@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { initializeSetup } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { Button } from '../components/ui/Input';
 
 const SetupWizard: React.FC = () => {
   const navigate = useNavigate();
