@@ -1,5 +1,7 @@
 package com.monetique.eye.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -7,6 +9,7 @@ import java.util.*;
 
 @Service
 public class PrometheusClient {
+    private static final Logger log = LoggerFactory.getLogger(PrometheusClient.class);
 
     private final WebClient webClient;
 
