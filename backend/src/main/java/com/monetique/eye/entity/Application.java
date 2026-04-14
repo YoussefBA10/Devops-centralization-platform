@@ -26,4 +26,11 @@ public class Application {
     private String name;
 
     private String serviceNameKeyword;
+
+    private java.time.LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = java.time.LocalDateTime.now();
+    }
 }

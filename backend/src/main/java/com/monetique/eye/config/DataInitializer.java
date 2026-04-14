@@ -42,21 +42,19 @@ public class DataInitializer {
         // 1. Create Environment
         Environment env = new Environment();
         env.setName(environmentName);
-        env.setCenterNodeIp(centralIp);
-        env.setCreatedAt(LocalDateTime.now());
+        env.setCentralNodeIp(centralIp);
+        env.setCreatedAt(java.time.LocalDateTime.now());
         env = environmentRepository.save(env);
 
         // 2. Create Core Applications
         Application backend = new Application();
         backend.setName("Backend Service");
         backend.setEnvironment(env);
-        backend.setCreatedAt(LocalDateTime.now());
         applicationRepository.save(backend);
 
         Application frontend = new Application();
         frontend.setName("Frontend Dashboard");
         frontend.setEnvironment(env);
-        frontend.setCreatedAt(LocalDateTime.now());
         applicationRepository.save(frontend);
 
         log.info("Manual initialization completed for environment {}", env.getId());

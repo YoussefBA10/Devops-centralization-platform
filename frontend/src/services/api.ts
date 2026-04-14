@@ -43,7 +43,5 @@ export const getEnvironmentNodes = (id: number) => api.get(`/environments/${id}/
 export const getDeploymentStatus = (envId: number, targetIp: string) => 
   api.get(`/environments/deployments/status`, { params: { environmentId: envId, targetIp } });
 
-export const initializeSetup = (data: { vmpipeIp: string; vmpipeHostname?: string; environmentName?: string }) => 
-  api.post('/setup/initialize', data);
 
 export default api;

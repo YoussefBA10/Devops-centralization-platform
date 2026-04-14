@@ -47,3 +47,7 @@ management:
 groq:
   api-key: ${GROQ_API_KEY}
   model: ${GROQ_MODEL:llama-3.3-70b-versatile}
+
+monetique:
+  gitops:
+    path: ${MONETIQUE_GITOPS_PATH:../gitops}

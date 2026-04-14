@@ -25,7 +25,7 @@ public class DeploymentService {
     private final DeploymentLogRepository deploymentLogRepository;
     private final EnvironmentRepository environmentRepository;
 
-    @Value("${monetique.gitops.path:../gitops}")
+    @Value("${monetique.gitops.path}")
     private String gitopsPath;
 
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
@@ -137,7 +137,7 @@ public class DeploymentService {
     public void registerNodeInPrometheus(Environment environment, String ip) {
         log.info("Registering node {} in Prometheus for environment {}", ip, environment.getName());
         try {
-            File configFile = new File(gitopsPath + "/prometheus/file_sd/agent_targets.yml");
+            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
             configFile.getParentFile().mkdirs();
 
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
