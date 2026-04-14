@@ -135,7 +135,7 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, deplo
           </div>
           <Button 
             className="rounded-xl px-5 h-10 gap-2 border-primary/20 hover:bg-primary transition-all duration-300"
-            variant={resources.nodeCount === 0 ? "default" : "outline"}
+            variant={resources.nodeCount === 0 ? "primary" : "outline"}
             onClick={onDeployClick}
             disabled={deploymentStatus === 'IN_PROGRESS'}
           >

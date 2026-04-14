@@ -4,20 +4,12 @@ import {
   Search, 
   RefreshCw, 
   Server, 
-  ShieldCheck, 
-  Cpu, 
   CheckCircle2,
   AlertCircle,
   Activity,
   Globe,
-  Settings,
-  MoreVertical,
-  ArrowUpRight,
-  HardDrive,
   Database,
-  X,
-  MapPin,
-  Clock
+  X
 } from 'lucide-react';
 import api, { getEnvironmentStats, getEnvironmentResources, getEnvironmentNodes, getDeploymentStatus } from '../services/api';
 import type { Environment } from '../types/index';
@@ -54,7 +46,6 @@ const EnvironmentsPage: React.FC = () => {
   const [stats, setStats] = useState<EnvStats | null>(null);
   const [resources, setResources] = useState<Record<number, EnvResources>>({});
   const [nodes, setNodes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
   const [nodesLoading, setNodesLoading] = useState(false);
 
   // Form States
@@ -114,7 +105,7 @@ const EnvironmentsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (activeDeployments.length > 0) {
       interval = setInterval(async () => {
         for (const dep of activeDeployments) {

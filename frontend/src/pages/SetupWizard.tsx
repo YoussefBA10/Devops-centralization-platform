@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Server, 
   Globe, 
   Terminal, 
   ShieldCheck, 
   Rocket, 
-  ChevronRight,
   ArrowRight,
   AlertCircle,
   Layout
