@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, User as UserIcon, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, User as UserIcon, AlertCircle, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';

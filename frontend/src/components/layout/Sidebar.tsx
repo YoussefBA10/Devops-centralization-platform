@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
-  BarChart3, 
   Layers, 
   Terminal, 
   Activity, 
@@ -9,7 +8,6 @@ import {
   FileText, 
   MessageSquare,
   LayoutDashboard,
-  Shield,
   Settings
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';

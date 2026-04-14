@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Card, CardContent } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
 
 interface Message {
@@ -23,7 +23,7 @@ interface Message {
 }
 
 const ChatPage: React.FC = () => {
-  const { user } = useAuth();
+  useAuth();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
