@@ -18,16 +18,16 @@ scrape_configs:
     metrics_path: '/actuator/prometheus'
     static_configs:
       - targets: ['backend:9001']
-    labels:
-      environment: "central"
+        labels:
+          environment: "central"
 
   # 2. Central Node (vmpipe) - Self monitoring
   - job_name: 'vmpipe'
     static_configs:
       - targets: ['localhost:9090']
-    labels:
-      environment: "central"
-      role: "central-node"
+        labels:
+          environment: "central"
+          role: "central-node"
 
   # 3. Dynamic scraping of all Agent Nodes (Environment-aware)
   # Prometheus will automatically discover nodes based on labels added by Ansible
