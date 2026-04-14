@@ -22,16 +22,36 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   
   const loading = authLoading || envLoading;
 
+  // Wait for auth and environment states to be determined
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If already authenticated and trying to access /login, redirect to home
+  if (isAuthenticated && location.pathname === '/login') {
+    return <Navigate to="/" replace />;
+  }
+
+  // Gate 1: Authentication
   if (!isAuthenticated && location.pathname !== '/login') {
     return <Navigate to="/login" replace />;
   }
 
-  // If authenticated but system not initialized, force /setup
-  if (isAuthenticated && isAdmin && !initialized && !loading && location.pathname !== '/setup') {
+  // Gate 2: Platform Initialization (Only for Admins)
+  if (isAuthenticated && isAdmin && !initialized && location.pathname !== '/setup') {
     return <Navigate to="/setup" replace />;
   }
 
-  // If already initialized, don't allow /setup
+  // Gate 3: Setup Access Control (Only Admins can see /setup)
+  if (isAuthenticated && !isAdmin && location.pathname === '/setup') {
+    return <Navigate to="/" replace />;
+  }
+
+  // Gate 4: Prevent /setup if already initialized
   if (isAuthenticated && initialized && location.pathname === '/setup') {
     return <Navigate to="/" replace />;
   }

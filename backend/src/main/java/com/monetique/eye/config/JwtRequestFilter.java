@@ -57,10 +57,18 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                    
+                    org.slf4j.LoggerFactory.getLogger(JwtRequestFilter.class)
+                        .info("JWT Token successfully validated for user: {} with authorities: {}", 
+                                username, userDetails.getAuthorities());
+                } else {
+                    org.slf4j.LoggerFactory.getLogger(JwtRequestFilter.class)
+                        .warn("JWT Token is invalid for user: {}", username);
                 }
             }
         } catch (Exception e) {
-            // Token validation failed
+            org.slf4j.LoggerFactory.getLogger(JwtRequestFilter.class)
+                .error("JWT validation failed: {}", e.getMessage());
         }
 
         filterChain.doFilter(request, response);

@@ -16,7 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class DataInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
@@ -34,6 +34,33 @@ public class DataInitializer {
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.passwordEncoder = passwordEncoder;
+    }
+
+    public Environment manualInitialize(String environmentName, String centralIp) {
+        log.info("Performing manual initialization for environment: {}", environmentName);
+        
+        // 1. Create Environment
+        Environment env = new Environment();
+        env.setName(environmentName);
+        env.setCenterNodeIp(centralIp);
+        env.setCreatedAt(LocalDateTime.now());
+        env = environmentRepository.save(env);
+
+        // 2. Create Core Applications
+        Application backend = new Application();
+        backend.setName("Backend Service");
+        backend.setEnvironment(env);
+        backend.setCreatedAt(LocalDateTime.now());
+        applicationRepository.save(backend);
+
+        Application frontend = new Application();
+        frontend.setName("Frontend Dashboard");
+        frontend.setEnvironment(env);
+        frontend.setCreatedAt(LocalDateTime.now());
+        applicationRepository.save(frontend);
+
+        log.info("Manual initialization completed for environment {}", env.getId());
+        return env;
     }
 
     @Bean

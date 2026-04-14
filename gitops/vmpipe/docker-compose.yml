@@ -40,6 +40,7 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
       - ./prometheus/prediction_rules.yml:/etc/prometheus/prediction_rules.yml
+      - ./prometheus/file_sd:/etc/prometheus/file_sd
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - prometheus_data:/prometheus
     command:
@@ -47,6 +48,8 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
     ports:
       - "9090:9090"
     depends_on:
@@ -223,6 +226,8 @@ services:
       app: "monetique-eye"
       env: "production"
       node: "vmpipe"
+    volumes:
+      - ../:/app/gitops
     environment:
       SERVER_PORT: ${SERVER_PORT}
       NODE_NAME: "vmpipe"
@@ -241,6 +246,7 @@ services:
       PROMETHEUS_URL: ${PROMETHEUS_URL}
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
+      MONETIQUE_GITOPS_PATH: "/app/gitops"
     ports:
       - "8880:8880"
       - "9001:9001"

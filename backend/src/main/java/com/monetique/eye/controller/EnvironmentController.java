@@ -36,6 +36,17 @@ public class EnvironmentController {
         this.deploymentLogRepository = deploymentLogRepository;
     }
 
+    private String resolvePrometheusLabel(Environment env) {
+        String label = env.getPrometheusLabel();
+        if (label == null || label.isBlank()) {
+            return env.getName().toLowerCase().replaceAll("\\s+", "-");
+        }
+        if (label.contains("=")) {
+            return label.substring(label.indexOf('=') + 1);
+        }
+        return label;
+    }
+
     @GetMapping
     public List<Environment> getAll() {
         return environmentRepository.findAll();
@@ -55,7 +66,7 @@ public class EnvironmentController {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
         
-        String label = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+        String label = resolvePrometheusLabel(env);
         
         return ResponseEntity.ok(Map.of(
             "cpuUsage", prometheusClient.getCpuUsage(label),
@@ -70,7 +81,7 @@ public class EnvironmentController {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
         
-        String label = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+        String label = resolvePrometheusLabel(env);
         
         // Fetch specific node details using Prometheus
         List<Map<String, Object>> nodes = prometheusClient.queryList(
@@ -99,19 +110,28 @@ public class EnvironmentController {
         ));
     }
 
-    @GetMapping("/deployments/latest/{envId}/{targetIp}")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Map<String, String>> getLatestDeploymentStatus(@PathVariable Long envId, @PathVariable String targetIp) {
-        // Find latest deployment log for this environment and IP. We will just use a generic call or search.
-        // For simplicity, we'll assume the frontend can just fetch the latest deployment log or poll.
+    @GetMapping("/deployments/status")
+    @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#environmentId)")
+    public ResponseEntity<Map<String, Object>> getDeploymentStatus(
+            @RequestParam Long environmentId, 
+            @RequestParam String targetIp) {
+            
+        // Find latest deployment log for this environment and IP
         var logOpt = deploymentLogRepository.findAll().stream()
-                .filter(l -> l.getEnvironment().getId().equals(envId) && targetIp.equals(l.getTargetIp()))
-                .reduce((first, second) -> second); // Get last
+                .filter(l -> l.getEnvironment().getId().equals(environmentId) && targetIp.equals(l.getTargetIp()))
+                .reduce((first, second) -> second);
         
         if (logOpt.isPresent()) {
-            return ResponseEntity.ok(Map.of("status", logOpt.get().getStatus()));
+            DeploymentLog log = logOpt.get();
+            return ResponseEntity.ok(Map.of(
+                "status", log.getStatus(),
+                "action", log.getAction(),
+                "timestamp", log.getExecutedAt(),
+                "log", log.getLogOutput() != null ? log.getLogOutput() : ""
+            ));
         }
-        return ResponseEntity.notFound().build();
+        
+        return ResponseEntity.ok(Map.of("status", "NOT_FOUND"));
     }
 
     @PostMapping("/{id}/deploy-application")

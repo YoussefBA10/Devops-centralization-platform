@@ -55,8 +55,8 @@ const EnvironmentsPage: React.FC = () => {
   const [deploymentLoading, setDeploymentLoading] = useState(false);
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
 
-  const [activeDeployments, setActiveDeployments] = useState<{envId: number, targetIp: string}[]>([]);
-  const [deploymentStatuses, setDeploymentStatuses] = useState<Record<number, 'IN_PROGRESS' | 'SUCCESS' | 'FAILED' | null>>({});
+  // Tracks which environment is currently deploying to which IP
+  const [activeDeployments, setActiveDeployments] = useState<Record<number, string>>({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -104,38 +104,16 @@ const EnvironmentsPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (activeDeployments.length > 0) {
-      interval = setInterval(async () => {
-        for (const dep of activeDeployments) {
-          try {
-            const res = await getDeploymentStatus(dep.envId, dep.targetIp);
-            if (res.data.status !== 'IN_PROGRESS') {
-              setDeploymentStatuses(prev => ({ ...prev, [dep.envId]: res.data.status }));
-              setActiveDeployments(prev => prev.filter(d => d.envId !== dep.envId || d.targetIp !== dep.targetIp));
-              if (res.data.status === 'SUCCESS') fetchData();
-              
-              // Clear status after 5 seconds to remove success/fail overlay
-              setTimeout(() => {
-                setDeploymentStatuses(prev => ({ ...prev, [dep.envId]: null }));
-              }, 5000);
-            }
-          } catch(e) { /* ignore checking errors if not found yet */ }
-        }
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [activeDeployments, fetchData]);
-
   const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string) => {
     if (!selectedEnv) return;
     setDeploymentLoading(true);
     setDeploymentError(null);
     try {
       await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword });
-      setDeploymentStatuses(prev => ({ ...prev, [selectedEnv.id]: 'IN_PROGRESS' }));
-      setActiveDeployments(prev => [...prev, { envId: selectedEnv.id, targetIp }]);
+      
+      // Notify the specific card to start its internal polling
+      setActiveDeployments(prev => ({ ...prev, [selectedEnv.id]: targetIp }));
+      
       setShowDeployModal(false);
     } catch (error: any) {
       setDeploymentError(error.response?.data?.message || 'Deployment failed to start');
@@ -231,13 +209,13 @@ const EnvironmentsPage: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {filteredEnvs.map((env) => {
           const res = resources[env.id] || { cpuUsage: 0, ramUsagePercent: 0, diskUsagePercent: 0, nodeCount: 0 };
-          const status = deploymentStatuses[env.id] || null;
           return (
             <EnvironmentCard
               key={env.id}
               env={env}
               resources={res}
-              deploymentStatus={status as 'IN_PROGRESS' | 'SUCCESS' | 'FAILED' | null}
+              activeDeploymentIp={activeDeployments[env.id]}
+              onRefresh={fetchData}
               onNodesClick={() => handleFetchNodes(env)}
               onDeployClick={() => {
                 setSelectedEnv(env);

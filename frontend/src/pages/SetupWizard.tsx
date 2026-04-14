@@ -1,22 +1,25 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Globe, 
+  Server, 
+  Settings, 
   Terminal, 
-  ShieldCheck, 
-  Rocket, 
-  ArrowRight,
+  Shield, 
+  ChevronRight, 
+  CheckCircle2, 
   AlertCircle,
-  Layout
+  Loader2
 } from 'lucide-react';
 import { initializeSetup } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
 
 const SetupWizard: React.FC = () => {
-  const navigate = useNavigate();
-  const { refreshEnvironments } = useEnvironment();
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { refreshEnvironments } = useEnvironment();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     vmpipeIp: '',
     vmpipeHostname: 'vmpipe',
@@ -27,150 +30,190 @@ const SetupWizard: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    
     try {
       await initializeSetup(formData);
-      await refreshEnvironments();
-      navigate('/');
+      setStep(3); // Move to success step
+      // Brief delay before refreshing and navigating
+      setTimeout(async () => {
+        await refreshEnvironments();
+        navigate('/');
+      }, 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Initialization failed. Please check your inputs.');
+      setError(err.response?.data?.message || 'Failed to initialize system. Please verify the IP address and backend status.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] text-white flex flex-col items-center justify-center p-6 selection:bg-primary/30">
-      {/* Background Glow */}
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[120px]"></div>
+    <div className="min-h-screen bg-[#0a0a0c] text-slate-200 flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Background Ambience */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-blue-500/10 blur-[120px] rounded-full" />
+        <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-purple-500/10 blur-[120px] rounded-full" />
       </div>
 
-      <div className="w-full max-w-2xl animate-in zoom-in-95 duration-700">
-        {/* Logo / Branding */}
-        <div className="flex flex-col items-center mb-12 text-center">
-          <div className="w-20 h-20 bg-gradient-to-br from-primary to-primary/50 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_40px_rgba(var(--primary-rgb),0.3)] border border-white/10 ring-1 ring-white/20">
-            <Layout className="w-10 h-10 text-white" />
+      <div className="w-full max-w-2xl relative">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 mb-6 shadow-2xl shadow-blue-500/20">
+            <div className="w-full h-full bg-[#0a0a0c] rounded-[14px] flex items-center justify-center">
+              < Shield className="w-8 h-8 text-blue-500" />
+            </div>
           </div>
-          <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-b from-white to-white/50 bg-clip-text text-transparent mb-4">
-            Welcome to Monetique-Eye
+          <h1 className="text-4xl font-bold tracking-tight text-white mb-3">
+            Monetique<span className="text-blue-500">-Eye</span>
           </h1>
-          <p className="text-muted-foreground text-lg max-w-md">
-            The platform is ready. Let's configure your central observation node to get started.
-          </p>
+          <p className="text-slate-400 text-lg">Platform Initial Configuration</p>
         </div>
 
-        {/* Setup Card */}
-        <div className="bg-[#111113] border border-white/5 rounded-3xl overflow-hidden shadow-2xl relative">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 via-primary to-primary/50"></div>
-          
-          <div className="p-10">
-            <form onSubmit={handleSubmit} className="space-y-8">
-              <div className="grid grid-cols-1 gap-8">
-                {/* IP Address Field */}
-                <div className="space-y-3">
-                  <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-primary" />
-                    Central Node IP (vmpipe)
-                  </label>
+        {/* Wizard Card */}
+        <div className="bg-[#111114]/80 backdrop-blur-xl border border-white/5 rounded-3xl p-8 shadow-2xl">
+          {/* Progress Bar */}
+          <div className="flex items-center gap-4 mb-10">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex-1 flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-500 ${
+                  step === s ? 'bg-blue-600 text-white ring-4 ring-blue-500/20' : 
+                  step > s ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500'
+                }`}>
+                  {step > s ? <CheckCircle2 className="w-5 h-5" /> : s}
+                </div>
+                <div className={`h-1 flex-1 rounded-full ${step > s ? 'bg-emerald-500/50' : 'bg-slate-800'}`} />
+              </div>
+            ))}
+          </div>
+
+          {step === 1 && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold text-white">System Architecture</h2>
+                <p className="text-slate-400">Welcome to Monetique-Eye. To monitor your infrastructure, we need to locate your central <b>vmpipe</b> node.</p>
+              </div>
+              
+              <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex gap-4">
+                <AlertCircle className="w-6 h-6 text-blue-500 shrink-0" />
+                <p className="text-sm text-blue-100/70 leading-relaxed">
+                  The central node hosts your ELK stack, Prometheus, and Ansible core. Ensure these services are reachable from this browser.
+                </p>
+              </div>
+
+              <button 
+                onClick={() => setStep(2)}
+                className="w-full h-12 bg-white text-black font-semibold rounded-xl hover:bg-slate-200 transition-all flex items-center justify-center gap-2 group"
+              >
+                Start Setup
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          )}
+
+          {step === 2 && (
+            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-400 ml-1">Central Node IP Address</label>
                   <div className="relative group">
-                    <input
+                    <Server className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                    <input 
                       required
                       type="text"
+                      placeholder="192.168.1.100"
+                      className="w-full h-12 bg-[#0a0a0c] border border-white/5 rounded-xl pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white"
                       value={formData.vmpipeIp}
-                      onChange={(e) => setFormData({ ...formData, vmpipeIp: e.target.value })}
-                      placeholder="e.g. 192.168.1.130"
-                      className="w-full bg-[#1A1A1D] border border-white/10 rounded-xl px-5 py-4 text-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all placeholder:text-white/20"
+                      onChange={e => setFormData({...formData, vmpipeIp: e.target.value})}
                     />
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 opacity-0 group-focus-within:opacity-100 transition-opacity">
-                      <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                    </div>
                   </div>
-                  <p className="text-[11px] text-muted-foreground/60 italic">
-                    The IP address where your ELK stack and core services are running.
-                  </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  {/* Hostname Field */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                      <Terminal className="w-4 h-4 text-primary" />
-                      Node Hostname
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.vmpipeHostname}
-                      onChange={(e) => setFormData({ ...formData, vmpipeHostname: e.target.value })}
-                      className="w-full bg-[#1A1A1D] border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                    />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400 ml-1">Hostname</label>
+                    <div className="relative group">
+                      <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                      <input 
+                        type="text"
+                        placeholder="vmpipe"
+                        className="w-full h-12 bg-[#0a0a0c] border border-white/5 rounded-xl pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white"
+                        value={formData.vmpipeHostname}
+                        onChange={e => setFormData({...formData, vmpipeHostname: e.target.value})}
+                      />
+                    </div>
                   </div>
-
-                  {/* Env Name Field */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                      <Rocket className="w-4 h-4 text-primary" />
-                      Environment Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.environmentName}
-                      onChange={(e) => setFormData({ ...formData, environmentName: e.target.value })}
-                      className="w-full bg-[#1A1A1D] border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                    />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-400 ml-1">Environment Name</label>
+                    <div className="relative group">
+                      <Settings className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                      <input 
+                        type="text"
+                        placeholder="vmpipe"
+                        className="w-full h-12 bg-[#0a0a0c] border border-white/5 rounded-xl pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white"
+                        value={formData.environmentName}
+                        onChange={e => setFormData({...formData, environmentName: e.target.value})}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
               {error && (
-                <div className="bg-destructive/10 border border-destructive/20 p-4 rounded-xl flex items-center gap-3 text-destructive animate-in slide-in-from-top-2">
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3 text-red-400 text-sm">
                   <AlertCircle className="w-5 h-5 shrink-0" />
-                  <p className="text-sm font-medium">{error}</p>
+                  {error}
                 </div>
               )}
 
-              <div className="pt-4">
-                <button
+              <div className="flex gap-4">
+                <button 
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="flex-1 h-12 bg-slate-800 text-white font-semibold rounded-xl hover:bg-slate-700 transition-all"
+                >
+                  Back
+                </button>
+                <button 
                   disabled={loading}
                   type="submit"
-                  className="w-full bg-primary hover:bg-primary-hover text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-3 shadow-[0_10px_30px_rgba(var(--primary-rgb),0.3)] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group duration-300"
+                  className="flex-[2] h-12 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {loading ? (
-                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
                     <>
-                      Initialize Platform
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Initializing...
                     </>
+                  ) : (
+                    'Complete Setup'
                   )}
                 </button>
               </div>
             </form>
-          </div>
+          )}
 
-          <div className="bg-[#161618] border-t border-white/5 p-6 flex items-center justify-center gap-8">
-             <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
-                <CheckCircle className="w-3 h-3 text-emerald-500" />
-                Auth Ready
-             </div>
-             <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
-                <CheckCircle className="w-3 h-3 text-emerald-500" />
-                DB Connected
-             </div>
-             <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-widest">
-                <CheckCircle className="w-3 h-3 text-emerald-500" />
-                GitOps Ready
-             </div>
-          </div>
+          {step === 3 && (
+            <div className="text-center py-8 space-y-6 animate-in zoom-in-95 duration-500">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-500/20 text-emerald-500 mb-4 scale-110">
+                <CheckCircle2 className="w-10 h-10" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-3xl font-bold text-white">System Ready!</h2>
+                <p className="text-slate-400 max-w-sm mx-auto">
+                  Monetique-Eye has been successfully initialized. The central node is now being registered in Prometheus and your ELK dashboard.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2 text-blue-500 text-sm font-medium animate-pulse">
+                Redirecting to dashboard in a few seconds...
+              </div>
+            </div>
+          )}
         </div>
+        
+        <p className="text-center mt-8 text-slate-500 text-sm">
+          Precision Monitoring & Observability Stack v1.0.0
+        </p>
       </div>
     </div>
   );
 };
-
-// Simple icon replacement since I used CheckCircle but didn't import CheckCircle2
-const CheckCircle = ({ className }: { className?: string }) => (
-  <svg className={className} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-);
 
 export default SetupWizard;

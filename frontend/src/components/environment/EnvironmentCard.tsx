@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Input';
-import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import { getDeploymentStatus } from '../../services/api';
 import type { Environment } from '../../types';
 
 interface EnvResources {
@@ -34,27 +35,96 @@ const ResourceMetric: React.FC<{ label: string; value: number; icon: React.React
 interface EnvironmentCardProps {
   env: Environment;
   resources: EnvResources;
-  deploymentStatus: 'IN_PROGRESS' | 'SUCCESS' | 'FAILED' | null;
   onDeployClick: () => void;
   onNodesClick: () => void;
+  onRefresh: () => void;
+  activeDeploymentIp?: string | null;
 }
 
-const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, deploymentStatus, onDeployClick, onNodesClick }) => {
+type DeploymentState = 'idle' | 'deploying' | 'success' | 'failed';
+
+const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDeployClick, onNodesClick, onRefresh, activeDeploymentIp }) => {
+  const [status, setStatus] = useState<DeploymentState>(activeDeploymentIp ? 'deploying' : 'idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Sync internal state with prop if triggered from parent
+  useEffect(() => {
+    if (activeDeploymentIp) {
+      setStatus('deploying');
+    }
+  }, [activeDeploymentIp]);
+
+  // Polling logic tied to this specific card
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+
+    if (status === 'deploying' && activeDeploymentIp) {
+      interval = setInterval(async () => {
+        try {
+          const res = await getDeploymentStatus(env.id, activeDeploymentIp);
+          const currentStatus = res.data.status;
+
+          if (currentStatus === 'SUCCESS') {
+            setStatus('success');
+            onRefresh(); // Refresh parent data
+            setTimeout(() => setStatus('idle'), 5000);
+          } else if (currentStatus === 'FAILED') {
+            setStatus('failed');
+            setErrorMessage(res.data.message || 'Deployment failed. Please check logs.');
+          }
+        } catch (error) {
+          // Keep polling if there's a network error, backend might be starting up
+        }
+      }, 3000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [status, activeDeploymentIp, env.id, onRefresh]);
+
   return (
     <Card className="group hover:border-primary/50 transition-all duration-300 overflow-hidden bg-card/30 backdrop-blur-sm relative">
       {/* Loading Overlay */}
-      {deploymentStatus === 'IN_PROGRESS' && (
-        <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in fade-in duration-300">
-          <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-          <h3 className="text-xl font-bold text-white">Deploying agent...</h3>
-          <p className="text-muted-foreground mt-2">Please wait while the SSH configuration completes</p>
+      {status === 'deploying' && (
+        <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-[4px] flex flex-col items-center justify-center animate-in fade-in duration-300">
+          <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
+          <h3 className="text-xl font-bold text-white tracking-tight">Deploying agent...</h3>
+          <p className="text-muted-foreground mt-2 text-sm font-medium">Please wait while the SSH configuration completes</p>
+          <div className="mt-8 px-4 py-1.5 bg-primary/10 rounded-full border border-primary/20">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary animate-pulse">
+              Orchestrating Stack
+            </span>
+          </div>
         </div>
       )}
       
-      {deploymentStatus === 'SUCCESS' && (
-        <div className="absolute inset-0 z-10 bg-emerald-950/80 backdrop-blur-[2px] flex flex-col items-center justify-center animate-in fade-in duration-300">
-          <CheckCircle2 className="w-10 h-10 text-emerald-500 mb-4" />
-          <h3 className="text-xl font-bold text-white">Agent deployed successfully!</h3>
+      {/* Success Overlay */}
+      {status === 'success' && (
+        <div className="absolute inset-0 z-10 bg-emerald-950/80 backdrop-blur-[6px] flex flex-col items-center justify-center animate-in zoom-in-95 duration-500">
+          <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/30 mb-4 animate-bounce">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+          </div>
+          <h3 className="text-2xl font-black text-white tracking-tight">Deployment Success!</h3>
+          <p className="text-emerald-400/80 mt-2 font-medium">Infrastructure node is now reporting.</p>
+        </div>
+      )}
+
+      {/* Failure Overlay */}
+      {status === 'failed' && (
+        <div className="absolute inset-0 z-10 bg-destructive/90 backdrop-blur-[6px] flex flex-col items-center justify-center animate-in fade-in duration-300 p-6 text-center">
+          <XCircle className="w-12 h-12 text-white mb-4" />
+          <h3 className="text-xl font-bold text-white">Deployment Failed</h3>
+          <p className="text-white/80 mt-2 text-sm max-w-[250px]">{errorMessage}</p>
+          <div className="flex gap-3 mt-6">
+            <Button variant="secondary" size="sm" onClick={onDeployClick} className="bg-white/10 hover:bg-white/20 border-white/20 text-white">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setStatus('idle')} className="text-white hover:bg-white/10">
+              Close
+            </Button>
+          </div>
         </div>
       )}
 
@@ -65,7 +135,7 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, deplo
               <Server className="w-7 h-7 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div>
-              <CardTitle className="text-2xl flex items-center gap-3">
+              <CardTitle className="text-2xl flex items-center gap-3 font-bold tracking-tight">
                 {env.name}
                 {resources.nodeCount > 0 ? (
                   <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">
@@ -77,14 +147,14 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, deplo
                   </span>
                 )}
               </CardTitle>
-              <CardDescription className="mt-1 text-base">{env.description}</CardDescription>
+              <CardDescription className="mt-1 text-base text-muted-foreground/80">{env.description}</CardDescription>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5" onClick={onNodesClick} disabled={deploymentStatus === 'IN_PROGRESS'}>
+            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5 transition-colors" onClick={onNodesClick} disabled={status === 'deploying'}>
               <Settings className="w-5 h-5 text-muted-foreground hover:text-white transition-colors" />
             </Button>
-            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5" disabled={deploymentStatus === 'IN_PROGRESS'}>
+            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5 transition-colors" disabled={status === 'deploying'}>
               <MoreVertical className="w-5 h-5 text-muted-foreground" />
             </Button>
           </div>
@@ -96,51 +166,56 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, deplo
               label="CPU Load" 
               value={resources.cpuUsage} 
               icon={<Cpu className="w-3 h-3" />} 
-              color="bg-primary shadow-[0_0_10px_rgba(var(--primary-rgb),0.5)]" 
+              color="bg-primary shadow-[0_0_15px_rgba(var(--primary-rgb),0.5)]" 
             />
             <ResourceMetric 
               label="RAM Usage" 
               value={resources.ramUsagePercent} 
               icon={<Activity className="w-3 h-3" />} 
-              color="bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
+              color="bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]" 
             />
             <ResourceMetric 
               label="Disk Capacity" 
               value={resources.diskUsagePercent} 
               icon={<HardDrive className="w-3 h-3" />} 
-              color="bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" 
+              color="bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]" 
             />
           </div>
         ) : (
-          <div className="mt-8 py-6 px-4 bg-muted/20 border border-dashed border-white/10 rounded-2xl flex flex-col items-center text-center animate-in zoom-in-95">
-            <AlertCircle className="w-8 h-8 text-muted-foreground mb-3 opacity-20" />
-            <p className="text-sm font-medium text-muted-foreground">No nodes deployed yet in this environment.</p>
-            <p className="text-xs text-muted-foreground/50 mt-1">Click 'Deploy Node' to get started with observation.</p>
+          <div className="mt-8 py-8 px-4 bg-muted/10 border border-dashed border-white/10 rounded-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
+               <AlertCircle className="w-6 h-6 text-muted-foreground opacity-30" />
+            </div>
+            <p className="text-sm font-semibold text-muted-foreground">No nodes deployed yet</p>
+            <p className="text-xs text-muted-foreground/50 mt-1 max-w-[200px]">Kickstart observation by provisioning a target node.</p>
           </div>
         )}
 
         <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Target Label</p>
-              <p className="text-xs font-mono text-primary flex items-center gap-1.5">
-                <MapPin className="w-3 h-3" />
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest opacity-60">Target Instance</p>
+              <p className="text-xs font-mono text-primary flex items-center gap-1.5 font-bold">
+                <MapPin className="w-3.5 h-3.5" />
                 {env.prometheusLabel}
               </p>
             </div>
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Active nodes</p>
-              <p className="text-xs font-bold">{resources.nodeCount} / 255</p>
+            <div className="space-y-1.5">
+              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest opacity-60">Node Count</p>
+              <p className="text-xs font-bold flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${resources.nodeCount > 0 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-muted'}`}></div>
+                {resources.nodeCount} / 255
+              </p>
             </div>
           </div>
           <Button 
-            className="rounded-xl px-5 h-10 gap-2 border-primary/20 hover:bg-primary transition-all duration-300"
+            className="rounded-xl px-6 h-11 gap-2 border-primary/20 hover:bg-primary transition-all duration-300 shadow-xl shadow-primary/5 group"
             variant={resources.nodeCount === 0 ? "primary" : "outline"}
             onClick={onDeployClick}
-            disabled={deploymentStatus === 'IN_PROGRESS'}
+            disabled={status === 'deploying'}
           >
             Deploy Node
-            <ArrowUpRight className="w-4 h-4" />
+            <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
           </Button>
         </div>
       </div>

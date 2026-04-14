@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.UriUtils;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
@@ -21,8 +23,8 @@ public class PrometheusClient {
         try {
             Map result = webClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", query)
-                            .build())
+                            .queryParam("query", "{query}")
+                            .build(query))
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
@@ -47,8 +49,8 @@ public class PrometheusClient {
         try {
             Map result = webClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", query)
-                            .build())
+                            .queryParam("query", "{query}")
+                            .build(query))
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();

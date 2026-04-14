@@ -28,16 +28,17 @@ public class DeploymentService {
     @Value("${monetique.gitops.path:../gitops}")
     private String gitopsPath;
 
-    public DeploymentService(DeploymentLogRepository deploymentLogRepository, 
-                             EnvironmentRepository environmentRepository) {
+    public DeploymentService(DeploymentLogRepository deploymentLogRepository,
+            EnvironmentRepository environmentRepository) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
     }
 
     @Async
-    public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser, String sshPassword) {
+    public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser,
+            String sshPassword) {
         log.info("Starting agent deployment for environment: {} at IP: {}", environment.getName(), targetIp);
-        
+
         DeploymentLog deploymentLog = DeploymentLog.builder()
                 .environment(environment)
                 .action("DEPLOY_AGENT")
@@ -49,30 +50,33 @@ public class DeploymentService {
 
         try {
             // 0. Ensure scripts are executable
-            executeProcess(new String[]{"chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh"}, deploymentLog, 30);
+            executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
             updateInventory(targetIp);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
-            executeProcessSecure(new String[]{gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword}, deploymentLog, 300);
+            executeProcessSecure(
+                    new String[] { gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword },
+                    deploymentLog, 300);
 
             // 3. Execute Ansible Playbook
             String playbookPath = gitopsPath + "/ansible/deploy-tools.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            executeProcess(new String[]{
-                "ansible-playbook", 
-                "-i", inventoryPath, 
-                playbookPath, 
-                "-e", "env_label=" + environment.getName().toLowerCase().replace(" ", "-"),
-                "-e", "ansible_user=" + sshUser
+            executeProcess(new String[] {
+                    "ansible-playbook",
+                    "-i", inventoryPath,
+                    playbookPath,
+                    "-e", "env_label=" + environment.getName().toLowerCase().replace(" ", "-"),
+                    "-e", "ansible_user=" + sshUser
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
         } catch (Exception e) {
             log.error("Deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
-            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput()) + "\nERROR: " + e.getMessage());
+            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage());
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
@@ -81,8 +85,9 @@ public class DeploymentService {
 
     @Async
     public void deployApplication(Environment environment, String targetIp, String sshUser, String appName) {
-        log.info("Starting application deployment for environment: {} at IP: {}, App: {}", environment.getName(), targetIp, appName);
-        
+        log.info("Starting application deployment for environment: {} at IP: {}, App: {}", environment.getName(),
+                targetIp, appName);
+
         DeploymentLog deploymentLog = DeploymentLog.builder()
                 .environment(environment)
                 .action("DEPLOY_APP")
@@ -99,19 +104,20 @@ public class DeploymentService {
             // 2. Execute Application Playbook
             String playbookPath = gitopsPath + "/ansible/deploy-backend.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            executeProcess(new String[]{
-                "ansible-playbook", 
-                "-i", inventoryPath, 
-                playbookPath, 
-                "-e", "appName=" + appName,
-                "-e", "ansible_user=" + sshUser
+            executeProcess(new String[] {
+                    "ansible-playbook",
+                    "-i", inventoryPath,
+                    playbookPath,
+                    "-e", "appName=" + appName,
+                    "-e", "ansible_user=" + sshUser
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
         } catch (Exception e) {
             log.error("Application deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
-            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput()) + "\nERROR: " + e.getMessage());
+            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage());
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
@@ -122,7 +128,82 @@ public class DeploymentService {
         inventoryFile.getParentFile().mkdirs();
         try (FileWriter writer = new FileWriter(inventoryFile)) {
             writer.write("[agents]\n");
-            writer.write("node-agent ansible_host=" + targetIp + " ansible_user=root\n"); // Simplified to root as default
+            writer.write("node-agent ansible_host=" + targetIp + " ansible_user=root\n"); // Simplified to root as
+                                                                                          // default
+        }
+    }
+
+    @Async
+    public void registerNodeInPrometheus(Environment environment, String ip) {
+        log.info("Registering node {} in Prometheus for environment {}", ip, environment.getName());
+        try {
+            File configFile = new File(gitopsPath + "/prometheus/file_sd/agent_targets.yml");
+            configFile.getParentFile().mkdirs();
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
+                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+            java.util.List<java.util.Map<String, Object>> targets;
+
+            if (configFile.exists() && configFile.length() > 0) {
+                targets = mapper.readValue(configFile,
+                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
+                        });
+            } else {
+                targets = new java.util.ArrayList<>();
+            }
+
+            String envLabel = environment.getName().toLowerCase().replace(" ", "-");
+
+            // Add Node Exporter target
+            java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
+            nodeExporter.put("targets", java.util.List.of(ip + ":9100"));
+            nodeExporter.put("labels", java.util.Map.of("job", "node-exporter", "environment", envLabel));
+
+            // Add cAdvisor target
+            java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
+            cadvisor.put("targets", java.util.List.of(ip + ":8081"));
+            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel));
+
+            // Check for duplicates and update or add
+            updateOrAdd(targets, nodeExporter);
+            updateOrAdd(targets, cadvisor);
+
+            mapper.writeValue(configFile, targets);
+            log.info("Updated Prometheus targets in {}", configFile.getAbsolutePath());
+
+            // Trigger Prometheus Reload
+            triggerPrometheusReload();
+
+        } catch (Exception e) {
+            log.error("Failed to register node in Prometheus: {}", e.getMessage(), e);
+        }
+    }
+
+    private void updateOrAdd(java.util.List<java.util.Map<String, Object>> list,
+            java.util.Map<String, Object> newItem) {
+        String newTarget = ((java.util.List<String>) newItem.get("targets")).get(0);
+        String newJob = ((java.util.Map<String, String>) newItem.get("labels")).get("job");
+
+        list.removeIf(item -> {
+            String target = ((java.util.List<String>) item.get("targets")).get(0);
+            String job = ((java.util.Map<String, String>) item.get("labels")).get("job");
+            return target.equals(newTarget) && job.equals(newJob);
+        });
+        list.add(newItem);
+    }
+
+    private void triggerPrometheusReload() {
+        try {
+            log.info("Triggering Prometheus reload...");
+            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("http://192.168.126.130:9090/-/reload"))
+                    .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
+                    .build();
+            client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding());
+            log.info("Prometheus reload triggered successfully.");
+        } catch (Exception e) {
+            log.error("Failed to reload Prometheus: {}", e.getMessage());
         }
     }
 
@@ -134,14 +215,15 @@ public class DeploymentService {
         executeProcessInternal(command, logEntry, timeoutSeconds, true);
     }
 
-    private void executeProcessInternal(String[] command, DeploymentLog logEntry, int timeoutSeconds, boolean maskLastArg) throws Exception {
+    private void executeProcessInternal(String[] command, DeploymentLog logEntry, int timeoutSeconds,
+            boolean maskLastArg) throws Exception {
         String cmdStr = String.join(" ", command);
         if (maskLastArg && command.length > 0) {
             String[] masked = command.clone();
             masked[masked.length - 1] = "********";
             cmdStr = String.join(" ", masked);
         }
-        
+
         log.info("Executing command: {}", cmdStr);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(gitopsPath));
@@ -149,7 +231,7 @@ public class DeploymentService {
 
         Process process = pb.start();
         StringBuilder output = new StringBuilder();
-        
+
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -165,7 +247,7 @@ public class DeploymentService {
 
         String currentLog = logEntry.getLogOutput() == null ? "" : logEntry.getLogOutput();
         logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
-        
+
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
         }

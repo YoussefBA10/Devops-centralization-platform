@@ -43,24 +43,26 @@ scrape_configs:
   # 4. Node Exporter (Host metrics) - scraped from all agents
   - job_name: 'node-exporter'
     metrics_path: '/metrics'
-    static_configs:
-      - targets: []   # Populated dynamically by DeploymentService via inventory
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/file_sd/agent_targets.yml'
+        refresh_interval: 1m
     relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-      - source_labels: ['__meta_kubernetes_pod_label_environment']
-        target_label: environment
+      - source_labels: [job]
+        regex: 'node-exporter'
+        action: keep
 
   # 5. cAdvisor (Container metrics) - scraped from all agents
   - job_name: 'cadvisor'
     metrics_path: '/metrics'
-    static_configs:
-      - targets: []   # Dynamically populated
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/file_sd/agent_targets.yml'
+        refresh_interval: 1m
     relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-      - source_labels: ['__meta_kubernetes_pod_label_environment']
-        target_label: environment
+      - source_labels: [job]
+        regex: 'cadvisor'
+        action: keep
 
   # 6. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'
