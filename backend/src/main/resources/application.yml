@@ -31,6 +31,19 @@ elasticsearch:
 prometheus:
   url: ${PROMETHEUS_URL:http://192.168.126.130:9090}
 
+management:
+  server:
+    port: 9001
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+
 groq:
   api-key: ${GROQ_API_KEY}
   model: ${GROQ_MODEL:llama-3.3-70b-versatile}

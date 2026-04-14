@@ -1,75 +1,78 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  scrape_timeout: 10s
 
-rule_files:
-  - "alert_rules.yml"
-  - "prediction_rules.yml"
-
+# Alerting configuration (optional but recommended)
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
-            - "alertmanager:9093"
+          - alertmanager:9093
 
+# Scrape configurations
 scrape_configs:
-  - job_name: "prometheus"
-    static_configs:
-      - targets: ["localhost:9090"]
-        labels:
-          node: "vmpipe"
-          app: "Monetique-eye"
 
-  - job_name: "node-exporter"
+  # 1. Scrape the Monetique-Eye Backend itself (self-monitoring)
+  - job_name: 'monetique-backend'
+    metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ["node-exporter:9100"]
-        labels:
-          node: "vmpipe"
-          app: "Monetique-eye"
-      - targets: ["192.168.126.131:9100"]
-        labels:
-          node: "node-1"
-          app: "infra-test-app"
-      - targets: ["192.168.126.132:9100"]
-        labels:
-          node: "node-2"
-          app: "infra-test-app"
+      - targets: ['backend:9001']
+    labels:
+      environment: "central"
 
-  - job_name: "cadvisor"
+  # 2. Central Node (vmpipe) - Self monitoring
+  - job_name: 'vmpipe'
     static_configs:
-      - targets: ["cadvisor:8080"]
-        labels:
-          node: "vmpipe"
-          app: "Monetique-eye"
-      - targets: ["192.168.126.131:8082"]
-        labels:
-          node: "node-1"
-          app: "infra-test-app"
-      - targets: ["192.168.126.132:8082"]
-        labels:
-          node: "node-2"
-          app: "infra-test-app"
+      - targets: ['localhost:9090']
+    labels:
+      environment: "central"
+      role: "central-node"
 
-  - job_name: "blackbox-exporter"
+  # 3. Dynamic scraping of all Agent Nodes (Environment-aware)
+  # Prometheus will automatically discover nodes based on labels added by Ansible
+  - job_name: 'agent-nodes'
+    metrics_path: '/metrics'
+    honor_labels: true
+    kubernetes_sd_configs: []   # Not using K8s - we use static + relabeling
+    static_configs: []
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # 4. Node Exporter (Host metrics) - scraped from all agents
+  - job_name: 'node-exporter'
+    metrics_path: '/metrics'
     static_configs:
-      - targets: ["blackbox-exporter:9115"]
-        labels:
-          node: "vmpipe"
-          app: "Monetique-eye"
+      - targets: []   # Populated dynamically by DeploymentService via inventory
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: ['__meta_kubernetes_pod_label_environment']
+        target_label: environment
 
-  - job_name: "backend"
-    metrics_path: "/actuator/prometheus"
+  # 5. cAdvisor (Container metrics) - scraped from all agents
+  - job_name: 'cadvisor'
+    metrics_path: '/metrics'
     static_configs:
-      - targets: ["backend:9001"]
-        labels:
-          node: "vmpipe"
-          app: "Monetique-eye"
+      - targets: []   # Dynamically populated
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: ['__meta_kubernetes_pod_label_environment']
+        target_label: environment
 
-  - job_name: "js-backend"
-    metrics_path: "/metrics"
+  # 6. Blackbox Exporter (for external probing - optional)
+  - job_name: 'blackbox'
+    metrics_path: '/probe'
+    params:
+      module: [http_2xx]
     static_configs:
-      - targets: ["192.168.126.131:3000"]
-        labels:
-          node: "node-1"
-          app: "infra-test-app"
-
+      - targets: []   # Add important external URLs here if needed
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
