@@ -24,6 +24,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - monetique-eye-net
 
   # --- Observability Stack ---
   prometheus:
@@ -54,6 +56,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    networks:
+      - monetique-eye-net
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -74,6 +78,8 @@ services:
       - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
     ports:
       - "9100:9100"
+    networks:
+      - monetique-eye-net
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
@@ -90,6 +96,8 @@ services:
       - /data:/data:ro
     ports:
       - "8081:8080"
+    networks:
+      - monetique-eye-net
   filebeat:
     image: docker.elastic.co/beats/filebeat:7.17.9
     container_name: filebeat
@@ -109,6 +117,8 @@ services:
       - "5066:5066"
     depends_on:
       - logstash
+    networks:
+      - monetique-eye-net
 
   blackbox-exporter:
     image: prom/blackbox-exporter:latest
@@ -124,6 +134,8 @@ services:
       - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml
     command:
       - '--config.file=/etc/blackbox_exporter/config.yml'
+    networks:
+      - monetique-eye-net
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -137,7 +149,69 @@ services:
       - "9093:9093"
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.ym
-  # --- Application Stack ---
+    networks:
+      - monetique-eye-net
+  
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "production"
+      node: "vmpipe"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - monetique-eye-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    container_name: elasticsearch
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "production"
+      node: "vmpipe"
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - monetique-eye-net
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.9
+    container_name: logstash
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "production"
+      node: "vmpipe"
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    ports:
+        - "5044:5044"
+        - "5045:5045"
+        - "5000:5000"
+        - "9600:9600"
+    depends_on:
+      - elasticsearch
+    networks:
+      - monetique-eye-net
+
+# --- Application Stack ---
   backend:
     build:
       context: ../../backend
@@ -178,6 +252,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - monetique-eye-net
 
   frontend:
     build:
@@ -196,61 +272,15 @@ services:
       - "80:80"
     depends_on:
       - backend
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: always
-    labels:
-      app: "monetique-eye"
-      env: "production"
-      node: "vmpipe"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    depends_on:
-      prometheus:
-        condition: service_healthy
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
-    container_name: elasticsearch
-    restart: always
-    labels:
-      app: "monetique-eye"
-      env: "production"
-      node: "vmpipe"
-    environment:
-      - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:7.17.9
-    container_name: logstash
-    restart: always
-    labels:
-      app: "monetique-eye"
-      env: "production"
-      node: "vmpipe"
-    volumes:
-      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
-    ports:
-        - "5044:5044"
-        - "5045:5045"
-        - "5000:5000"
-        - "9600:9600"
-    depends_on:
-      - elasticsearch
-
+    networks:
+      - monetique-eye-net
+      
 volumes:
   mysql_data:
   prometheus_data:
   elasticsearch_data:
+
+networks:
+  monetique-eye-net:
+    driver: bridge
 
