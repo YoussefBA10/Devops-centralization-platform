@@ -37,4 +37,9 @@ api.interceptors.response.use(
 export const initializeSetup = (data: { vmpipeIp: string; vmpipeHostname?: string; environmentName?: string }) => 
   api.post('/setup/initialize', data);
 
+export const getEnvironmentStats = () => api.get('/environments/stats');
+export const getEnvironmentResources = (id: number) => api.get(`/environments/${id}/resources`);
+export const getEnvironmentNodes = (id: number) => api.get(`/environments/${id}/nodes`);
+export const getDeploymentStatus = (envId: number, targetIp: string) => api.get(`/environments/deployments/latest/${envId}/${targetIp}`);
+
 export default api;

@@ -34,7 +34,7 @@ public class DeploymentService {
     }
 
     @Async
-    public void deployAgent(Environment environment, String targetIp) {
+    public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser, String sshPassword) {
         log.info("Starting agent deployment for environment: {} at IP: {}", environment.getName(), targetIp);
         
         DeploymentLog deploymentLog = DeploymentLog.builder()
@@ -53,8 +53,8 @@ public class DeploymentService {
             // 1. Update Inventory
             updateInventory(targetIp);
 
-            // 2. Execute SSH Configure Script (Accepts USER, IP)
-            executeProcess(new String[]{gitopsPath + "/scripts/ssh-configure.sh", "root", targetIp}, deploymentLog, 300);
+            // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
+            executeProcessSecure(new String[]{gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword}, deploymentLog, 300);
 
             // 3. Execute Ansible Playbook
             String playbookPath = gitopsPath + "/ansible/deploy-tools.yml";
@@ -63,7 +63,8 @@ public class DeploymentService {
                 "ansible-playbook", 
                 "-i", inventoryPath, 
                 playbookPath, 
-                "-e", "env_label=" + environment.getName().toLowerCase().replace(" ", "-")
+                "-e", "env_label=" + environment.getName().toLowerCase().replace(" ", "-"),
+                "-e", "ansible_user=" + sshUser
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
@@ -74,6 +75,7 @@ public class DeploymentService {
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
+        return CompletableFuture.completedFuture(deploymentLog);
     }
 
     @Async
@@ -124,7 +126,22 @@ public class DeploymentService {
     }
 
     private void executeProcess(String[] command, DeploymentLog logEntry, int timeoutSeconds) throws Exception {
-        log.info("Executing command: {}", String.join(" ", command));
+        executeProcessInternal(command, logEntry, timeoutSeconds, false);
+    }
+
+    private void executeProcessSecure(String[] command, DeploymentLog logEntry, int timeoutSeconds) throws Exception {
+        executeProcessInternal(command, logEntry, timeoutSeconds, true);
+    }
+
+    private void executeProcessInternal(String[] command, DeploymentLog logEntry, int timeoutSeconds, boolean maskLastArg) throws Exception {
+        String cmdStr = String.join(" ", command);
+        if (maskLastArg && command.length > 0) {
+            String[] masked = command.clone();
+            masked[masked.length - 1] = "********";
+            cmdStr = String.join(" ", masked);
+        }
+        
+        log.info("Executing command: {}", cmdStr);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(gitopsPath));
         pb.redirectErrorStream(true);
@@ -146,7 +163,7 @@ public class DeploymentService {
         }
 
         String currentLog = logEntry.getLogOutput() == null ? "" : logEntry.getLogOutput();
-        logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + String.join(" ", command) + " ---\n" + output.toString());
+        logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
         
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
