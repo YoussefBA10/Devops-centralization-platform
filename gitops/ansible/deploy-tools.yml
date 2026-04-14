@@ -1,0 +1,70 @@
+---
+- name: Deploy Observability Tools to Agent Node
+  hosts: agents
+  become: yes
+  vars:
+    node_exporter_version: "1.7.0"
+    filebeat_version: "8.11.1"
+    central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
+
+  tasks:
+    - name: Ensure Docker is installed
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Start and Enable Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Deploy cAdvisor Container
+      docker_container:
+        name: cadvisor
+        image: gcr.io/cadvisor/cadvisor:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "8081:8080"
+        volumes:
+          - /:/rootfs:ro
+          - /var/run:/var/run:ro
+          - /sys:/sys:ro
+          - /var/lib/docker/:/var/lib/docker:ro
+          - /dev/disk/:/dev/disk:ro
+        labels:
+          environment: "{{ env_label }}"
+
+    - name: Deploy Node Exporter Container
+      docker_container:
+        name: node-exporter
+        image: prom/node-exporter:latest
+        state: started
+        restart_policy: always
+        ports:
+          - "9100:9100"
+        command:
+          - '--path.rootfs=/host'
+        volumes:
+          - /:/host:ro,rslave
+        labels:
+          environment: "{{ env_label }}"
+
+    - name: Install Filebeat (Simplified via Docker)
+      docker_container:
+        name: filebeat
+        image: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
+        state: started
+        restart_policy: always
+        user: root
+        volumes:
+          - /var/lib/docker/containers:/var/lib/docker/containers:ro
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+        command: >
+          filebeat -e
+          -E "output.logstash.hosts=['{{ central_logstash_ip }}:5044']"
+          -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
+        labels:
+          environment: "{{ env_label }}"

@@ -1,0 +1,36 @@
+server:
+  port: ${SERVER_PORT:8880}
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://192.168.126.130:3306/devops_db?allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:youss}
+    password: ${DB_PASSWORD:youss123}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+  
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    show-sql: ${SPRING_JPA_SHOW_SQL:true}
+    properties:
+      hibernate:
+        dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.MySQL8Dialect}
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:3600}
+
+# Integration endpoints
+logstash:
+  host: ${LOGSTASH_HOST:192.168.126.130}
+  port: ${LOGSTASH_PORT:5044}
+
+elasticsearch:
+  url: ${ELASTICSEARCH_URL:http://192.168.126.130:9200}
+
+prometheus:
+  url: ${PROMETHEUS_URL:http://192.168.126.130:9090}
+
+groq:
+  api-key: ${GROQ_API_KEY}
+  model: ${GROQ_MODEL:llama-3.3-70b-versatile}
