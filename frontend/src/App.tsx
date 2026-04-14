@@ -14,7 +14,7 @@ import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  useAuth();
   // For now, bypass for dev speed or check token
   const token = localStorage.getItem('token');
   if (!token && window.location.pathname !== '/login') {
@@ -24,7 +24,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 };
 
 function App() {
-  const { isAuthenticated } = useAuth();
+  useAuth();
 
   return (
     <Routes>
