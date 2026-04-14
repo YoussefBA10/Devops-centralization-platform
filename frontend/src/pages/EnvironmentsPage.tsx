@@ -21,10 +21,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button, Input } from '../components/ui/Input';
 
 const EnvironmentsPage: React.FC = () => {
-  const { environments, refreshEnvironments, loading } = useEnvironment();
+  const { environments, refreshEnvironments, createEnvironment, loading } = useEnvironment();
   const [searchQuery, setSearchQuery] = useState('');
   const [showDeployModal, setShowDeployModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedEnvForDeploy, setSelectedEnvForDeploy] = useState<Environment | null>(null);
+  
+  // New Environment Form State
+  const [newEnv, setNewEnv] = useState({
+    name: '',
+    description: '',
+    prometheusLabel: ''
+  });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   
   // Deployment Form State
   const [targetIp, setTargetIp] = useState('');
@@ -58,6 +68,22 @@ const EnvironmentsPage: React.FC = () => {
     }
   };
 
+  const handleCreateEnvironment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreateError(null);
+    
+    try {
+      await createEnvironment(newEnv);
+      setShowCreateModal(false);
+      setNewEnv({ name: '', description: '', prometheusLabel: '' });
+    } catch (error: any) {
+      setCreateError(error.response?.data?.message || 'Failed to create environment');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
       {/* Header Section */}
@@ -76,7 +102,7 @@ const EnvironmentsPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button>
+          <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="w-4 h-4" />
             Create New
           </Button>
@@ -194,6 +220,65 @@ const EnvironmentsPage: React.FC = () => {
           </Card>
         ))}
       </div>
+
+      {/* Create Environment Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
+          <Card className="w-full max-w-lg relative z-10 shadow-2xl border-white/10">
+            <CardHeader>
+              <CardTitle>Create New Environment</CardTitle>
+              <CardDescription>Define a new logical group for your infrastructure monitoring.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateEnvironment} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Environment Name</label>
+                  <Input 
+                    placeholder="e.g. Production West, Staging" 
+                    value={newEnv.name} 
+                    onChange={(e) => setNewEnv({ ...newEnv, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Description</label>
+                  <Input 
+                    placeholder="e.g. Primary production cluster in US-West" 
+                    value={newEnv.description} 
+                    onChange={(e) => setNewEnv({ ...newEnv, description: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Prometheus Label</label>
+                  <Input 
+                    placeholder="e.g. prod-west" 
+                    value={newEnv.prometheusLabel} 
+                    onChange={(e) => setNewEnv({ ...newEnv, prometheusLabel: e.target.value })}
+                    required
+                  />
+                  <p className="text-[10px] text-muted-foreground">This label must match the 'environment' label in your Prometheus configuration.</p>
+                </div>
+
+                {createError && (
+                  <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    {createError}
+                  </div>
+                )}
+
+                <div className="flex gap-3 justify-end pt-4">
+                  <Button variant="outline" type="button" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+                  <Button type="submit" loading={createLoading}>
+                    Create Environment
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Deployment Modal (Simplified for the page) */}
       {showDeployModal && selectedEnvForDeploy && (

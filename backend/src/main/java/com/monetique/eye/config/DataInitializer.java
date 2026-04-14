@@ -54,27 +54,6 @@ public class DataInitializer {
             admin.setPassword(passwordEncoder.encode("admin123"));
             userRepository.save(admin);
 
-            if (environmentRepository.findByName("Production").isEmpty()) {
-                Environment prod = new Environment();
-                prod.setName("Production");
-                prod.setDescription("Primary production environment");
-                prod.setPrometheusLabel("prod");
-                prod.setCreatedAt(LocalDateTime.now());
-                environmentRepository.save(prod);
-                log.info("Default Production environment created.");
-
-                Application infraApp = new Application();
-                infraApp.setName("Infra Agent");
-                infraApp.setEnvironment(prod);
-                infraApp.setServiceNameKeyword("infra-agent");
-                applicationRepository.save(infraApp);
-                log.info("Default Infra Application created.");
-
-                // Link admin to prod environment
-                admin.getEnvironments().add(prod);
-                userRepository.save(admin);
-            }
-
             log.info("Data initialization completed.");
         };
     }

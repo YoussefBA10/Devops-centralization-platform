@@ -8,7 +8,9 @@ interface EnvironmentContextType {
   selectedEnvironment: Environment | null;
   setSelectedEnvironment: (env: Environment) => void;
   loading: boolean;
+  initialized: boolean;
   refreshEnvironments: () => Promise<void>;
+  createEnvironment: (env: Partial<Environment>) => Promise<void>;
 }
 
 const EnvironmentContext = createContext<EnvironmentContextType | undefined>(undefined);
@@ -16,8 +18,8 @@ const EnvironmentContext = createContext<EnvironmentContextType | undefined>(und
 export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
-  const [loading, setLoading] = useState(false);
   const { isAuthenticated } = useAuth();
+  const [loading, setLoading] = useState(isAuthenticated);
 
   const refreshEnvironments = async () => {
     if (!isAuthenticated) return;
@@ -35,6 +37,16 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setLoading(false);
     }
   };
+  
+  const createEnvironment = async (env: Partial<Environment>) => {
+    try {
+      await api.post('/environments', env);
+      await refreshEnvironments();
+    } catch (error) {
+      console.error('Failed to create environment', error);
+      throw error;
+    }
+  };
 
   useEffect(() => {
     refreshEnvironments();
@@ -47,7 +59,9 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
         selectedEnvironment, 
         setSelectedEnvironment, 
         loading, 
-        refreshEnvironments 
+        initialized: environments.length > 0,
+        refreshEnvironments,
+        createEnvironment
       }}
     >
       {children}

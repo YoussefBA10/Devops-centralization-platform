@@ -25,6 +25,7 @@ public class Environment {
 
     private String description;
     private String prometheusLabel;
+    private String centralNodeIp;
 
     @Enumerated(EnumType.STRING)
     private DeploymentStatus lastDeploymentStatus;

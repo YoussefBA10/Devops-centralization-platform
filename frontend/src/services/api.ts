@@ -34,4 +34,7 @@ api.interceptors.response.use(
   }
 );
 
+export const initializeSetup = (data: { vmpipeIp: string; vmpipeHostname?: string; environmentName?: string }) => 
+  api.post('/setup/initialize', data);
+
 export default api;

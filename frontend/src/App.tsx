@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
@@ -12,14 +12,30 @@ import LogsPage from './pages/LogsPage';
 import TicketsPage from './pages/TicketsPage';
 import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
+import SetupWizard from './pages/SetupWizard';
+import { useEnvironment } from './context/EnvironmentContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  useAuth();
-  // For now, bypass for dev speed or check token
-  const token = localStorage.getItem('token');
-  if (!token && window.location.pathname !== '/login') {
-    return <Navigate to="/login" />;
+  const { isAuthenticated, isAdmin, loading: authLoading } = useAuth();
+  const { initialized, loading: envLoading } = useEnvironment();
+  const location = useLocation();
+  
+  const loading = authLoading || envLoading;
+
+  if (!isAuthenticated && location.pathname !== '/login') {
+    return <Navigate to="/login" replace />;
   }
+
+  // If authenticated but system not initialized, force /setup
+  if (isAuthenticated && isAdmin && !initialized && !loading && location.pathname !== '/setup') {
+    return <Navigate to="/setup" replace />;
+  }
+
+  // If already initialized, don't allow /setup
+  if (isAuthenticated && initialized && location.pathname === '/setup') {
+    return <Navigate to="/" replace />;
+  }
+
   return <>{children}</>;
 };
 
@@ -29,6 +45,11 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/setup" element={
+        <ProtectedRoute>
+          <SetupWizard />
+        </ProtectedRoute>
+      } />
       <Route
         path="/*"
         element={
