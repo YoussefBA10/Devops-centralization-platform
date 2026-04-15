@@ -83,9 +83,9 @@ public class EnvironmentController {
         
         String label = resolvePrometheusLabel(env);
         
-        // Fetch specific node details using Prometheus
+        // Fetch specific node details including central stack (ES, Logstash, etc.)
         List<Map<String, Object>> nodes = prometheusClient.queryList(
-            String.format("up{job=\"node-exporter\", environment=\"%s\"}", label)
+            String.format("up{job=~\"node-exporter|cadvisor|filebeat|elasticsearch|logstash|alertmanager|grafana\", environment=\"%s\"}", label)
         );
         
         return ResponseEntity.ok(nodes);

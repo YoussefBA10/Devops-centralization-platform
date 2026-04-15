@@ -64,7 +64,47 @@ scrape_configs:
         regex: 'cadvisor'
         action: keep
 
-  # 6. Blackbox Exporter (for external probing - optional)
+  # 6. Filebeat (Log agent metrics)
+  - job_name: 'filebeat'
+    metrics_path: '/metrics'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/file_sd/agent_targets.yml'
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [job]
+        regex: 'filebeat'
+        action: keep
+
+  # 7. Elasticsearch (DB Metrics)
+  - job_name: 'elasticsearch'
+    static_configs:
+      - targets: ['elasticsearch-exporter:9114']
+        labels:
+          environment: "vmpipe"
+
+  # 8. Logstash (Pipeline Metrics)
+  - job_name: 'logstash'
+    static_configs:
+      - targets: ['logstash-exporter:9198']
+        labels:
+          environment: "vmpipe"
+
+  # 9. Alertmanager (Self monitoring)
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+        labels:
+          environment: "vmpipe"
+
+  # 10. Grafana (Self monitoring)
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          environment: "vmpipe"
+
+  # 11. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'
     metrics_path: '/probe'
     params:

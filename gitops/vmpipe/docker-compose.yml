@@ -214,6 +214,32 @@ services:
     networks:
       - monetique-eye-net
 
+  elasticsearch-exporter:
+    image: prometheus-community/elasticsearch-exporter:v1.5.0
+    container_name: elasticsearch-exporter
+    restart: always
+    command:
+      - '--es.uri=http://elasticsearch:9200'
+    ports:
+      - "9114:9114"
+    depends_on:
+      - elasticsearch
+    networks:
+      - monetique-eye-net
+
+  logstash-exporter:
+    image: prometheus-community/logstash-exporter:v1.5.0
+    container_name: logstash-exporter
+    restart: always
+    command:
+      - '--logstash.endpoint=http://logstash:9600'
+    ports:
+      - "9198:9198"
+    depends_on:
+      - logstash
+    networks:
+      - monetique-eye-net
+
 # --- Application Stack ---
   backend:
     build:

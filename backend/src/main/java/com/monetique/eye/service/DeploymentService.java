@@ -174,9 +174,19 @@ public class DeploymentService {
             cadvisor.put("targets", java.util.List.of(cadvisorTarget));
             cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel));
 
+            // Add Filebeat target
+            String filebeatTarget = ip + ":5066";
+            if (ip.equals(environment.getCentralNodeIp())) {
+                filebeatTarget = "filebeat:5066";
+            }
+            java.util.Map<String, Object> filebeat = new java.util.HashMap<>();
+            filebeat.put("targets", java.util.List.of(filebeatTarget));
+            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel));
+
             // Check for duplicates and update or add
             updateOrAdd(targets, nodeExporter);
             updateOrAdd(targets, cadvisor);
+            updateOrAdd(targets, filebeat);
 
             mapper.writeValue(configFile, targets);
             log.info("Updated Prometheus targets in {}", configFile.getAbsolutePath());
