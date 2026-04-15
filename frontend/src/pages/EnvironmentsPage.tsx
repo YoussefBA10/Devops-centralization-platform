@@ -11,7 +11,7 @@ import {
   Database,
   X
 } from 'lucide-react';
-import api, { getEnvironmentStats, getEnvironmentResources, getEnvironmentNodes, getDeploymentStatus } from '../services/api';
+import api, { getEnvironmentStats, getEnvironmentResources, getEnvironmentNodes } from '../services/api';
 import type { Environment } from '../types/index';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
