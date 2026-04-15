@@ -153,15 +153,25 @@ public class DeploymentService {
             }
 
             String envLabel = environment.getName().toLowerCase().replace(" ", "-");
+            
+            // Determine targets based on whether the IP matches the central node
+            String nodeExporterTarget = ip + ":9100";
+            String cadvisorTarget = ip + ":8081";
+
+            if (ip.equals(environment.getCentralNodeIp())) {
+                log.info("Node {} is detected as Central Node. Using internal service names.", ip);
+                nodeExporterTarget = "node-exporter:9100";
+                cadvisorTarget = "cadvisor:8080";
+            }
 
             // Add Node Exporter target
             java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
-            nodeExporter.put("targets", java.util.List.of(ip + ":9100"));
+            nodeExporter.put("targets", java.util.List.of(nodeExporterTarget));
             nodeExporter.put("labels", java.util.Map.of("job", "node-exporter", "environment", envLabel));
 
             // Add cAdvisor target
             java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
-            cadvisor.put("targets", java.util.List.of(ip + ":8081"));
+            cadvisor.put("targets", java.util.List.of(cadvisorTarget));
             cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel));
 
             // Check for duplicates and update or add
