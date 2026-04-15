@@ -83,28 +83,21 @@ scrape_configs:
         labels:
           environment: "vmpipe"
 
-  # 8. Logstash (Pipeline Metrics)
-  - job_name: 'logstash'
-    static_configs:
-      - targets: ['logstash-exporter:9198']
-        labels:
-          environment: "vmpipe"
-
-  # 9. Alertmanager (Self monitoring)
+  # 8. Alertmanager (Self monitoring)
   - job_name: 'alertmanager'
     static_configs:
       - targets: ['alertmanager:9093']
         labels:
           environment: "vmpipe"
 
-  # 10. Grafana (Self monitoring)
+  # 9. Grafana (Self monitoring)
   - job_name: 'grafana'
     static_configs:
       - targets: ['grafana:3000']
         labels:
           environment: "vmpipe"
 
-  # 11. Blackbox Exporter (for external probing - optional)
+  # 10. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'
     metrics_path: '/probe'
     params:

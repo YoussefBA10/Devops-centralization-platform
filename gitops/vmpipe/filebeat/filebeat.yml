@@ -30,6 +30,7 @@ filebeat.config.modules:
 setup.template.settings:
   index.number_of_shards: 1
 
-http.enabled: true
-http.host: 0.0.0.0
-http.port: 5066
+monitoring.enabled: true
+monitoring.prometheus.enabled: true
+monitoring.prometheus.host: 0.0.0.0
+monitoring.prometheus.port: 5066

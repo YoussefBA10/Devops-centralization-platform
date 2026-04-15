@@ -82,11 +82,27 @@ public class EnvironmentController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
         
         String label = resolvePrometheusLabel(env);
-        
-        // Fetch specific node details including central stack (ES, Logstash, etc.)
-        List<Map<String, Object>> nodes = prometheusClient.queryList(
-            String.format("up{job=~\"node-exporter|cadvisor|filebeat|elasticsearch|logstash|alertmanager|grafana\", environment=\"%s\"}", label)
-        );
+        List<Map<String, Object>> nodes;
+
+        if ("vmpipe".equals(label)) {
+            // For the central node, show all containers tracked by cAdvisor
+            nodes = prometheusClient.queryList(
+                "time() - container_last_seen{environment=\"vmpipe\", name!=\"\"} < 60"
+            );
+            // Remap labels for consistent UI display
+            nodes.forEach(node -> {
+                Map<String, Object> metric = (Map<String, Object>) node.get("metric");
+                if (metric != null && metric.containsKey("name")) {
+                    metric.put("instance", metric.get("name"));
+                    metric.put("job", "container");
+                }
+            });
+        } else {
+            // For remote nodes, show infrastructure agents (node-exporter and cadvisor)
+            nodes = prometheusClient.queryList(
+                String.format("up{job=~\"node-exporter|cadvisor|filebeat\", environment=\"%s\"}", label)
+            );
+        }
         
         return ResponseEntity.ok(nodes);
     }
