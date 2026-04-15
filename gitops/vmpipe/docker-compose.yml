@@ -215,7 +215,7 @@ services:
       - monetique-eye-net
 
   elasticsearch-exporter:
-    image: prometheus-community/elasticsearch-exporter:v1.5.0
+    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.5.0
     container_name: elasticsearch-exporter
     restart: always
     command:
@@ -228,7 +228,7 @@ services:
       - monetique-eye-net
 
   logstash-exporter:
-    image: prometheus-community/logstash-exporter:v1.5.0
+    image: quay.io/prometheuscommunity/logstash-exporter:v1.5.0
     container_name: logstash-exporter
     restart: always
     command:
