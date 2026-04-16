@@ -88,7 +88,7 @@ public class EnvironmentController {
 
         // 1. Fetch Agents (node-exporter, cadvisor, filebeat)
         List<Map<String, Object>> agentMetrics = prometheusClient.queryList(
-                String.format("up{environment=\"%s\"}", label));
+                String.format("up{job=~\"node-exporter|cadvisor|filebeat\", environment=\"%s\"}", label));
 
         // 2. Fetch Containers
         List<Map<String, Object>> containerMetrics = prometheusClient.queryList(
