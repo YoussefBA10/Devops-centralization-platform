@@ -182,11 +182,12 @@ public class EnvironmentController {
 
             List<Map<String, String>> services = (List<Map<String, String>>) nodeMap.get(nodeKey).get("services");
             
-            // Deduplicate containers
+            // Deduplicate containers against both agents and other containers
             boolean exists = false;
             for (Map<String, String> s : services) {
-                if (s.get("name").equals(name) && "CONTAINER".equals(s.get("type"))) {
+                if (s.get("name").equals(name)) {
                     exists = true;
+                    s.put("status", "Online"); // Ensure it's marked online if it was offline as an agent
                     break;
                 }
             }
