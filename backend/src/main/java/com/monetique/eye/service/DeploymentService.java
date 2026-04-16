@@ -1,7 +1,10 @@
 package com.monetique.eye.service;
 
+import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.DeploymentLog;
 import com.monetique.eye.entity.Environment;
+import com.monetique.eye.entity.enums.DeploymentStatus;
+import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.DeploymentLogRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import org.slf4j.Logger;
@@ -24,14 +27,17 @@ public class DeploymentService {
 
     private final DeploymentLogRepository deploymentLogRepository;
     private final EnvironmentRepository environmentRepository;
+    private final ApplicationRepository applicationRepository;
 
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
 
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
-            EnvironmentRepository environmentRepository) {
+            EnvironmentRepository environmentRepository,
+            ApplicationRepository applicationRepository) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
+        this.applicationRepository = applicationRepository;
     }
 
     @Async
@@ -63,18 +69,28 @@ public class DeploymentService {
             // 3. Execute Ansible Playbook
             String playbookPath = gitopsPath + "/ansible/deploy-tools.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+            
+            String envLabel = environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
+            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp() : "192.168.126.130";
+
             executeProcess(new String[] {
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
-                    "-e", "env_label=" + environment.getName().toLowerCase().replace(" ", "-"),
-                    "-e", "ansible_user=" + sshUser
+                    "-e", "env_label=" + envLabel,
+                    "-e", "ansible_user=" + sshUser,
+                    "-e", "central_logstash_ip=" + centralIp
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
+            environment.setLastDeploymentStatus(DeploymentStatus.SUCCESS);
+            environment.setLastDeployedAt(java.time.LocalDateTime.now());
+            environmentRepository.save(environment);
         } catch (Exception e) {
             log.error("Deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
+            environment.setLastDeploymentStatus(DeploymentStatus.FAILED);
+            environmentRepository.save(environment);
             deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
                     + "\nERROR: " + e.getMessage());
         } finally {
@@ -122,6 +138,20 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
+            
+            // Auto-create application record if not exists
+            if (applicationRepository.findAll().stream()
+                .noneMatch(a -> a.getName().equalsIgnoreCase(appName) && a.getEnvironment().getId().equals(environment.getId()))) {
+                
+                Application app = Application.builder()
+                        .name(appName)
+                        .environment(environment)
+                        .serviceNameKeyword(appName.toLowerCase())
+                        .build();
+                applicationRepository.save(app);
+                log.info("Auto-created application record for: {}", appName);
+            }
+            
         } catch (Exception e) {
             log.error("Application deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
@@ -133,12 +163,12 @@ public class DeploymentService {
     }
 
     private void updateInventory(String targetIp) throws Exception {
+        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with target IP: {}", gitopsPath, targetIp);
         File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
         inventoryFile.getParentFile().mkdirs();
         try (FileWriter writer = new FileWriter(inventoryFile)) {
             writer.write("[agents]\n");
-            writer.write("node-agent ansible_host=" + targetIp + " ansible_user=root\n"); // Simplified to root as
-                                                                                          // default
+            writer.write("node-agent ansible_host=" + targetIp + " ansible_user=root\n");
         }
     }
 
