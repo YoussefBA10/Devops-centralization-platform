@@ -84,80 +84,99 @@ public class EnvironmentController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         String label = resolvePrometheusLabel(env);
+        List<Map<String, Object>> resultNodes = new ArrayList<>();
 
         // 1. Fetch Agents (node-exporter, cadvisor, filebeat)
         List<Map<String, Object>> agentMetrics = prometheusClient.queryList(
                 String.format("up{environment=\"%s\"}", label));
 
-        // 2. Fetch Containers (only for nodes that already exist)
+        // 2. Fetch Containers
         List<Map<String, Object>> containerMetrics = prometheusClient.queryList(
                 String.format("time() - container_last_seen{environment=\"%s\", name!=\"\"} < 60", label));
 
-        // Map to group by node label
+        // Map to group by Host/Instance
         Map<String, Map<String, Object>> nodeMap = new HashMap<>();
 
         // Process Agents to identify Nodes
         for (Map<String, Object> metricData : agentMetrics) {
             Map<String, String> metric = (Map<String, String>) metricData.get("metric");
+            String instance = metric.get("instance");
             String job = metric.get("job");
             String value = metricData.get("value").toString();
-            String instance = metric.get("instance");
+
+            // Extract IP/Hostname from instance (remove port)
+            String rawIp = instance != null ? instance.split(":")[0] : "unknown";
+            String nodeKey = rawIp;
+            String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", ""); // e.g., node-131
             
-            // Use the 'node' label for grouping; fall back to instance IP
-            String nodeKey = metric.get("node");
-            if (nodeKey == null || nodeKey.isEmpty()) {
-                nodeKey = instance != null ? instance.split(":")[0] : "unknown";
+            // Only collapse into "vmpipe" if it's an internal service name or the central node IP
+            if ("vmpipe".equals(label) && (
+                "node-exporter".equals(rawIp) || 
+                "cadvisor".equals(rawIp) || 
+                "filebeat".equals(rawIp) || 
+                "localhost".equals(rawIp) ||
+                rawIp.equals(env.getCentralNodeIp())
+            )) {
+                nodeKey = "vmpipe";
+                rawIp = env.getCentralNodeIp() != null ? env.getCentralNodeIp() : "127.0.0.1";
+                nodeDisplayName = "vmpipe";
             }
 
-            // Extract IP from instance
-            String ip = instance != null ? instance.split(":")[0] : "N/A";
-            // For central node internal services, use the central node IP
-            if (env.getCentralNodeIp() != null && (
-                ip.equals("node-exporter") || ip.equals("cadvisor") || 
-                ip.equals("filebeat") || ip.equals("localhost"))) {
-                ip = env.getCentralNodeIp();
-            }
-
-            if (!nodeMap.containsKey(nodeKey)) {
-                Map<String, Object> nodeInfo = new HashMap<>();
-                nodeInfo.put("nodeName", nodeKey);
-                nodeInfo.put("ip", ip);
-                nodeInfo.put("status", "Offline");
-                nodeInfo.put("services", new ArrayList<Map<String, String>>());
-                nodeMap.put(nodeKey, nodeInfo);
-            }
+            nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
+                "nodeName", nodeDisplayName,
+                "ip", rawIp,
+                "status", "Offline",
+                "services", new ArrayList<Map<String, String>>()
+            )));
 
             Map<String, Object> nodeInfo = nodeMap.get(nodeKey);
             List<Map<String, String>> services = (List<Map<String, String>>) nodeInfo.get("services");
             
-            // Deduplicate: don't add if same job already exists
-            boolean exists = services.stream().anyMatch(s -> s.get("name").equals(job));
-            if (!exists) {
-                services.add(Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT"));
-            }
+            services.add(Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT"));
             if ("node-exporter".equals(job) && "1".equals(value)) {
                 nodeInfo.put("status", "Online");
             }
         }
 
-        // Process Containers — only add to existing nodes, not as new top-level nodes
+        // Process Containers
         for (Map<String, Object> metricData : containerMetrics) {
             Map<String, String> metric = (Map<String, String>) metricData.get("metric");
             String name = metric.get("name");
+            String instance = metric.get("instance");
             
-            // Use the 'node' label for grouping; fall back to instance IP
-            String nodeKey = metric.get("node");
-            if (nodeKey == null || nodeKey.isEmpty()) {
-                String instance = metric.get("instance");
-                nodeKey = instance != null ? instance.split(":")[0] : "unknown";
+            if (name == null || name.trim().isEmpty()) continue;
+
+            String rawIp = instance != null ? instance.split(":")[0] : "unknown";
+            String nodeKey = rawIp;
+            String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", "");
+            
+            if ("vmpipe".equals(label) && (
+                "cadvisor".equals(rawIp) || 
+                "localhost".equals(rawIp) ||
+                rawIp.equals(env.getCentralNodeIp())
+            )) {
+                nodeKey = "vmpipe";
+                rawIp = env.getCentralNodeIp() != null ? env.getCentralNodeIp() : "127.0.0.1";
+                nodeDisplayName = "vmpipe";
             }
 
-            // Only add containers to nodes that were already discovered via agents
-            if (!nodeMap.containsKey(nodeKey)) continue;
+            nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
+                "nodeName", nodeDisplayName,
+                "ip", rawIp,
+                "status", "Online",
+                "services", new ArrayList<Map<String, String>>()
+            )));
 
             List<Map<String, String>> services = (List<Map<String, String>>) nodeMap.get(nodeKey).get("services");
-            // Deduplicate: don't add if same container name already exists
-            boolean exists = services.stream().anyMatch(s -> s.get("name").equals(name));
+            
+            // Deduplicate containers
+            boolean exists = false;
+            for (Map<String, String> s : services) {
+                if (s.get("name").equals(name) && "CONTAINER".equals(s.get("type"))) {
+                    exists = true;
+                    break;
+                }
+            }
             if (!exists) {
                 services.add(Map.of("name", name, "status", "Online", "type", "CONTAINER"));
             }
@@ -175,9 +194,8 @@ public class EnvironmentController {
         String targetIp = request.get("targetIp");
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
-        String nodeName = request.get("nodeName");
         
-        CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser, sshPassword, nodeName);
+        CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser, sshPassword);
         
         // Return immediately with a placeholder, or wait slightly. Here we just return async confirmation.
         return ResponseEntity.ok(Map.of(

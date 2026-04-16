@@ -3,16 +3,13 @@
   labels:
     job: "node-exporter"
     environment: "vmpipe"
-    node: "vmpipe"
 - targets:
   - "cadvisor:8080"
   labels:
     job: "cadvisor"
     environment: "vmpipe"
-    node: "vmpipe"
 - targets:
   - "filebeat:5066"
   labels:
     job: "filebeat"
     environment: "vmpipe"
-    node: "vmpipe"

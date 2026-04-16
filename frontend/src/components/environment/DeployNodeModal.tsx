@@ -5,21 +5,20 @@ import { Button, Input } from '../ui/Input';
 
 interface DeployNodeModalProps {
   envName: string;
-  onDeploy: (ip: string, user: string, pass: string, nodeName: string) => void;
+  onDeploy: (ip: string, user: string, pass: string) => void;
   onClose: () => void;
   loading: boolean;
   error: string | null;
 }
 
 const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, onClose, loading, error }) => {
-  const [nodeName, setNodeName] = useState('');
   const [targetIp, setTargetIp] = useState('');
   const [sshUser, setSshUser] = useState('root');
   const [sshPassword, setSshPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onDeploy(targetIp, sshUser, sshPassword, nodeName);
+    onDeploy(targetIp, sshUser, sshPassword);
   };
 
   return (
@@ -39,31 +38,17 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-3">
-                <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  Node Name
-                </label>
-                <Input 
-                  placeholder="e.g. node-1" 
-                  value={nodeName} 
-                  onChange={(e) => setNodeName(e.target.value)}
-                  required
-                  className="h-14 bg-black/20 border-white/10 text-lg font-mono focus:ring-primary/50 transition-all"
-                />
-              </div>
-              <div className="space-y-3">
-                <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Globe className="w-4 h-4" /> Target IP
-                </label>
-                <Input 
-                  placeholder="e.g. 192.168.1.135" 
-                  value={targetIp} 
-                  onChange={(e) => setTargetIp(e.target.value)}
-                  required
-                  className="h-14 bg-black/20 border-white/10 text-lg font-mono focus:ring-primary/50 transition-all"
-                />
-              </div>
+            <div className="space-y-3">
+              <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                <Globe className="w-4 h-4" /> Target Destination (IP / Host)
+              </label>
+              <Input 
+                placeholder="e.g. 192.168.1.135" 
+                value={targetIp} 
+                onChange={(e) => setTargetIp(e.target.value)}
+                required
+                className="h-14 bg-black/20 border-white/10 text-lg font-mono focus:ring-primary/50 transition-all"
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-3">

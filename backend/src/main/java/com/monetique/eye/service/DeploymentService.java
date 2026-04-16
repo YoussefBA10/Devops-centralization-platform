@@ -42,8 +42,8 @@ public class DeploymentService {
 
     @Async
     public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser,
-            String sshPassword, String nodeName) {
-        log.info("Starting agent deployment for environment: {} at IP: {} with node name: {}", environment.getName(), targetIp, nodeName);
+            String sshPassword) {
+        log.info("Starting agent deployment for environment: {} at IP: {}", environment.getName(), targetIp);
 
         DeploymentLog deploymentLog = DeploymentLog.builder()
                 .environment(environment)
@@ -59,7 +59,7 @@ public class DeploymentService {
             executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
-            updateInventory(nodeName != null ? nodeName : sshUser, targetIp, sshUser);
+            updateInventory(sshUser, targetIp, sshUser);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
             executeProcessSecure(
@@ -84,7 +84,7 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
-            registerNodeInPrometheus(environment, targetIp, nodeName != null ? nodeName : targetIp);
+            registerNodeInPrometheus(environment, targetIp);
             environment.setLastDeploymentStatus(DeploymentStatus.SUCCESS);
             environment.setLastDeployedAt(java.time.LocalDateTime.now());
             environmentRepository.save(environment);
@@ -179,8 +179,8 @@ public class DeploymentService {
     }
 
     @Async
-    public void registerNodeInPrometheus(Environment environment, String ip, String nodeName) {
-        log.info("Registering node {} ({}) in Prometheus for environment {}", nodeName, ip, environment.getName());
+    public void registerNodeInPrometheus(Environment environment, String ip) {
+        log.info("Registering node {} in Prometheus for environment {}", ip, environment.getName());
         try {
             File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
             configFile.getParentFile().mkdirs();
@@ -212,20 +212,12 @@ public class DeploymentService {
             // Add Node Exporter target
             java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
             nodeExporter.put("targets", java.util.List.of(nodeExporterTarget));
-            java.util.Map<String, String> neLabels = new java.util.HashMap<>();
-            neLabels.put("job", "node-exporter");
-            neLabels.put("environment", envLabel);
-            neLabels.put("node", nodeName);
-            nodeExporter.put("labels", neLabels);
+            nodeExporter.put("labels", java.util.Map.of("job", "node-exporter", "environment", envLabel));
 
             // Add cAdvisor target
             java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
             cadvisor.put("targets", java.util.List.of(cadvisorTarget));
-            java.util.Map<String, String> caLabels = new java.util.HashMap<>();
-            caLabels.put("job", "cadvisor");
-            caLabels.put("environment", envLabel);
-            caLabels.put("node", nodeName);
-            cadvisor.put("labels", caLabels);
+            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel));
 
             // Add Filebeat target
             String filebeatTarget = ip + ":5066";
@@ -234,11 +226,7 @@ public class DeploymentService {
             }
             java.util.Map<String, Object> filebeat = new java.util.HashMap<>();
             filebeat.put("targets", java.util.List.of(filebeatTarget));
-            java.util.Map<String, String> fbLabels = new java.util.HashMap<>();
-            fbLabels.put("job", "filebeat");
-            fbLabels.put("environment", envLabel);
-            fbLabels.put("node", nodeName);
-            filebeat.put("labels", fbLabels);
+            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel));
 
             // Check for duplicates and update or add
             updateOrAdd(targets, nodeExporter);

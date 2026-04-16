@@ -104,12 +104,12 @@ const EnvironmentsPage: React.FC = () => {
     }
   };
 
-  const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string, nodeName: string) => {
+  const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string) => {
     if (!selectedEnv) return;
     setDeploymentLoading(true);
     setDeploymentError(null);
     try {
-      await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword, nodeName });
+      await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword });
       
       // Notify the specific card to start its internal polling
       setActiveDeployments(prev => ({ ...prev, [selectedEnv.id]: targetIp }));
@@ -238,7 +238,7 @@ const EnvironmentsPage: React.FC = () => {
                   <div className="p-2 bg-primary/10 rounded-lg">
                     <Server className="w-5 h-5 text-primary" />
                   </div>
-                  Node Inventory: {selectedEnv.name}
+                  Node Inventory: {selectedEnv.prometheusLabel}
                 </CardTitle>
                 <CardDescription className="mt-1">Active observation agents reporting to Prometheus.</CardDescription>
               </div>
@@ -259,18 +259,21 @@ const EnvironmentsPage: React.FC = () => {
                       <div className="flex items-center justify-between px-6 py-5 hover:bg-white/[0.02] transition-colors group">
                         <div className="flex items-center gap-4">
                           <div className={`w-3 h-3 rounded-full ${node.status === "Online" ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'bg-destructive'}`}></div>
-                          <div className="flex flex-col">
-                            <span className="text-base font-bold text-white flex items-center gap-2">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-base font-bold text-white flex items-center gap-3">
                               {node.nodeName}
+                              <span className="text-sm font-mono text-muted-foreground bg-white/5 px-2 py-0.5 rounded-md">
+                                {node.ip}
+                              </span>
                               <span className="text-[10px] py-0.5 px-2 bg-primary/10 text-primary rounded-full border border-primary/20 uppercase tracking-widest">
                                 Machine
                               </span>
                             </span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-3">
-                              <span className="font-mono text-primary/70">{node.ip || 'N/A'}</span>
-                              <span>•</span>
-                              <span className={node.status === "Online" ? 'text-emerald-500' : 'text-destructive'}>{node.status}</span>
-                            </span>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span>Status: <span className={node.status === "Online" ? 'font-bold text-emerald-500' : 'font-bold text-destructive'}>{node.status}</span></span>
+                              <span className="w-1 h-1 rounded-full bg-white/20"></span>
+                              <span>Label: <span className="font-mono text-primary/80 px-1 py-0.5 bg-primary/10 rounded">{selectedEnv.prometheusLabel}</span></span>
+                            </div>
                           </div>
                         </div>
                         <Button 
