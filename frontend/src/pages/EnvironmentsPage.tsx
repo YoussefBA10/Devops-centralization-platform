@@ -266,7 +266,11 @@ const EnvironmentsPage: React.FC = () => {
                                 Machine
                               </span>
                             </span>
-                            <span className="text-xs text-muted-foreground">Status: <span className={node.status === "Online" ? 'text-emerald-500' : 'text-destructive'}>{node.status}</span></span>
+                            <span className="text-xs text-muted-foreground flex items-center gap-3">
+                              <span className="font-mono text-primary/70">{node.ip || 'N/A'}</span>
+                              <span>•</span>
+                              <span className={node.status === "Online" ? 'text-emerald-500' : 'text-destructive'}>{node.status}</span>
+                            </span>
                           </div>
                         </div>
                         <Button 
