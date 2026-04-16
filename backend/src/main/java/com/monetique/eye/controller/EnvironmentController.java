@@ -106,8 +106,17 @@ public class EnvironmentController {
 
             // Extract IP/Hostname from instance (remove port)
             String nodeKey = instance != null ? instance.split(":")[0] : "unknown";
-            // For central node, use label
-            if ("vmpipe".equals(label)) nodeKey = "vmpipe";
+            
+            // Only collapse into "vmpipe" if it's an internal service name or the central node IP
+            if ("vmpipe".equals(label) && (
+                "node-exporter".equals(nodeKey) || 
+                "cadvisor".equals(nodeKey) || 
+                "filebeat".equals(nodeKey) || 
+                "localhost".equals(nodeKey) ||
+                nodeKey.equals(env.getCentralNodeIp())
+            )) {
+                nodeKey = "vmpipe";
+            }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
                 "nodeName", nodeKey,
@@ -131,7 +140,14 @@ public class EnvironmentController {
             String instance = metric.get("instance");
             
             String nodeKey = instance != null ? instance.split(":")[0] : "unknown";
-            if ("vmpipe".equals(label)) nodeKey = "vmpipe";
+            
+            if ("vmpipe".equals(label) && (
+                "cadvisor".equals(nodeKey) || 
+                "localhost".equals(nodeKey) ||
+                nodeKey.equals(env.getCentralNodeIp())
+            )) {
+                nodeKey = "vmpipe";
+            }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
                 "nodeName", nodeKey,
