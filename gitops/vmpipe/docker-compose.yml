@@ -210,11 +210,11 @@ services:
         - "5045:5045"
         - "5000:5000"
         - "9600:9600"
+    environment:
+      - ELASTIC_USER=${ELASTIC_USER}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
     depends_on:
       - elasticsearch
-    environment:
-      - ELASTIC_USER=${ELASTIC_USER:-elastic}
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
     networks:
       - monetique-eye-net
 
@@ -263,7 +263,7 @@ services:
       PROMETHEUS_URL: ${PROMETHEUS_URL}
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
-      MONETIQUE_GITOPS_PATH: "/app/gitops"
+      MONETIQUE_GITOPS_PATH: ${MONETIQUE_GITOPS_PATH}
     ports:
       - "8880:8880"
       - "9001:9001"
