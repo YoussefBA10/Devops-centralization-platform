@@ -263,7 +263,7 @@ services:
       PROMETHEUS_URL: ${PROMETHEUS_URL}
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
-      MONETIQUE_GITOPS_PATH: ${MONETIQUE_GITOPS_PATH}
+      MONETIQUE_GITOPS_PATH: "/app/gitops"
     ports:
       - "8880:8880"
       - "9001:9001"

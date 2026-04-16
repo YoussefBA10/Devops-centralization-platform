@@ -63,7 +63,7 @@ public class DeploymentService {
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
             executeProcessSecure(
-                    new String[] { gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword },
+                    new String[] { "bash", gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword },
                     deploymentLog, 300);
 
             // 3. Execute Ansible Playbook
