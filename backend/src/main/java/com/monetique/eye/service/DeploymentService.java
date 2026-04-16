@@ -84,6 +84,7 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
+            registerNodeInPrometheus(environment, targetIp);
             environment.setLastDeploymentStatus(DeploymentStatus.SUCCESS);
             environment.setLastDeployedAt(java.time.LocalDateTime.now());
             environmentRepository.save(environment);
