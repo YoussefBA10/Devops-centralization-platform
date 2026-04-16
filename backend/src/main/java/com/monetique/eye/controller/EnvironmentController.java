@@ -84,7 +84,6 @@ public class EnvironmentController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         String label = resolvePrometheusLabel(env);
-        List<Map<String, Object>> resultNodes = new ArrayList<>();
 
         // 1. Fetch Agents (node-exporter, cadvisor, filebeat)
         List<Map<String, Object>> agentMetrics = prometheusClient.queryList(
@@ -94,28 +93,20 @@ public class EnvironmentController {
         List<Map<String, Object>> containerMetrics = prometheusClient.queryList(
                 String.format("time() - container_last_seen{environment=\"%s\", name!=\"\"} < 60", label));
 
-        // Map to group by Host/Instance
+        // Map to group by node label
         Map<String, Map<String, Object>> nodeMap = new HashMap<>();
 
         // Process Agents to identify Nodes
         for (Map<String, Object> metricData : agentMetrics) {
             Map<String, String> metric = (Map<String, String>) metricData.get("metric");
-            String instance = metric.get("instance");
             String job = metric.get("job");
             String value = metricData.get("value").toString();
-
-            // Extract IP/Hostname from instance (remove port)
-            String nodeKey = instance != null ? instance.split(":")[0] : "unknown";
             
-            // Only collapse into "vmpipe" if it's an internal service name or the central node IP
-            if ("vmpipe".equals(label) && (
-                "node-exporter".equals(nodeKey) || 
-                "cadvisor".equals(nodeKey) || 
-                "filebeat".equals(nodeKey) || 
-                "localhost".equals(nodeKey) ||
-                nodeKey.equals(env.getCentralNodeIp())
-            )) {
-                nodeKey = "vmpipe";
+            // Use the 'node' label for grouping; fall back to instance IP
+            String nodeKey = metric.get("node");
+            if (nodeKey == null || nodeKey.isEmpty()) {
+                String instance = metric.get("instance");
+                nodeKey = instance != null ? instance.split(":")[0] : "unknown";
             }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
@@ -137,16 +128,12 @@ public class EnvironmentController {
         for (Map<String, Object> metricData : containerMetrics) {
             Map<String, String> metric = (Map<String, String>) metricData.get("metric");
             String name = metric.get("name");
-            String instance = metric.get("instance");
             
-            String nodeKey = instance != null ? instance.split(":")[0] : "unknown";
-            
-            if ("vmpipe".equals(label) && (
-                "cadvisor".equals(nodeKey) || 
-                "localhost".equals(nodeKey) ||
-                nodeKey.equals(env.getCentralNodeIp())
-            )) {
-                nodeKey = "vmpipe";
+            // Use the 'node' label for grouping; fall back to instance IP
+            String nodeKey = metric.get("node");
+            if (nodeKey == null || nodeKey.isEmpty()) {
+                String instance = metric.get("instance");
+                nodeKey = instance != null ? instance.split(":")[0] : "unknown";
             }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
@@ -171,8 +158,9 @@ public class EnvironmentController {
         String targetIp = request.get("targetIp");
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
+        String nodeName = request.get("nodeName");
         
-        CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser, sshPassword);
+        CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser, sshPassword, nodeName);
         
         // Return immediately with a placeholder, or wait slightly. Here we just return async confirmation.
         return ResponseEntity.ok(Map.of(

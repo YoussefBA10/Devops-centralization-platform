@@ -104,12 +104,12 @@ const EnvironmentsPage: React.FC = () => {
     }
   };
 
-  const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string) => {
+  const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string, nodeName: string) => {
     if (!selectedEnv) return;
     setDeploymentLoading(true);
     setDeploymentError(null);
     try {
-      await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword });
+      await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword, nodeName });
       
       // Notify the specific card to start its internal polling
       setActiveDeployments(prev => ({ ...prev, [selectedEnv.id]: targetIp }));
