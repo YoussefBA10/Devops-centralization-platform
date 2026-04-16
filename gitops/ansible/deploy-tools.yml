@@ -2,69 +2,110 @@
 - name: Deploy Observability Tools to Agent Node
   hosts: agents
   become: yes
+
   vars:
-    node_exporter_version: "1.7.0"
     filebeat_version: "8.11.1"
     central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
+    env_label: "{{ environment_label | default('production') }}"
 
   tasks:
-    - name: Ensure Docker is installed
+    # -----------------------------
+    # Check if Docker exists
+    # -----------------------------
+    - name: Check if Docker is installed
+      command: docker --version
+      register: docker_check
+      ignore_errors: yes
+      changed_when: false
+
+    # -----------------------------
+    # Fix broken Docker repo (IMPORTANT)
+    # -----------------------------
+    - name: Remove broken Docker repo
+      file:
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+      when: docker_check.failed
+
+    - name: Remove Docker keyring conflict
+      file:
+        path: /etc/apt/keyrings/docker.asc
+        state: absent
+      when: docker_check.failed
+
+    # -----------------------------
+    # Install Docker
+    # -----------------------------
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      when: docker_check.failed
+
+    - name: Install Docker
       apt:
         name: docker.io
         state: present
-        update_cache: yes
+      when: docker_check.failed
 
-    - name: Start and Enable Docker
+    - name: Start Docker
       systemd:
         name: docker
         state: started
         enabled: yes
 
-    - name: Deploy cAdvisor Container
-      docker_container:
-        name: cadvisor
-        image: gcr.io/cadvisor/cadvisor:latest
-        state: started
-        restart_policy: always
-        ports:
-          - "8081:8080"
-        volumes:
-          - /:/rootfs:ro
-          - /var/run:/var/run:ro
-          - /sys:/sys:ro
-          - /var/lib/docker/:/var/lib/docker:ro
-          - /dev/disk/:/dev/disk:ro
-        labels:
-          environment: "{{ env_label }}"
+    # -----------------------------
+    # Ensure containers are absent (idempotent)
+    # -----------------------------
+    - name: Remove old containers if exist
+      shell: |
+        docker rm -f cadvisor node-exporter filebeat || true
+      changed_when: false
 
-    - name: Deploy Node Exporter Container
-      docker_container:
-        name: node-exporter
-        image: prom/node-exporter:latest
-        state: started
-        restart_policy: always
-        ports:
-          - "9100:9100"
-        command:
-          - '--path.rootfs=/host'
-        volumes:
-          - /:/host:ro,rslave
-        labels:
-          environment: "{{ env_label }}"
+    # -----------------------------
+    # Run cAdvisor
+    # -----------------------------
+    - name: Run cAdvisor
+      shell: |
+        docker run -d --name cadvisor \
+        --restart=always \
+        -p 8081:8080 \
+        -v /:/rootfs:ro \
+        -v /var/run:/var/run:ro \
+        -v /sys:/sys:ro \
+        -v /var/lib/docker/:/var/lib/docker:ro \
+        -v /dev/disk/:/dev/disk:ro \
+        gcr.io/cadvisor/cadvisor:latest
+      args:
+        executable: /bin/bash
 
-    - name: Install Filebeat (Simplified via Docker)
-      docker_container:
-        name: filebeat
-        image: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
-        state: started
-        restart_policy: always
-        user: root
-        volumes:
-          - /var/lib/docker/containers:/var/lib/docker/containers:ro
-          - /var/run/docker.sock:/var/run/docker.sock:ro
-        command: >
-          filebeat -e
-          -E "output.logstash.hosts=['{{ central_logstash_ip }}:5044']"
-          -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
-        labels:
-          environment: "{{ env_label }}"
+    # -----------------------------
+    # Run Node Exporter
+    # -----------------------------
+    - name: Run Node Exporter
+      shell: |
+        docker run -d --name node-exporter \
+        --restart=always \
+        -p 9100:9100 \
+        -v /:/host:ro,rslave \
+        prom/node-exporter:latest \
+        --path.rootfs=/host
+      args:
+        executable: /bin/bash
+
+    # -----------------------------
+    # Run Filebeat
+    # -----------------------------
+    - name: Run Filebeat
+      shell: |
+        docker run -d --name filebeat \
+        --restart=always \
+        --user root \
+        -v /var/lib/docker/containers:/var/lib/docker/containers:ro \
+        -v /var/run/docker.sock:/var/run/docker.sock:ro \
+        docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
+        filebeat -e \
+        -E "output.elasticsearch.enabled=false" \
+        -E "output.logstash.hosts=['{{ central_logstash_ip }}:5045']" \
+        -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
+      args:
+        executable: /bin/bash

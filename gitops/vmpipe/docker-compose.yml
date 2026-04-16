@@ -101,6 +101,7 @@ services:
       - "8081:8080"
     networks:
       - monetique-eye-net
+      
   filebeat:
     image: docker.elastic.co/beats/filebeat:7.17.9
     container_name: filebeat
@@ -211,6 +212,9 @@ services:
         - "9600:9600"
     depends_on:
       - elasticsearch
+    environment:
+      - ELASTIC_USER=${ELASTIC_USER:-elastic}
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:-changeme}
     networks:
       - monetique-eye-net
 

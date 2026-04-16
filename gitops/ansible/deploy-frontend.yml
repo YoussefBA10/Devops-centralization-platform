@@ -1,0 +1,22 @@
+---
+- name: Deploy Frontend Application to Agent Node
+  hosts: agents
+  become: yes
+  vars:
+    appName: "frontend"
+    image_tag: "v1"
+    central_ip: "192.168.126.130"
+
+  tasks:
+    - name: Remove old frontend container if exists
+      shell: "docker rm -f {{ appName }} || true"
+      changed_when: false
+
+    - name: Run Frontend Container
+      shell: |
+        docker run -d --name {{ appName }} \
+        --restart=always \
+        -p 80:80 \
+        {{ appName }}:{{ image_tag }}
+      args:
+        executable: /bin/bash

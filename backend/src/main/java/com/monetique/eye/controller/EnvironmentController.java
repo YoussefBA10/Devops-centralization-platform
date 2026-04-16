@@ -89,12 +89,13 @@ public class EnvironmentController {
             nodes = prometheusClient.queryList(
                 "time() - container_last_seen{environment=\"vmpipe\", name!=\"\"} < 60"
             );
-            // Remap labels for consistent UI display
+            // Remap labels for consistent UI display and force "1" (Online) status
             nodes.forEach(node -> {
                 Map<String, Object> metric = (Map<String, Object>) node.get("metric");
                 if (metric != null && metric.containsKey("name")) {
                     metric.put("instance", metric.get("name"));
                     metric.put("job", "container");
+                    node.put("value", "1"); // Explicitly set as Online
                 }
             });
         } else {

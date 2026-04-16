@@ -101,15 +101,24 @@ public class DeploymentService {
             // 1. Update Inventory
             updateInventory(targetIp);
 
-            // 2. Execute Application Playbook
-            String playbookPath = gitopsPath + "/ansible/deploy-backend.yml";
+            // 2. Select Playbook
+            String playbookFile = "deploy-backend.yml";
+            if (appName.toLowerCase().contains("frontend")) {
+                playbookFile = "deploy-frontend.yml";
+            }
+            
+            String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp() : "192.168.126.130";
+
+            // 3. Execute Application Playbook
             executeProcess(new String[] {
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
                     "-e", "appName=" + appName,
-                    "-e", "ansible_user=" + sshUser
+                    "-e", "ansible_user=" + sshUser,
+                    "-e", "central_ip=" + centralIp
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
