@@ -45,8 +45,9 @@ scrape_configs:
     metrics_path: '/metrics'
     file_sd_configs:
       - files:
-          - '/etc/prometheus/file_sd/agent_targets.yml'
-        refresh_interval: 1m
+          - '/etc/prometheus/file_sd/*.yml'
+          - '/etc/prometheus/file_sd/*.json'
+        refresh_interval: 15s
     relabel_configs:
       - source_labels: [job]
         regex: 'node-exporter'
@@ -57,8 +58,9 @@ scrape_configs:
     metrics_path: '/metrics'
     file_sd_configs:
       - files:
-          - '/etc/prometheus/file_sd/agent_targets.yml'
-        refresh_interval: 1m
+          - '/etc/prometheus/file_sd/*.yml'
+          - '/etc/prometheus/file_sd/*.json'
+        refresh_interval: 15s
     relabel_configs:
       - source_labels: [job]
         regex: 'cadvisor'
@@ -69,8 +71,9 @@ scrape_configs:
     metrics_path: '/metrics'
     file_sd_configs:
       - files:
-          - '/etc/prometheus/file_sd/agent_targets.yml'
-        refresh_interval: 1m
+          - '/etc/prometheus/file_sd/*.yml'
+          - '/etc/prometheus/file_sd/*.json'
+        refresh_interval: 15s
     relabel_configs:
       - source_labels: [job]
         regex: 'filebeat'

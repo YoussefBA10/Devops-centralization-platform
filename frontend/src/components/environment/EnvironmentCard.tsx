@@ -67,10 +67,11 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
           if (currentStatus === 'SUCCESS') {
             setStatus('success');
             onRefresh(); // Refresh parent data
-            setTimeout(() => setStatus('idle'), 5000);
+            // Maintain success state for 10 seconds for better visibility
+            setTimeout(() => setStatus('idle'), 10000);
           } else if (currentStatus === 'FAILED') {
             setStatus('failed');
-            setErrorMessage(res.data.message || 'Deployment failed. Please check logs.');
+            setErrorMessage(res.data.log?.split('\n').pop() || 'Deployment failed. Check logs.');
           }
         } catch (error) {
           // Keep polling if there's a network error, backend might be starting up

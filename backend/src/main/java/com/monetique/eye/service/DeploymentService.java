@@ -261,7 +261,7 @@ public class DeploymentService {
             log.info("Triggering Prometheus reload...");
             java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create("http://192.168.126.130:9090/-/reload"))
+                    .uri(java.net.URI.create("http://prometheus:9090/-/reload"))
                     .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
                     .build();
             client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding());
