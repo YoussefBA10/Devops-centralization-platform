@@ -59,7 +59,7 @@ public class DeploymentService {
             executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
-            updateInventory(targetIp);
+            updateInventory(environment.getName(), targetIp, sshUser);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
             executeProcessSecure(
@@ -115,7 +115,7 @@ public class DeploymentService {
 
         try {
             // 1. Update Inventory
-            updateInventory(targetIp);
+            updateInventory(environment.getName(), targetIp, sshUser);
 
             // 2. Select Playbook
             String playbookFile = "deploy-backend.yml";
@@ -162,13 +162,14 @@ public class DeploymentService {
         }
     }
 
-    private void updateInventory(String targetIp) throws Exception {
-        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with target IP: {}", gitopsPath, targetIp);
+    private void updateInventory(String envName, String targetIp, String sshUser) throws Exception {
+        String hostAlias = envName.toLowerCase().replaceAll("[^a-z0-9]", "-");
+        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with host: {}, User: {}", gitopsPath, hostAlias, sshUser);
         File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
         inventoryFile.getParentFile().mkdirs();
         try (FileWriter writer = new FileWriter(inventoryFile)) {
             writer.write("[agents]\n");
-            writer.write("node-agent ansible_host=" + targetIp + " ansible_user=root\n");
+            writer.write(hostAlias + " ansible_host=" + targetIp + " ansible_user=" + sshUser + "\n");
         }
     }
 
