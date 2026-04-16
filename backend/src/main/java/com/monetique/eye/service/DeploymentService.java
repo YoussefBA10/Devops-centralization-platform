@@ -313,6 +313,9 @@ public class DeploymentService {
         logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
 
         if (process.exitValue() != 0) {
+            String errorMsg = "Process exited with code " + process.exitValue() + "\nOutput:\n" + output.toString();
+            log.error(errorMsg);
+            System.err.println(errorMsg); // Ensure it appears in VM console
             throw new RuntimeException("Process exited with code " + process.exitValue());
         }
     }
