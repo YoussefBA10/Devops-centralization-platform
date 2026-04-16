@@ -80,32 +80,68 @@ public class EnvironmentController {
     public ResponseEntity<List<Map<String, Object>>> getNodes(@PathVariable Long id) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
-        String label = resolvePrometheusLabel(env);
-        List<Map<String, Object>> nodes;
 
-        if ("vmpipe".equals(label)) {
-            // For the central node, show all containers tracked by cAdvisor
-            nodes = prometheusClient.queryList(
-                "time() - container_last_seen{environment=\"vmpipe\", name!=\"\"} < 60"
-            );
-            // Remap labels for consistent UI display and force "1" (Online) status
-            nodes.forEach(node -> {
-                Map<String, Object> metric = (Map<String, Object>) node.get("metric");
-                if (metric != null && metric.containsKey("name")) {
-                    metric.put("instance", metric.get("name"));
-                    metric.put("job", "container");
-                    node.put("value", "1"); // Explicitly set as Online
-                }
-            });
-        } else {
-            // For remote nodes, show infrastructure agents (node-exporter and cadvisor)
-            nodes = prometheusClient.queryList(
-                String.format("up{job=~\"node-exporter|cadvisor|filebeat\", environment=\"%s\"}", label)
-            );
+        String label = resolvePrometheusLabel(env);
+        List<Map<String, Object>> resultNodes = new ArrayList<>();
+
+        // 1. Fetch Agents (node-exporter, cadvisor, filebeat)
+        List<Map<String, Object>> agentMetrics = prometheusClient.queryList(
+                String.format("up{environment=\"%s\"}", label));
+
+        // 2. Fetch Containers
+        List<Map<String, Object>> containerMetrics = prometheusClient.queryList(
+                String.format("time() - container_last_seen{environment=\"%s\", name!=\"\"} < 60", label));
+
+        // Map to group by Host/Instance
+        Map<String, Map<String, Object>> nodeMap = new HashMap<>();
+
+        // Process Agents to identify Nodes
+        for (Map<String, Object> metricData : agentMetrics) {
+            Map<String, String> metric = (Map<String, String>) metricData.get("metric");
+            String instance = metric.get("instance");
+            String job = metric.get("job");
+            String value = metricData.get("value").toString();
+
+            // Extract IP/Hostname from instance (remove port)
+            String nodeKey = instance != null ? instance.split(":")[0] : "unknown";
+            // For central node, use label
+            if ("vmpipe".equals(label)) nodeKey = "vmpipe";
+
+            nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
+                "nodeName", nodeKey,
+                "status", "Offline",
+                "services", new ArrayList<Map<String, String>>()
+            )));
+
+            Map<String, Object> nodeInfo = nodeMap.get(nodeKey);
+            List<Map<String, String>> services = (List<Map<String, String>>) nodeInfo.get("services");
+            
+            services.add(Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT"));
+            if ("node-exporter".equals(job) && "1".equals(value)) {
+                nodeInfo.put("status", "Online");
+            }
         }
-        
-        return ResponseEntity.ok(nodes);
+
+        // Process Containers
+        for (Map<String, Object> metricData : containerMetrics) {
+            Map<String, String> metric = (Map<String, String>) metricData.get("metric");
+            String name = metric.get("name");
+            String instance = metric.get("instance");
+            
+            String nodeKey = instance != null ? instance.split(":")[0] : "unknown";
+            if ("vmpipe".equals(label)) nodeKey = "vmpipe";
+
+            nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
+                "nodeName", nodeKey,
+                "status", "Online",
+                "services", new ArrayList<Map<String, String>>()
+            )));
+
+            List<Map<String, String>> services = (List<Map<String, String>>) nodeMap.get(nodeKey).get("services");
+            services.add(Map.of("name", name, "status", "Online", "type", "CONTAINER"));
+        }
+
+        return ResponseEntity.ok(new ArrayList<>(nodeMap.values()));
     }
 
     @PostMapping("/{id}/deploy-agent")

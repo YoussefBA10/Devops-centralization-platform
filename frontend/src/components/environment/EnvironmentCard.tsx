@@ -209,15 +209,26 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
               </p>
             </div>
           </div>
-          <Button 
-            className="rounded-xl px-6 h-11 gap-2 border-primary/20 hover:bg-primary transition-all duration-300 shadow-xl shadow-primary/5 group"
-            variant={resources.nodeCount === 0 ? "primary" : "outline"}
-            onClick={onDeployClick}
-            disabled={status === 'deploying'}
-          >
-            Deploy Node
-            <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              className="rounded-xl px-4 h-11 gap-2 border-white/5 hover:bg-white/5 transition-all duration-300"
+              onClick={onNodesClick}
+              disabled={status === 'deploying'}
+            >
+              <Activity className="w-4 h-4" />
+              View Nodes
+            </Button>
+            <Button 
+              className="rounded-xl px-6 h-11 gap-2 border-primary/20 hover:bg-primary transition-all duration-300 shadow-xl shadow-primary/5 group"
+              variant={resources.nodeCount === 0 ? "primary" : "outline"}
+              onClick={onDeployClick}
+              disabled={status === 'deploying'}
+            >
+              Deploy Node
+              <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </Button>
+          </div>
         </div>
       </div>
     </Card>

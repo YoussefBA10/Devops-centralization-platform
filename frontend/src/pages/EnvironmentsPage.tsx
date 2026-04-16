@@ -253,44 +253,61 @@ const EnvironmentsPage: React.FC = () => {
                   <p className="text-muted-foreground animate-pulse">Scanning infrastructure...</p>
                 </div>
               ) : nodes.length > 0 ? (
-                <table className="w-full text-left">
-                  <thead className="bg-white/5 text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground">
-                    <tr>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Instance / IP</th>
-                      <th className="px-6 py-4">Job</th>
-                      <th className="px-6 py-4 text-right">Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {nodes.map((node, i) => (
-                      <tr key={i} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${node.value === "1" ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-destructive'}`}></div>
-                            <span className="text-xs font-bold uppercase tracking-wider">
-                              {node.value === "1" ? 'Online' : 'Offline'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
+                <div className="divide-y divide-white/5">
+                  {nodes.map((node: any, i) => (
+                    <div key={i} className="flex flex-col">
+                      <div className="flex items-center justify-between px-6 py-5 hover:bg-white/[0.02] transition-colors group">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-3 h-3 rounded-full ${node.status === "Online" ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'bg-destructive'}`}></div>
                           <div className="flex flex-col">
-                            <span className="text-sm font-mono font-bold text-primary">{node.metric.instance}</span>
-                            <span className="text-[10px] text-muted-foreground">{node.metric.environment || 'N/A'}</span>
+                            <span className="text-base font-bold text-white flex items-center gap-2">
+                              {node.nodeName}
+                              <span className="text-[10px] py-0.5 px-2 bg-primary/10 text-primary rounded-full border border-primary/20 uppercase tracking-widest">
+                                Machine
+                              </span>
+                            </span>
+                            <span className="text-xs text-muted-foreground">Status: <span className={node.status === "Online" ? 'text-emerald-500' : 'text-destructive'}>{node.status}</span></span>
                           </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className="text-xs py-1 px-2.5 bg-secondary rounded-lg border border-white/5">
-                            {node.metric.job}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5 text-right font-mono text-sm text-muted-foreground">
-                          {node.value}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="rounded-lg gap-2"
+                          onClick={() => {
+                            const detailRow = document.getElementById(`services-${i}`);
+                            if (detailRow) detailRow.classList.toggle('hidden');
+                          }}
+                        >
+                          <Activity className="w-4 h-4" />
+                          See Services ({node.services?.length || 0})
+                        </Button>
+                      </div>
+                      
+                      {/* Services Detail Row */}
+                      <div id={`services-${i}`} className="hidden bg-black/40 border-y border-white/5 animate-in slide-in-from-top-2 duration-300">
+                        <div className="px-12 py-4">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-4">Node Runtime Services</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {node.services?.map((service: any, si: number) => (
+                              <div key={si} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full ${service.status === "Online" ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
+                                  <div className="flex flex-col">
+                                    <span className="text-sm font-bold">{service.name}</span>
+                                    <span className="text-[9px] uppercase tracking-widest text-muted-foreground">{service.type}</span>
+                                  </div>
+                                </div>
+                                <span className={`text-[10px] font-bold ${service.status === "Online" ? 'text-emerald-500' : 'text-destructive'}`}>
+                                  {service.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="p-20 flex flex-col items-center text-center">
                   <div className="w-16 h-16 bg-muted/10 rounded-full flex items-center justify-center mb-4">
