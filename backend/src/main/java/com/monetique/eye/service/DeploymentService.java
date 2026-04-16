@@ -59,7 +59,7 @@ public class DeploymentService {
             executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
-            updateInventory(environment.getName(), targetIp, sshUser);
+            updateInventory(sshUser, targetIp, sshUser);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
             executeProcessSecure(
@@ -69,9 +69,10 @@ public class DeploymentService {
             // 3. Execute Ansible Playbook
             String playbookPath = gitopsPath + "/ansible/deploy-tools.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            
+
             String envLabel = environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
-            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp() : "192.168.126.130";
+            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
+                    : "192.168.126.130";
 
             executeProcess(new String[] {
                     "ansible-playbook",
@@ -122,10 +123,11 @@ public class DeploymentService {
             if (appName.toLowerCase().contains("frontend")) {
                 playbookFile = "deploy-frontend.yml";
             }
-            
+
             String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp() : "192.168.126.130";
+            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
+                    : "192.168.126.130";
 
             // 3. Execute Application Playbook
             executeProcess(new String[] {
@@ -138,11 +140,12 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
-            
+
             // Auto-create application record if not exists
             if (applicationRepository.findAll().stream()
-                .noneMatch(a -> a.getName().equalsIgnoreCase(appName) && a.getEnvironment().getId().equals(environment.getId()))) {
-                
+                    .noneMatch(a -> a.getName().equalsIgnoreCase(appName)
+                            && a.getEnvironment().getId().equals(environment.getId()))) {
+
                 Application app = Application.builder()
                         .name(appName)
                         .environment(environment)
@@ -151,7 +154,7 @@ public class DeploymentService {
                 applicationRepository.save(app);
                 log.info("Auto-created application record for: {}", appName);
             }
-            
+
         } catch (Exception e) {
             log.error("Application deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
@@ -164,7 +167,8 @@ public class DeploymentService {
 
     private void updateInventory(String envName, String targetIp, String sshUser) throws Exception {
         String hostAlias = envName.toLowerCase().replaceAll("[^a-z0-9]", "-");
-        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with host: {}, User: {}", gitopsPath, hostAlias, sshUser);
+        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with host: {}, User: {}", gitopsPath,
+                hostAlias, sshUser);
         File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
         inventoryFile.getParentFile().mkdirs();
         try (FileWriter writer = new FileWriter(inventoryFile)) {
@@ -193,7 +197,7 @@ public class DeploymentService {
             }
 
             String envLabel = environment.getName().toLowerCase().replace(" ", "-");
-            
+
             // Determine targets based on whether the IP matches the central node
             String nodeExporterTarget = ip + ":9100";
             String cadvisorTarget = ip + ":8081";
