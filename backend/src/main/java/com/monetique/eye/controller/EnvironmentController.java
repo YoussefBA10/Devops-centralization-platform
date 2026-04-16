@@ -131,8 +131,21 @@ public class EnvironmentController {
 
             Map<String, Object> nodeInfo = nodeMap.get(nodeKey);
             List<Map<String, String>> services = (List<Map<String, String>>) nodeInfo.get("services");
+            boolean exists = false;
+            for (Map<String, String> s : services) {
+                if (s.get("name").equals(job) && "AGENT".equals(s.get("type"))) {
+                    exists = true;
+                    // Always prefer "Online" over "Offline" if multiple metrics exist
+                    if ("1".equals(value)) {
+                        s.put("status", "Online");
+                    }
+                    break;
+                }
+            }
+            if (!exists) {
+                services.add(new HashMap<>(Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT")));
+            }
             
-            services.add(Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT"));
             if ("node-exporter".equals(job) && "1".equals(value)) {
                 nodeInfo.put("status", "Online");
             }
@@ -178,7 +191,7 @@ public class EnvironmentController {
                 }
             }
             if (!exists) {
-                services.add(Map.of("name", name, "status", "Online", "type", "CONTAINER"));
+                services.add(new HashMap<>(Map.of("name", name, "status", "Online", "type", "CONTAINER")));
             }
         }
 
