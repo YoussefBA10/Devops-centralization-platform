@@ -220,7 +220,8 @@ public class DeploymentService {
     }
 
     public void updateInventory(String envName, String targetIp, String sshUser) {
-        log.info("Updating Ansible inventory for env: {}, host: {}, User: {}", envName, targetIp, sshUser);
+        String groupName = "env-" + envName;
+        log.info("Updating Ansible inventory for env group: {}, host: {}, User: {}", groupName, targetIp, sshUser);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             inventoryFile.getParentFile().mkdirs();
@@ -239,83 +240,102 @@ public class DeploymentService {
             }
             if (childrenIdx == -1) {
                 if (!lines.isEmpty() && lines.get(0).trim().equals("[agents]")) {
-                    lines.set(0, "[agents:children]"); // Replace old simple [agents]
+                    lines.set(0, "[agents:children]"); 
                 } else {
                     lines.add(0, "[agents:children]");
                 }
                 childrenIdx = 0;
             }
 
-            // 2. Ensure envName is listed under [agents:children]
+            // 2. Ensure groupName is listed under [agents:children]
             boolean envInChildren = false;
             int lastChildIdx = childrenIdx;
             for (int i = childrenIdx + 1; i < lines.size(); i++) {
                 String l = lines.get(i).trim();
                 if (l.startsWith("[")) break; // Next section
-                if (l.equals(envName)) {
+                if (l.equals(groupName)) {
                     envInChildren = true;
                     break;
+                }
+                // Also check if the old unprefixed name is there and remove it
+                if (l.equals(envName)) {
+                    lines.remove(i);
+                    i--;
+                    continue;
                 }
                 if (!l.isEmpty()) lastChildIdx = i;
             }
             if (!envInChildren) {
-                lines.add(lastChildIdx + 1, envName);
+                lines.add(lastChildIdx + 1, groupName);
             }
 
-            // 3. Ensure [envName] group exists
+            // 3. Ensure [groupName] header exists
             int envIdx = -1;
             for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).trim().equals("[" + envName + "]")) {
+                if (lines.get(i).trim().equals("[" + groupName + "]")) {
                     envIdx = i;
                     break;
                 }
             }
             if (envIdx == -1) {
                 lines.add(""); // Spacer
-                lines.add("[" + envName + "]");
+                lines.add("[" + groupName + "]");
                 envIdx = lines.size() - 1;
             }
 
             // 4. Update node entries if IP is provided
             if (targetIp != null && sshUser != null) {
-                String safeAlias = "agent-" + targetIp.replace(".", "-");
                 String ipLine = targetIp + " ansible_user=" + sshUser;
-                String aliasLine = safeAlias + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
+                String aliasLine = sshUser + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
-                // Remove existing stale entries for this IP or this Alias across the whole file
+                // DEEP CLEAN: Remove ANY line that could cause a collision
                 lines.removeIf(line -> {
                     String trimmed = line.trim();
-                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false; // Don't remove headers
-                    // Aggressive matching: literal IP, alias-style, or any line containing the IP
+                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                        // Special case: if we find the old unprefixed header, we keep it but it will be empty 
+                        // or we could remove it. Let's remove it if it's the old environment name.
+                        return trimmed.equals("[" + envName + "]");
+                    }
+                    
+                    // Kill lines starting with environment name (the "buggy" line)
+                    if (trimmed.startsWith(envName + " ")) return true;
+                    if (trimmed.equals(envName)) return true;
+
+                    // Kill lines starting with the SSH User (your preferred alias) to ensure it's fresh
+                    if (trimmed.startsWith(sshUser + " ")) return true;
+                    if (trimmed.equals(sshUser)) return true;
+
+                    // Kill lines containing the target IP or mentions of the old alias style
                     return trimmed.startsWith(targetIp + " ") || 
                            trimmed.equals(targetIp) || 
-                           trimmed.startsWith(safeAlias + " ") ||
+                           trimmed.startsWith("agent-" + targetIp.replace(".", "-")) ||
                            trimmed.contains("ansible_host=" + targetIp);
                 });
 
                 // Find env header again because indices might have changed after removal
                 envIdx = -1;
                 for (int i = 0; i < lines.size(); i++) {
-                    if (lines.get(i).trim().equals("[" + envName + "]")) {
+                    if (lines.get(i).trim().equals("[" + groupName + "]")) {
                         envIdx = i;
                         break;
                     }
                 }
                 
-                // Add new entries under the header
+                // Add new entries under the correct header
                 lines.add(envIdx + 1, ipLine);
                 lines.add(envIdx + 2, aliasLine);
             }
 
             Files.write(inventoryFile.toPath(), lines);
-            log.info("Inventory successfully restructured for environment: {}", envName);
+            log.info("Inventory successfully deep-cleaned and restructured for group: {}", groupName);
         } catch (Exception e) {
             log.error("Failed to update inventory: {}", e.getMessage(), e);
         }
     }
 
     public void removeEnvironmentFromInventory(String envName) {
-        log.info("Removing environment group from inventory: {}", envName);
+        String groupName = "env-" + envName;
+        log.info("Removing environment group from inventory: {}", groupName);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             if (!inventoryFile.exists()) return;
@@ -327,13 +347,13 @@ public class DeploymentService {
             for (String line : lines) {
                 String trimmed = line.trim();
                 
-                // 1. Skip the environment name if it's under [agents:children]
-                if (!inTargetSection && trimmed.equals(envName)) {
+                // 1. Skip the group name (prefixed or not) if it's under [agents:children]
+                if (!inTargetSection && (trimmed.equals(groupName) || trimmed.equals(envName))) {
                     continue; 
                 }
 
                 // 2. Detect start of target section
-                if (trimmed.equals("[" + envName + "]")) {
+                if (trimmed.equals("[" + groupName + "]") || trimmed.equals("[" + envName + "]")) {
                     inTargetSection = true;
                     continue;
                 }
@@ -350,7 +370,7 @@ public class DeploymentService {
             }
 
             Files.write(inventoryFile.toPath(), newLines);
-            log.info("Environment {} removed from inventory successfully.", envName);
+            log.info("Environment {} removed from inventory successfully.", groupName);
         } catch (Exception e) {
             log.error("Failed to remove environment from inventory: {}", e.getMessage(), e);
         }
@@ -369,6 +389,7 @@ public class DeploymentService {
             lines.removeIf(line -> {
                 String trimmed = line.trim();
                 if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false;
+                // Aggressively remove anything pointing to this IP
                 return trimmed.startsWith(targetIp + " ") || 
                        trimmed.equals(targetIp) || 
                        trimmed.startsWith(safeAlias + " ") ||
