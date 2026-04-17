@@ -9,6 +9,11 @@
         docker rm -f cadvisor node-exporter filebeat || true
       changed_when: false
 
+    - name: Remove observability docker images
+      shell: |
+        docker rmi -f gcr.io/cadvisor/cadvisor:latest prom/node-exporter:latest docker.elastic.co/beats/filebeat:8.11.1 || true
+      changed_when: false
+
     - name: Remove backend SSH key
       authorized_key:
         user: "{{ ssh_user | default(ansible_user) }}"
