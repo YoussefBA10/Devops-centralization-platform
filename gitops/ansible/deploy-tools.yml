@@ -1,6 +1,6 @@
 ---
 - name: Deploy Observability Tools to Agent Node
-  hosts: agents
+  hosts: "{{ target_host | default('node-1') }}"
   become: yes
 
   vars:
