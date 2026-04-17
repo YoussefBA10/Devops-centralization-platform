@@ -25,17 +25,20 @@ public class EnvironmentController {
     private final SecurityService securityService;
     private final com.monetique.eye.service.PrometheusClient prometheusClient;
     private final DeploymentLogRepository deploymentLogRepository;
+    private final com.monetique.eye.repository.UserRepository userRepository;
 
     public EnvironmentController(EnvironmentRepository environmentRepository,
             DeploymentService deploymentService,
             SecurityService securityService,
             com.monetique.eye.service.PrometheusClient prometheusClient,
-            DeploymentLogRepository deploymentLogRepository) {
+            DeploymentLogRepository deploymentLogRepository,
+            com.monetique.eye.repository.UserRepository userRepository) {
         this.environmentRepository = environmentRepository;
         this.deploymentService = deploymentService;
         this.securityService = securityService;
         this.prometheusClient = prometheusClient;
         this.deploymentLogRepository = deploymentLogRepository;
+        this.userRepository = userRepository;
     }
 
     private String resolvePrometheusLabel(Environment env) {
@@ -301,12 +304,23 @@ public class EnvironmentController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
+        // 1. Manually clean up User associations (Join Table)
+        env.getUsers().forEach(user -> {
+            user.getEnvironments().remove(env);
+            userRepository.save(user);
+        });
+
+        // 2. Remove from Ansible inventory
         deploymentService.removeEnvironmentFromInventory(env.getName());
+
+        // 3. Delete environment (Cascades will handle applications, logs, and tickets)
         environmentRepository.delete(env);
+        
         return ResponseEntity.ok(Map.of("message", "Environment deleted successfully"));
     }
 }

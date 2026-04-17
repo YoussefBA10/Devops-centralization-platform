@@ -220,8 +220,7 @@ public class DeploymentService {
     }
 
     public void updateInventory(String envName, String targetIp, String sshUser) {
-        String groupName = "env-" + envName;
-        log.info("Updating Ansible inventory for env group: {}, host: {}, User: {}", groupName, targetIp, sshUser);
+        log.info("Updating Ansible inventory for env group: {}, host: {}, User: {}", envName, targetIp, sshUser);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             inventoryFile.getParentFile().mkdirs();
@@ -247,39 +246,33 @@ public class DeploymentService {
                 childrenIdx = 0;
             }
 
-            // 2. Ensure groupName is listed under [agents:children]
+            // 2. Ensure envName is listed under [agents:children]
             boolean envInChildren = false;
             int lastChildIdx = childrenIdx;
             for (int i = childrenIdx + 1; i < lines.size(); i++) {
                 String l = lines.get(i).trim();
                 if (l.startsWith("[")) break; // Next section
-                if (l.equals(groupName)) {
+                if (l.equals(envName)) {
                     envInChildren = true;
                     break;
-                }
-                // Also check if the old unprefixed name is there and remove it
-                if (l.equals(envName)) {
-                    lines.remove(i);
-                    i--;
-                    continue;
                 }
                 if (!l.isEmpty()) lastChildIdx = i;
             }
             if (!envInChildren) {
-                lines.add(lastChildIdx + 1, groupName);
+                lines.add(lastChildIdx + 1, envName);
             }
 
-            // 3. Ensure [groupName] header exists
+            // 3. Ensure [envName] header exists
             int envIdx = -1;
             for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).trim().equals("[" + groupName + "]")) {
+                if (lines.get(i).trim().equals("[" + envName + "]")) {
                     envIdx = i;
                     break;
                 }
             }
             if (envIdx == -1) {
                 lines.add(""); // Spacer
-                lines.add("[" + groupName + "]");
+                lines.add("[" + envName + "]");
                 envIdx = lines.size() - 1;
             }
 
@@ -292,15 +285,10 @@ public class DeploymentService {
                 lines.removeIf(line -> {
                     String trimmed = line.trim();
                     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                        // Special case: if we find the old unprefixed header, we keep it but it will be empty 
-                        // or we could remove it. Let's remove it if it's the old environment name.
-                        return trimmed.equals("[" + envName + "]");
+                        // Don't remove the header we just ensured exists
+                        return false; 
                     }
                     
-                    // Kill lines starting with environment name (the "buggy" line)
-                    if (trimmed.startsWith(envName + " ")) return true;
-                    if (trimmed.equals(envName)) return true;
-
                     // Kill lines starting with the SSH User (your preferred alias) to ensure it's fresh
                     if (trimmed.startsWith(sshUser + " ")) return true;
                     if (trimmed.equals(sshUser)) return true;
@@ -315,7 +303,7 @@ public class DeploymentService {
                 // Find env header again because indices might have changed after removal
                 envIdx = -1;
                 for (int i = 0; i < lines.size(); i++) {
-                    if (lines.get(i).trim().equals("[" + groupName + "]")) {
+                    if (lines.get(i).trim().equals("[" + envName + "]")) {
                         envIdx = i;
                         break;
                     }
@@ -327,15 +315,14 @@ public class DeploymentService {
             }
 
             Files.write(inventoryFile.toPath(), lines);
-            log.info("Inventory successfully deep-cleaned and restructured for group: {}", groupName);
+            log.info("Inventory successfully deep-cleaned and restructured for env: {}", envName);
         } catch (Exception e) {
             log.error("Failed to update inventory: {}", e.getMessage(), e);
         }
     }
 
     public void removeEnvironmentFromInventory(String envName) {
-        String groupName = "env-" + envName;
-        log.info("Removing environment group from inventory: {}", groupName);
+        log.info("Removing environment group from inventory: {}", envName);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             if (!inventoryFile.exists()) return;
@@ -347,13 +334,13 @@ public class DeploymentService {
             for (String line : lines) {
                 String trimmed = line.trim();
                 
-                // 1. Skip the group name (prefixed or not) if it's under [agents:children]
-                if (!inTargetSection && (trimmed.equals(groupName) || trimmed.equals(envName))) {
+                // 1. Skip the group name if it's under [agents:children]
+                if (!inTargetSection && trimmed.equals(envName)) {
                     continue; 
                 }
 
                 // 2. Detect start of target section
-                if (trimmed.equals("[" + groupName + "]") || trimmed.equals("[" + envName + "]")) {
+                if (trimmed.equals("[" + envName + "]")) {
                     inTargetSection = true;
                     continue;
                 }

@@ -40,19 +40,26 @@ public class Environment {
     @JsonIgnore
     private Set<Application> applications = new HashSet<>();
 
-    @OneToMany(mappedBy = "environment", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "environment", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Builder.Default
     @JsonIgnore
     private Set<Ticket> tickets = new HashSet<>();
 
-    @OneToMany(mappedBy = "environment")
+    @OneToMany(mappedBy = "environment", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @Builder.Default
     @JsonIgnore
     private Set<DeploymentLog> deploymentLogs = new HashSet<>();
+
+    @ManyToMany(mappedBy = "environments")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    @JsonIgnore
+    private Set<User> users = new HashSet<>();
 
     @PrePersist
     protected void onCreate() {

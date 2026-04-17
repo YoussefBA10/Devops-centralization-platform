@@ -25,18 +25,28 @@ public class MonetiqueEyeApplication {
 	}
 
 	private static void loadEnv() {
-		Path path = Paths.get(".env");
-		if (Files.exists(path)) {
-			try (FileInputStream fis = new FileInputStream(path.toFile())) {
+		String[] searchPaths = {".env", "backend/.env", System.getProperty("user.home") + "/.env"};
+		Path foundPath = null;
+
+		for (String pathStr : searchPaths) {
+			Path p = Paths.get(pathStr);
+			if (Files.exists(p)) {
+				foundPath = p;
+				break;
+			}
+		}
+
+		if (foundPath != null) {
+			try (FileInputStream fis = new FileInputStream(foundPath.toFile())) {
 				Properties props = new Properties();
 				props.load(fis);
 				props.forEach((key, value) -> System.setProperty(key.toString(), value.toString()));
-				System.out.println("Loaded environment variables from " + path.toAbsolutePath());
+				System.out.println("Loaded environment variables from " + foundPath.toAbsolutePath());
 			} catch (IOException e) {
 				System.err.println("Failed to load .env file: " + e.getMessage());
 			}
 		} else {
-			System.out.println(".env file not found at " + path.toAbsolutePath());
+			System.out.println(".env file not found in searched locations: " + String.join(", ", searchPaths));
 		}
 	}
 }
