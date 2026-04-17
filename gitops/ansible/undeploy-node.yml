@@ -1,6 +1,6 @@
 ---
 - name: Undeploy Observability Tools from Agent Node
-  hosts: all
+  hosts: "{{ target_host | default('node-1') }}"
   become: yes
 
   tasks:
@@ -11,7 +11,7 @@
 
     - name: Remove backend SSH key
       authorized_key:
-        user: "{{ ansible_user }}"
+        user: "{{ ssh_user | default(ansible_user) }}"
         state: absent
         key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
       ignore_errors: true
