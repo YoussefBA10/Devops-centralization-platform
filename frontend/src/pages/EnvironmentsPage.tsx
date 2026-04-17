@@ -66,22 +66,34 @@ const EnvironmentsPage: React.FC = () => {
   const [undeployUser, setUndeployUser] = useState('root');
   const [undeployPassword, setUndeployPassword] = useState('');
   const [undeployLoading, setUndeployLoading] = useState(false);
+  const [undeploySuccess, setUndeploySuccess] = useState(false);
+  const [undeployErrorMessage, setUndeployErrorMessage] = useState<string | null>(null);
 
   const handleUndeploy = async () => {
     if (!selectedEnv || !undeployIp) return;
     setUndeployLoading(true);
+    setUndeploySuccess(false);
+    setUndeployErrorMessage(null);
     try {
       await api.delete(`/environments/${selectedEnv.id}/nodes/${undeployIp}`, { 
         data: { sshUser: undeployUser, sshPassword: undeployPassword } 
       });
-      // Optimistically remove from list
+      setUndeploySuccess(true);
+      // Wait 15 seconds to show success message as requested
+      await new Promise(resolve => setTimeout(resolve, 15000));
+      
+      // Optimistically remove from list and reset
       setNodes(prev => prev.filter(n => n.ip !== undeployIp));
       setUndeployIp(null);
       setUndeployUser('root');
       setUndeployPassword('');
-    } catch (e) {
+      setUndeploySuccess(false);
+    } catch (e: any) {
       console.error('Failed to undeploy', e);
-      alert('Failed to initialize undeployment.');
+      setUndeployErrorMessage(e.response?.data?.message || 'Failed to initialize undeployment.');
+      // Show error for 15 seconds too
+      await new Promise(resolve => setTimeout(resolve, 15000));
+      setUndeployErrorMessage(null);
     } finally {
       setUndeployLoading(false);
     }
@@ -557,36 +569,57 @@ const EnvironmentsPage: React.FC = () => {
             </CardHeader>
             <CardContent className="p-6">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Confirm SSH User</label>
-                  <p className="text-[10px] text-muted-foreground mb-2">We need the SSH username to connect and run the cleanup playbook.</p>
-                  <Input 
-                    value={undeployUser} 
-                    onChange={e => setUndeployUser(e.target.value)} 
-                    placeholder="root" 
-                    required 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SSH Password / Sudo Password</label>
-                  <p className="text-[10px] text-muted-foreground mb-2">Required if public key authentication is not configured on the remote node.</p>
-                  <Input 
-                    type="password"
-                    value={undeployPassword} 
-                    onChange={e => setUndeployPassword(e.target.value)} 
-                    placeholder="••••••••" 
-                  />
-                </div>
-                <div className="flex gap-4 pt-4">
-                  <Button variant="ghost" className="flex-1" onClick={() => setUndeployIp(null)}>Cancel</Button>
-                  <Button 
-                    className="flex-1 bg-destructive hover:bg-destructive/90 text-white" 
-                    onClick={handleUndeploy} 
-                    loading={undeployLoading}
-                  >
-                    Confirm Undeploy
-                  </Button>
-                </div>
+                {undeploySuccess ? (
+                  <div className="p-8 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-center space-y-3 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <h4 className="text-lg font-bold text-white">Undeployment Successful</h4>
+                    <p className="text-sm text-muted-foreground">The agent cleanup process has been completed successfully. This modal will close in 15 seconds.</p>
+                  </div>
+                ) : undeployErrorMessage ? (
+                  <div className="p-8 bg-destructive/10 border border-destructive/20 rounded-2xl text-center space-y-3 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="w-12 h-12 bg-destructive/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                       <AlertCircle className="w-6 h-6 text-destructive" />
+                    </div>
+                    <h4 className="text-lg font-bold text-white">Undeployment Failed</h4>
+                    <p className="text-sm text-muted-foreground">{undeployErrorMessage}</p>
+                    <p className="text-[10px] text-muted-foreground pt-4">Closing in 15 seconds...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Confirm SSH User</label>
+                      <p className="text-[10px] text-muted-foreground mb-2">We need the SSH username to connect and run the cleanup playbook.</p>
+                      <Input 
+                        value={undeployUser} 
+                        onChange={e => setUndeployUser(e.target.value)} 
+                        placeholder="root" 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SSH Password / Sudo Password</label>
+                      <p className="text-[10px] text-muted-foreground mb-2">Required if public key authentication is not configured on the remote node.</p>
+                      <Input 
+                        type="password"
+                        value={undeployPassword} 
+                        onChange={e => setUndeployPassword(e.target.value)} 
+                        placeholder="••••••••" 
+                      />
+                    </div>
+                    <div className="flex gap-4 pt-4">
+                      <Button variant="ghost" className="flex-1" onClick={() => setUndeployIp(null)}>Cancel</Button>
+                      <Button 
+                        className="flex-1 bg-destructive hover:bg-destructive/90 text-white" 
+                        onClick={handleUndeploy} 
+                        loading={undeployLoading}
+                      >
+                        Confirm Undeploy
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>

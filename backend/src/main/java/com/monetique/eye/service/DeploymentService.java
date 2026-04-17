@@ -81,6 +81,7 @@ public class DeploymentService {
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
+                    "--limit", targetIp,
                     "-e", "env_label=" + envLabel,
                     "-e", "ansible_user=" + sshUser,
                     "-e", "ssh_user=" + sshUser,
@@ -112,8 +113,7 @@ public class DeploymentService {
         try {
             // 1. Run Ansible Undeploy Playbook
             String playbookPath = gitopsPath + "/ansible/undeploy-node.yml";
-            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-
+            
             // Generate a temporary inventory for just this target to ensure we don't
             // undeploy others accidentally
             File tempInventory = File.createTempFile("undeploy-inventory", ".ini");
@@ -125,6 +125,7 @@ public class DeploymentService {
                     "ansible-playbook",
                     "-i", tempInventory.getAbsolutePath(),
                     playbookPath,
+                    "--limit", targetIp,
                     "-e", "target_host=" + targetIp,
                     "-e", "ssh_user=" + sshUser
             ));
@@ -186,6 +187,7 @@ public class DeploymentService {
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
+                    "--limit", targetIp,
                     "-e", "appName=" + appName,
                     "-e", "ansible_user=" + sshUser,
                     "-e", "central_ip=" + centralIp
@@ -276,15 +278,19 @@ public class DeploymentService {
 
             // 4. Update node entries if IP is provided
             if (targetIp != null && sshUser != null) {
+                String safeAlias = "agent-" + targetIp.replace(".", "-");
                 String ipLine = targetIp + " ansible_user=" + sshUser;
-                String aliasLine = sshUser + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
+                String aliasLine = safeAlias + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
                 // Remove existing stale entries for this IP or this Alias across the whole file
                 lines.removeIf(line -> {
                     String trimmed = line.trim();
                     if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false; // Don't remove headers
-                    return trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp) ||
-                           trimmed.startsWith(sshUser + " ") || trimmed.contains("ansible_host=" + targetIp);
+                    // Aggressive matching: literal IP, alias-style, or any line containing the IP
+                    return trimmed.startsWith(targetIp + " ") || 
+                           trimmed.equals(targetIp) || 
+                           trimmed.startsWith(safeAlias + " ") ||
+                           trimmed.contains("ansible_host=" + targetIp);
                 });
 
                 // Find env header again because indices might have changed after removal
@@ -323,7 +329,6 @@ public class DeploymentService {
                 
                 // 1. Skip the environment name if it's under [agents:children]
                 if (!inTargetSection && trimmed.equals(envName)) {
-                    // Check if we are currently in the children section (simple check)
                     continue; 
                 }
 
@@ -359,26 +364,19 @@ public class DeploymentService {
                 return;
 
             List<String> lines = Files.readAllLines(inventoryFile.toPath());
-            List<String> updatedLines = new ArrayList<>();
-
-            for (String line : lines) {
+            String safeAlias = "agent-" + targetIp.replace(".", "-");
+            
+            lines.removeIf(line -> {
                 String trimmed = line.trim();
-                if (trimmed.equals("[agents]")) {
-                    updatedLines.add(line);
-                    continue;
-                }
+                if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false;
+                return trimmed.startsWith(targetIp + " ") || 
+                       trimmed.equals(targetIp) || 
+                       trimmed.startsWith(safeAlias + " ") ||
+                       trimmed.contains("ansible_host=" + targetIp);
+            });
 
-                // Remove both IP-indexed and Alias-indexed lines that point to this IP
-                if (trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp)
-                        || trimmed.contains("ansible_host=" + targetIp)) {
-                    log.info("Removing inventory entry: {}", trimmed);
-                    continue;
-                }
-                updatedLines.add(line);
-            }
-
-            Files.write(inventoryFile.toPath(), updatedLines);
-            log.info("Inventory cleaned for {}. Remaining lines: {}", targetIp, updatedLines.size());
+            Files.write(inventoryFile.toPath(), lines);
+            log.info("Inventory cleaned for {}", targetIp);
         } catch (Exception e) {
             log.error("Failed to remove from inventory: {}", e.getMessage(), e);
         }
@@ -442,7 +440,6 @@ public class DeploymentService {
             mapper.writeValue(configFile, targets);
             log.info("Updated Prometheus targets in {}", configFile.getAbsolutePath());
 
-            // Trigger Prometheus Reload
             triggerPrometheusReload();
 
         } catch (Exception e) {
@@ -528,7 +525,8 @@ public class DeploymentService {
         log.info("Executing command: {}", cmdStr);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(gitopsPath));
-        // Global Host Key Checking solution
+        
+        // Robust environment for bypassing strict host key checking
         pb.environment().put("ANSIBLE_HOST_KEY_CHECKING", "False");
         pb.environment().put("ANSIBLE_CONFIG", gitopsPath + "/ansible/ansible.cfg");
         pb.environment().put("ANSIBLE_SSH_ARGS", "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null");
@@ -554,10 +552,8 @@ public class DeploymentService {
         logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
 
         if (process.exitValue() != 0) {
-            String errorMsg = "Process exited with code " + process.exitValue() + "\nOutput:\n" + output.toString();
-            log.error(errorMsg);
-            System.err.println(errorMsg); // Ensure it appears in VM console
             throw new RuntimeException("Process exited with code " + process.exitValue());
         }
     }
 }
+
