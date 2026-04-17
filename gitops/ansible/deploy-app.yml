@@ -1,0 +1,61 @@
+---
+- name: Deploy Custom Application Flow
+  hosts: "{{ target_host }}"
+  become: yes
+  vars:
+    app_dir: "/opt/monetique/apps/{{ appName }}"
+    image_name: "{{ appName | lower }}"
+    container_name: "{{ appName | lower }}"
+    
+  tasks:
+    - name: Ensure git is installed
+      apt:
+        name: git
+        state: present
+        update_cache: yes
+      when: ansible_os_family == 'Debian'
+
+    - name: Ensure app directory exists
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Clone repository
+      git:
+        repo: "{{ repoUrl }}"
+        dest: "{{ app_dir }}"
+        version: "{{ branch | default('main') }}"
+        force: yes
+
+    - name: Build Docker Image (Assumption: Repo contains a valid Dockerfile)
+      command: docker build -t {{ image_name }}:latest .
+      args:
+        chdir: "{{ app_dir }}"
+      register: build_output
+
+    - name: Stop and remove existing container
+      docker_container:
+        name: "{{ container_name }}"
+        state: absent
+
+    - name: Run Application Container
+      docker_container:
+        name: "{{ container_name }}"
+        image: "{{ image_name }}:latest"
+        state: started
+        restart_policy: always
+        ports:
+          - "{{ appPort }}:{{ appPort }}"
+        labels:
+          app: "{{ appName }}"
+          env: "{{ envLabel }}"
+          com.monetique.environment: "{{ envLabel }}"
+          node: "{{ nodename }}"
+        # In a real scenario, envVars would be passed dynamically and mapped here
+        env:
+          PORT: "{{ appPort }}"
+          NODE_ENV: "production"
+
+    - name: Clean up dangling images
+      command: docker image prune -f

@@ -225,6 +225,64 @@ public class DeploymentService {
         }
     }
 
+    @Async
+    public void deployApplicationFull(Environment environment, com.monetique.eye.dto.DeployRequestDTO request, Application app) {
+        log.info("Starting full application deployment for environment: {} at Target Node: {}, App: {}", 
+                 environment.getName(), request.getTargetNode(), request.getName());
+
+        DeploymentLog deploymentLog = DeploymentLog.builder()
+                .environment(environment)
+                .action("DEPLOY_APP_FULL")
+                .targetIp(request.getTargetNode())
+                .status("IN_PROGRESS")
+                .logOutput("Starting deployment of " + request.getName() + " on " + request.getTargetNode() + "...\n")
+                .build();
+        deploymentLog = deploymentLogRepository.save(deploymentLog);
+
+        try {
+            // Find SSH User from inventory or use a default (like root/ubuntu) for the target IP
+            // In a real scenario, this would look up the target node's sshUser from DB or inventory
+            // We assume deploy-app.yml playbook will handle connection based on existing inventory structure
+            String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
+            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+
+            // Execute Application Playbook
+            // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType
+            executeProcess(new String[] {
+                    "ansible-playbook",
+                    "-i", inventoryPath,
+                    playbookPath,
+                    "--limit", request.getTargetNode(),
+                    "-e", "appName=" + request.getName(),
+                    "-e", "target_host=" + request.getTargetNode(),
+                    "-e", "repoUrl=" + request.getRepoUrl(),
+                    "-e", "branch=" + request.getBranch(),
+                    "-e", "appPort=" + request.getPort(),
+                    "-e", "appType=" + request.getType(),
+                    "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-")
+            }, deploymentLog, 600); // 10 minutes timeout for builds
+
+            deploymentLog.setStatus("SUCCESS");
+            
+            // Update application status
+            app.setStatus("RUNNING");
+            app.setLastDeployedAt(java.time.LocalDateTime.now());
+            applicationRepository.save(app);
+
+        } catch (Exception e) {
+            log.error("Application full deployment failed: {}", e.getMessage());
+            deploymentLog.setStatus("FAILED");
+            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage());
+            
+            // Update application status
+            app.setStatus("FAILED");
+            applicationRepository.save(app);
+        } finally {
+            deploymentLogRepository.save(deploymentLog);
+        }
+    }
+
     public void updateInventory(String envName, String targetIp, String sshUser) {
         log.info("Updating Ansible inventory for env group: {}, host: {}, User: {}", envName, targetIp, sshUser);
         try {

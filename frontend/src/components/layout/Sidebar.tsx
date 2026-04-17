@@ -8,7 +8,8 @@ import {
   FileText, 
   MessageSquare,
   LayoutDashboard,
-  Settings
+  Settings,
+  Box
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
@@ -27,6 +28,7 @@ const Sidebar: React.FC = () => {
 
   if (isAdmin) {
     navItems.splice(1, 0, { name: 'Environments', path: '/environments', icon: Layers });
+    navItems.splice(2, 0, { name: 'Applications', path: '/applications', icon: Box });
   }
 
   return (

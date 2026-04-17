@@ -27,10 +27,27 @@ public class Application {
 
     private String serviceNameKeyword;
 
+    private String type; // BACKEND, FRONTEND, FULLSTACK
+    
+    private String appLanguage; // e.g. Java Spring Boot, Node.js
+
+    private String repoUrl;
+
+    private String targetNode;
+
+    private String branch;
+
+    private Integer port;
+
+    private String status; // RUNNING, DEPLOYING, FAILED
+
+    private java.time.LocalDateTime lastDeployedAt;
+
     private java.time.LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         createdAt = java.time.LocalDateTime.now();
+        if (status == null) status = "DEPLOYING";
     }
 }
