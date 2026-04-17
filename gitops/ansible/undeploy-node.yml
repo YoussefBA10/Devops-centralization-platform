@@ -1,17 +1,21 @@
 ---
 - name: Undeploy Observability Tools from Agent Node
-  hosts: "{{ target_host | default('node-1') }}"
+  hosts: "{{ target_host | default('all') }}"
   become: yes
 
   tasks:
     - name: Remove observability containers
       shell: |
         docker rm -f cadvisor node-exporter filebeat || true
+      args:
+        executable: /bin/bash
       changed_when: false
 
     - name: Remove observability docker images
       shell: |
         docker rmi -f gcr.io/cadvisor/cadvisor:latest prom/node-exporter:latest docker.elastic.co/beats/filebeat:8.11.1 || true
+      args:
+        executable: /bin/bash
       changed_when: false
 
     - name: Remove backend SSH key

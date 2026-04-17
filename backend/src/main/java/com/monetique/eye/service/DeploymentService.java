@@ -80,6 +80,8 @@ public class DeploymentService {
                     playbookPath,
                     "-e", "env_label=" + envLabel,
                     "-e", "ansible_user=" + sshUser,
+                    "-e", "ssh_user=" + sshUser,
+                    "-e", "target_host=" + targetIp,
                     "-e", "central_logstash_ip=" + centralIp
             }, deploymentLog, 600);
 
@@ -118,7 +120,9 @@ public class DeploymentService {
             executeProcess(new String[] {
                     "ansible-playbook",
                     "-i", tempInventory.getAbsolutePath(),
-                    playbookPath
+                    playbookPath,
+                    "-e", "target_host=" + targetIp,
+                    "-e", "ssh_user=" + sshUser
             }, new DeploymentLog(), 300);
             
             tempInventory.delete();
@@ -208,7 +212,7 @@ public class DeploymentService {
         File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
         inventoryFile.getParentFile().mkdirs();
         try (FileWriter writer = new FileWriter(inventoryFile)) {
-            writer.write("[agents]\n");
+            writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
         }
     }
 

@@ -59,6 +59,8 @@
     - name: Remove old containers if exist
       shell: |
         docker rm -f cadvisor node-exporter filebeat || true
+      args:
+        executable: /bin/bash
       changed_when: false
 
     # -----------------------------
