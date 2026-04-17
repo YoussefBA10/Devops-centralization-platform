@@ -218,6 +218,20 @@ public class EnvironmentController {
         ));
     }
 
+    @DeleteMapping("/{id}/nodes/{ip}")
+    @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#id)")
+    public ResponseEntity<Map<String, Object>> undeployAgent(@PathVariable Long id, @PathVariable String ip, @RequestParam(defaultValue = "root") String sshUser) {
+        Environment env = environmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+        
+        deploymentService.undeployAgentAsync(env, ip, sshUser);
+        
+        return ResponseEntity.ok(Map.of(
+            "message", "Agent undeployment triggered for " + ip,
+            "status", "IN_PROGRESS"
+        ));
+    }
+
     @GetMapping("/deployments/status")
     @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#environmentId)")
     public ResponseEntity<Map<String, Object>> getDeploymentStatus(

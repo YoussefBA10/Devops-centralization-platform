@@ -102,6 +102,41 @@ public class DeploymentService {
     }
 
     @Async
+    public CompletableFuture<Void> undeployAgentAsync(Environment environment, String targetIp, String sshUser) {
+        log.info("Starting undeployment for IP: {} (Environment: {})", targetIp, environment.getName());
+        try {
+            // 1. Run Ansible Undeploy Playbook
+            String playbookPath = gitopsPath + "/ansible/undeploy-node.yml";
+            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+            
+            // Generate a temporary inventory for just this target to ensure we don't undeploy others accidentally
+            File tempInventory = File.createTempFile("undeploy-inventory", ".ini");
+            try (FileWriter writer = new FileWriter(tempInventory)) {
+                writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
+            }
+            
+            executeProcess(new String[] {
+                    "ansible-playbook",
+                    "-i", tempInventory.getAbsolutePath(),
+                    playbookPath
+            }, new DeploymentLog(), 300);
+            
+            tempInventory.delete();
+
+            // 2. Remove from Prometheus
+            deregisterNodeFromPrometheus(targetIp);
+
+            // 3. Remove from main inventory
+            removeFromInventory(targetIp);
+            
+            log.info("Successfully undeployed agent {}", targetIp);
+        } catch (Exception e) {
+            log.error("Undeployment failed for {}: {}", targetIp, e.getMessage());
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Async
     public void deployApplication(Environment environment, String targetIp, String sshUser, String appName) {
         log.info("Starting application deployment for environment: {} at IP: {}, App: {}", environment.getName(),
                 targetIp, appName);
@@ -174,7 +209,25 @@ public class DeploymentService {
         inventoryFile.getParentFile().mkdirs();
         try (FileWriter writer = new FileWriter(inventoryFile)) {
             writer.write("[agents]\n");
-            writer.write(hostAlias + " ansible_host=" + targetIp + " ansible_user=" + sshUser + "\n");
+        }
+    }
+
+    private void removeFromInventory(String targetIp) {
+        try {
+            File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
+            if (!inventoryFile.exists()) return;
+            
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(inventoryFile.toPath());
+            java.util.List<String> updatedLines = new java.util.ArrayList<>();
+            for (String line : lines) {
+                if (!line.contains("ansible_host=" + targetIp)) {
+                    updatedLines.add(line);
+                }
+            }
+            java.nio.file.Files.write(inventoryFile.toPath(), updatedLines);
+            log.info("Removed {} from inventory", targetIp);
+        } catch (Exception e) {
+            log.error("Failed to remove from inventory: {}", e.getMessage());
         }
     }
 
@@ -241,6 +294,35 @@ public class DeploymentService {
 
         } catch (Exception e) {
             log.error("Failed to register node in Prometheus: {}", e.getMessage(), e);
+        }
+    }
+
+    private void deregisterNodeFromPrometheus(String ip) {
+        log.info("Deregistering node {} from Prometheus", ip);
+        try {
+            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
+            if (!configFile.exists()) return;
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
+                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+            
+            java.util.List<java.util.Map<String, Object>> targets = mapper.readValue(configFile,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
+                    });
+
+            boolean removed = targets.removeIf(item -> {
+                String targetStr = ((java.util.List<String>) item.get("targets")).get(0);
+                return targetStr.startsWith(ip + ":");
+            });
+
+            if (removed) {
+                mapper.writeValue(configFile, targets);
+                log.info("Removed Prometheus targets for {} and updated file", ip);
+                triggerPrometheusReload();
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to deregister node from Prometheus: {}", e.getMessage(), e);
         }
     }
 

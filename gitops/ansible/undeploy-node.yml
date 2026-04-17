@@ -1,0 +1,17 @@
+---
+- name: Undeploy Observability Tools from Agent Node
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Remove observability containers
+      shell: |
+        docker rm -f cadvisor node-exporter filebeat || true
+      changed_when: false
+
+    - name: Remove backend SSH key
+      authorized_key:
+        user: "{{ ansible_user }}"
+        state: absent
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+      ignore_errors: true

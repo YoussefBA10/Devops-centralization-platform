@@ -9,7 +9,8 @@ import {
   Activity,
   Globe,
   Database,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import api, { getEnvironmentStats, getEnvironmentResources, getEnvironmentNodes } from '../services/api';
 import type { Environment } from '../types/index';
@@ -57,6 +58,27 @@ const EnvironmentsPage: React.FC = () => {
 
   // Tracks which environment is currently deploying to which IP
   const [activeDeployments, setActiveDeployments] = useState<Record<number, string>>({});
+
+  const [undeployIp, setUndeployIp] = useState<string | null>(null);
+  const [undeployUser, setUndeployUser] = useState('root');
+  const [undeployLoading, setUndeployLoading] = useState(false);
+
+  const handleUndeploy = async () => {
+    if (!selectedEnv || !undeployIp) return;
+    setUndeployLoading(true);
+    try {
+      await api.delete(`/environments/${selectedEnv.id}/nodes/${undeployIp}?sshUser=${undeployUser}`);
+      // Optimistically remove from list
+      setNodes(prev => prev.filter(n => n.ip !== undeployIp));
+      setUndeployIp(null);
+      setUndeployUser('root');
+    } catch (e) {
+      console.error('Failed to undeploy', e);
+      alert('Failed to initialize undeployment.');
+    } finally {
+      setUndeployLoading(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -276,18 +298,32 @@ const EnvironmentsPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="rounded-lg gap-2"
-                          onClick={() => {
-                            const detailRow = document.getElementById(`services-${i}`);
-                            if (detailRow) detailRow.classList.toggle('hidden');
-                          }}
-                        >
-                          <Activity className="w-4 h-4" />
-                          See Services ({node.services?.length || 0})
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="rounded-lg gap-2"
+                            onClick={() => {
+                              const detailRow = document.getElementById(`services-${i}`);
+                              if (detailRow) detailRow.classList.toggle('hidden');
+                            }}
+                          >
+                            <Activity className="w-4 h-4" />
+                            See Services ({node.services?.length || 0})
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-lg text-destructive hover:text-red-400 hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUndeployIp(node.ip);
+                            }}
+                            title="Undeploy Node"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                       
                       {/* Services Detail Row */}
@@ -386,6 +422,47 @@ const EnvironmentsPage: React.FC = () => {
                   <Button className="flex-1" type="submit" loading={createLoading}>Confirm Setup</Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Undeploy Confirmation Modal */}
+      {undeployIp && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-md bg-black/90 border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-white/5 pb-6">
+              <CardTitle className="text-xl flex items-center gap-3 text-destructive">
+                <AlertCircle className="w-5 h-5" />
+                Undeploy Node
+              </CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground leading-relaxed">
+                You are about to sever observability for <span className="font-mono text-white bg-white/10 px-1 rounded">{undeployIp}</span>. This will stop the agents and remove the backend's SSH access key.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Confirm SSH User</label>
+                  <p className="text-[10px] text-muted-foreground mb-2">We need the SSH username to connect and run the cleanup playbook.</p>
+                  <Input 
+                    value={undeployUser} 
+                    onChange={e => setUndeployUser(e.target.value)} 
+                    placeholder="root" 
+                    required 
+                  />
+                </div>
+                <div className="flex gap-4 pt-4">
+                  <Button variant="ghost" className="flex-1" onClick={() => setUndeployIp(null)}>Cancel</Button>
+                  <Button 
+                    className="flex-1 bg-destructive hover:bg-destructive/90 text-white" 
+                    onClick={handleUndeploy} 
+                    loading={undeployLoading}
+                  >
+                    Confirm Undeploy
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
