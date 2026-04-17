@@ -5,6 +5,7 @@ import com.monetique.eye.dto.DeployRequestDTO;
 import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.repository.ApplicationRepository;
+import com.monetique.eye.repository.DeploymentLogRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.service.DeploymentService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class ApplicationController {
     private final ApplicationRepository applicationRepository;
     private final EnvironmentRepository environmentRepository;
     private final DeploymentService deploymentService;
+    private final DeploymentLogRepository deploymentLogRepository;
 
     @GetMapping
     public ResponseEntity<List<ApplicationDTO>> getApplications(@RequestParam Long environmentId) {
@@ -51,7 +53,8 @@ public class ApplicationController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         Application app = applicationRepository.findAll().stream()
-                .filter(a -> a.getName().equalsIgnoreCase(request.getName()) && a.getEnvironment().getId().equals(request.getEnvironmentId()))
+                .filter(a -> a.getName().equalsIgnoreCase(request.getName())
+                        && a.getEnvironment().getId().equals(request.getEnvironmentId()))
                 .findFirst()
                 .orElse(Application.builder()
                         .name(request.getName())
@@ -67,12 +70,57 @@ public class ApplicationController {
         app.setPort(request.getPort());
         app.setStatus("DEPLOYING");
         app.setLastDeployedAt(LocalDateTime.now());
-        
+
         applicationRepository.save(app);
 
         // Async deployment
         deploymentService.deployApplicationFull(env, request, app);
 
-        return ResponseEntity.ok(Map.of("message", "Deployment triggered successfuly", "appId", app.getId()));
+        return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
+    }
+
+    /** Poll live status of an application (for frontend polling while DEPLOYING). */
+    @GetMapping("/{id}/status")
+    public ResponseEntity<?> getApplicationStatus(@PathVariable Long id) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+        return ResponseEntity.ok(Map.of(
+                "id", app.getId(),
+                "status", app.getStatus() != null ? app.getStatus() : "UNKNOWN",
+                "lastDeployedAt", app.getLastDeployedAt() != null ? app.getLastDeployedAt().toString() : ""
+        ));
+    }
+
+    /**
+     * Fetch the full Ansible log output from the last deployment of this application.
+     * This enables the frontend to surface the exact Ansible/SSH error when deployment fails.
+     */
+    @GetMapping("/{id}/logs")
+    public ResponseEntity<?> getApplicationLogs(@PathVariable Long id) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+
+        if (app.getTargetNode() == null) {
+            return ResponseEntity.ok(Map.of("log", "No deployment has been triggered yet.", "status", "NONE"));
+        }
+
+        return deploymentLogRepository
+                .findTopByTargetIpAndActionOrderByExecutedAtDesc(app.getTargetNode(), "DEPLOY_APP_FULL")
+                .map(log -> ResponseEntity.ok(Map.of(
+                        "status", log.getStatus() != null ? log.getStatus() : "UNKNOWN",
+                        "log", log.getLogOutput() != null ? log.getLogOutput() : "No output captured.",
+                        "executedAt", log.getExecutedAt() != null ? log.getExecutedAt().toString() : ""
+                )))
+                .orElse(ResponseEntity.ok(Map.of(
+                        "log", "No deployment log found for this application.",
+                        "status", "NONE"
+                )));
+    }
+
+    /** Remove an application record from the database. */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteApplication(@PathVariable Long id) {
+        applicationRepository.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Application removed."));
     }
 }
