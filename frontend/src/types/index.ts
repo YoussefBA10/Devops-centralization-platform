@@ -57,6 +57,8 @@ export interface Node {
   ram?: number;
   riskScore?: number;
   status?: string;
+  label?: string;
+  environmentName?: string;
 }
 
 export interface Edge {

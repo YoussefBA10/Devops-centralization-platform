@@ -20,10 +20,10 @@ import {
   Search,
   Activity
 } from 'lucide-react';
-import api, { getGlobalInfrastructureStats, getInfrastructureTopology, getAllInfrastructureTopology } from '../services/api';
+import { getGlobalInfrastructureStats, getInfrastructureTopology, getAllInfrastructureTopology } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { useAuth } from '../context/AuthContext';
-import type { TopologyData, Node as TopologyNode } from '../types/index';
+import type { Node as TopologyNode } from '../types/index';
 import { Card } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 
@@ -129,7 +129,7 @@ const nodeTypes = {
 const InfrastructureTopologyPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
   const { isAdmin } = useAuth();
-  const [viewAllEnvs, setViewAllEnvs] = useState(isAdmin);
+  const [viewAllEnvs] = useState(isAdmin);
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(false);

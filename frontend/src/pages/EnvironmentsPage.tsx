@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button, Input } from '../components/ui/Input';
 import EnvironmentCard from '../components/environment/EnvironmentCard';
 import DeployNodeModal from '../components/environment/DeployNodeModal';
-import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 interface EnvStats {
   totalEnvironments: number;
@@ -54,8 +54,6 @@ const EnvironmentsPage: React.FC = () => {
   const [showNodesModal, setShowNodesModal] = useState(false);
   const [selectedEnv, setSelectedEnv] = useState<Environment | null>(null);
   
-  // Monitoring Data State
-  const [stats, setStats] = useState<EnvStats | null>(null);
   const [stabilityInfo, setStabilityInfo] = useState<StabilityInfo | null>(null);
   const [resources, setResources] = useState<Record<number, EnvResources>>({});
   const [nodes, setNodes] = useState<any[]>([]);
@@ -139,12 +137,11 @@ const EnvironmentsPage: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const [statsRes, stabilityRes] = await Promise.all([
+      const [_, stabilityRes] = await Promise.all([
         getEnvironmentStats(),
         getGlobalStability()
       ]);
       
-      setStats(statsRes.data);
       setStabilityInfo(stabilityRes.data);
 
       const resourcePromises = environments.map(async (env) => {

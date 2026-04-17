@@ -246,6 +246,9 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
+            // Ensure the target node is in the inventory for the environment
+            updateInventory(environment.getName(), request.getTargetNode(), "root");
+
             // Execute Application Playbook
             // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType
             executeProcess(new String[] {

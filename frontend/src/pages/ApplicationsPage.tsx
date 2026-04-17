@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { getApplications, deployApplication } from '../services/api';
-import { Search, Plus, Filter, GitBranch, Play, StopCircle, RefreshCw, Terminal, Activity, Cpu, Server, Box } from 'lucide-react';
+import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
 
