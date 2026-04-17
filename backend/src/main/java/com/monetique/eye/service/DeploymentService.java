@@ -209,8 +209,8 @@ public class DeploymentService {
         }
     }
 
-    private void updateInventory(String envName, String targetIp, String sshUser) {
-        log.info("Updating Ansible inventory with host: {}, Alias: {}, User: {}", targetIp, envName, sshUser);
+    public void updateInventory(String envName, String targetIp, String sshUser) {
+        log.info("Updating Ansible inventory for env: {}, host: {}, User: {}", envName, targetIp, sshUser);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             inventoryFile.getParentFile().mkdirs();
@@ -219,32 +219,127 @@ public class DeploymentService {
                     ? Files.readAllLines(inventoryFile.toPath())
                     : new ArrayList<>();
 
-            if (lines.isEmpty() || !lines.get(0).trim().equals("[agents]")) {
-                if (lines.isEmpty()) {
-                    lines.add("[agents]");
+            // 1. Ensure [agents:children] group exists at the top
+            int childrenIdx = -1;
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).trim().equals("[agents:children]")) {
+                    childrenIdx = i;
+                    break;
+                }
+            }
+            if (childrenIdx == -1) {
+                if (!lines.isEmpty() && lines.get(0).trim().equals("[agents]")) {
+                    lines.set(0, "[agents:children]"); // Replace old simple [agents]
                 } else {
-                    lines.add(0, "[agents]");
+                    lines.add(0, "[agents:children]");
+                }
+                childrenIdx = 0;
+            }
+
+            // 2. Ensure envName is listed under [agents:children]
+            boolean envInChildren = false;
+            int lastChildIdx = childrenIdx;
+            for (int i = childrenIdx + 1; i < lines.size(); i++) {
+                String l = lines.get(i).trim();
+                if (l.startsWith("[")) break; // Next section
+                if (l.equals(envName)) {
+                    envInChildren = true;
+                    break;
+                }
+                if (!l.isEmpty()) lastChildIdx = i;
+            }
+            if (!envInChildren) {
+                lines.add(lastChildIdx + 1, envName);
+            }
+
+            // 3. Ensure [envName] group exists
+            int envIdx = -1;
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).trim().equals("[" + envName + "]")) {
+                    envIdx = i;
+                    break;
+                }
+            }
+            if (envIdx == -1) {
+                lines.add(""); // Spacer
+                lines.add("[" + envName + "]");
+                envIdx = lines.size() - 1;
+            }
+
+            // 4. Update node entries if IP is provided
+            if (targetIp != null && sshUser != null) {
+                String ipLine = targetIp + " ansible_user=" + sshUser;
+                String aliasLine = envName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
+
+                // Remove existing stale entries for this IP or this Alias across the whole file
+                lines.removeIf(line -> {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false; // Don't remove headers
+                    return trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp) ||
+                           trimmed.startsWith(envName + " ") || trimmed.contains("ansible_host=" + targetIp);
+                });
+
+                // Find env header again because indices might have changed after removal
+                envIdx = -1;
+                for (int i = 0; i < lines.size(); i++) {
+                    if (lines.get(i).trim().equals("[" + envName + "]")) {
+                        envIdx = i;
+                        break;
+                    }
+                }
+                
+                // Add new entries under the header
+                lines.add(envIdx + 1, ipLine);
+                lines.add(envIdx + 2, aliasLine);
+            }
+
+            Files.write(inventoryFile.toPath(), lines);
+            log.info("Inventory successfully restructured for environment: {}", envName);
+        } catch (Exception e) {
+            log.error("Failed to update inventory: {}", e.getMessage(), e);
+        }
+    }
+
+    public void removeEnvironmentFromInventory(String envName) {
+        log.info("Removing environment group from inventory: {}", envName);
+        try {
+            File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
+            if (!inventoryFile.exists()) return;
+
+            List<String> lines = Files.readAllLines(inventoryFile.toPath());
+            List<String> newLines = new ArrayList<>();
+            boolean inTargetSection = false;
+
+            for (String line : lines) {
+                String trimmed = line.trim();
+                
+                // 1. Skip the environment name if it's under [agents:children]
+                if (!inTargetSection && trimmed.equals(envName)) {
+                    // Check if we are currently in the children section (simple check)
+                    continue; 
+                }
+
+                // 2. Detect start of target section
+                if (trimmed.equals("[" + envName + "]")) {
+                    inTargetSection = true;
+                    continue;
+                }
+
+                // 3. Detect end of target section (next header)
+                if (inTargetSection && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                    inTargetSection = false;
+                }
+
+                // 4. If not in target section, keep the line
+                if (!inTargetSection) {
+                    newLines.add(line);
                 }
             }
 
-            String ipLine = targetIp + " ansible_user=" + sshUser;
-            String aliasLine = envName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
-
-            // Remove any existing entries for this IP or this Alias to avoid duplicates/stale entries
-            lines.removeIf(line -> {
-                String trimmed = line.trim();
-                return trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp) ||
-                       trimmed.startsWith(envName + " ") || trimmed.equals(envName);
-            });
-
-            // Add the new entries after the [agents] header (at the end of the list is fine)
-            lines.add(ipLine);
-            lines.add(aliasLine);
-
-            Files.write(inventoryFile.toPath(), lines);
-            log.info("Inventory updated successfully for host: {} and alias: {}", targetIp, envName);
+            Files.write(inventoryFile.toPath(), newLines);
+            log.info("Environment {} removed from inventory successfully.", envName);
         } catch (Exception e) {
-            log.error("Failed to update inventory: {}", e.getMessage(), e);
+            log.error("Failed to remove environment from inventory: {}", e.getMessage(), e);
         }
     }
 

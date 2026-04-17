@@ -44,7 +44,8 @@ public class SetupController {
             // 1. Trigger Data Initialization
             Environment env = dataInitializer.manualInitialize(environmentName, vmpipeIp);
             
-            // 2. Register the central node itself in Prometheus
+            // 2. Register the central node itself in Prometheus and Ansible Inventory
+            deploymentService.updateInventory(environmentName, vmpipeIp, "root");
             deploymentService.registerNodeInPrometheus(env, vmpipeIp);
             
             return ResponseEntity.ok(Map.of("message", "System initialized successfully"));

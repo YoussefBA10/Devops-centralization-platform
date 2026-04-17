@@ -43,5 +43,8 @@ export const getEnvironmentNodes = (id: number) => api.get(`/environments/${id}/
 export const getDeploymentStatus = (envId: number, targetIp: string) => 
   api.get(`/environments/deployments/status`, { params: { environmentId: envId, targetIp } });
 
+export const updateEnvironment = (id: number, data: any) => api.put(`/environments/${id}`, data);
+export const deleteEnvironment = (id: number) => api.delete(`/environments/${id}`);
+
 
 export default api;

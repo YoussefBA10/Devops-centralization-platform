@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Input';
-import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { getDeploymentStatus } from '../../services/api';
 import type { Environment } from '../../types';
 
@@ -37,15 +37,18 @@ interface EnvironmentCardProps {
   resources: EnvResources;
   onDeployClick: () => void;
   onNodesClick: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   onRefresh: () => void;
   activeDeploymentIp?: string | null;
 }
 
 type DeploymentState = 'idle' | 'deploying' | 'success' | 'failed';
 
-const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDeployClick, onNodesClick, onRefresh, activeDeploymentIp }) => {
+const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDeployClick, onNodesClick, onEdit, onDelete, onRefresh, activeDeploymentIp }) => {
   const [status, setStatus] = useState<DeploymentState>(activeDeploymentIp ? 'deploying' : 'idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
 
   // Sync internal state with prop if triggered from parent
   useEffect(() => {
@@ -67,11 +70,13 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
           if (currentStatus === 'SUCCESS') {
             setStatus('success');
             onRefresh(); // Refresh parent data
-            // Maintain success state for 10 seconds for better visibility
-            setTimeout(() => setStatus('idle'), 10000);
+            // Maintain success state for 15 seconds for better visibility
+            setTimeout(() => setStatus('idle'), 15000);
           } else if (currentStatus === 'FAILED') {
             setStatus('failed');
             setErrorMessage(res.data.log?.split('\n').pop() || 'Deployment failed. Check logs.');
+            // Maintain failure state for 15 seconds then reset if not manual retry
+            setTimeout(() => setStatus('idle'), 15000);
           }
         } catch (error) {
           // Keep polling if there's a network error, backend might be starting up
@@ -151,13 +156,43 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
               <CardDescription className="mt-1 text-base text-muted-foreground/80">{env.description}</CardDescription>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 relative">
             <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5 transition-colors" onClick={onNodesClick} disabled={status === 'deploying'}>
               <Settings className="w-5 h-5 text-muted-foreground hover:text-white transition-colors" />
             </Button>
-            <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5 transition-colors" disabled={status === 'deploying'}>
-              <MoreVertical className="w-5 h-5 text-muted-foreground" />
-            </Button>
+            <div className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className={`rounded-xl hover:bg-white/5 transition-colors ${showMenu ? 'bg-white/10 text-white' : ''}`} 
+                disabled={status === 'deploying'}
+                onClick={() => setShowMenu(!showMenu)}
+              >
+                <MoreVertical className="w-5 h-5 text-muted-foreground" />
+              </Button>
+              
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)}></div>
+                  <div className="absolute right-0 mt-2 w-48 bg-[#111114] border border-white/10 rounded-xl shadow-2xl py-2 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <button 
+                      onClick={() => { onEdit(); setShowMenu(false); }}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-white/5 flex items-center gap-2 transition-colors"
+                    >
+                      <Settings className="w-4 h-4 text-primary" />
+                      Edit Environment
+                    </button>
+                    <button 
+                      onClick={() => { onDelete(); setShowMenu(false); }}
+                      className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Environment
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

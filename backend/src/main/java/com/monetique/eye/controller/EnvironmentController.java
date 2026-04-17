@@ -274,6 +274,33 @@ public class EnvironmentController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public Environment create(@RequestBody Environment environment) {
-        return environmentRepository.save(environment);
+        Environment env = environmentRepository.save(environment);
+        // Initialize inventory group for this environment
+        deploymentService.updateInventory(env.getName(), null, null);
+        return env;
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#id)")
+    public ResponseEntity<Environment> update(@PathVariable Long id, @RequestBody Environment details) {
+        Environment env = environmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+        
+        env.setName(details.getName());
+        env.setDescription(details.getDescription());
+        env.setPrometheusLabel(details.getPrometheusLabel());
+        
+        return ResponseEntity.ok(environmentRepository.save(env));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
+        Environment env = environmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+        
+        deploymentService.removeEnvironmentFromInventory(env.getName());
+        environmentRepository.delete(env);
+        return ResponseEntity.ok(Map.of("message", "Environment deleted successfully"));
     }
 }

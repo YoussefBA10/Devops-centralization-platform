@@ -35,8 +35,9 @@ interface EnvResources {
 
 
 
-const EnvironmentsPage: React.FC = () => {
-  const { environments, refreshEnvironments, createEnvironment, loading: envLoading } = useEnvironment();
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteEnvModal, setShowDeleteEnvModal] = useState(false);
+  const { environments, refreshEnvironments, createEnvironment, updateEnvironment, deleteEnvironment, loading: envLoading } = useEnvironment();
   const [searchQuery, setSearchQuery] = useState('');
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -51,6 +52,7 @@ const EnvironmentsPage: React.FC = () => {
 
   // Form States
   const [newEnv, setNewEnv] = useState({ name: '', description: '', prometheusLabel: '' });
+  const [editEnvData, setEditEnvData] = useState({ name: '', description: '', prometheusLabel: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deploymentLoading, setDeploymentLoading] = useState(false);
@@ -77,6 +79,34 @@ const EnvironmentsPage: React.FC = () => {
       alert('Failed to initialize undeployment.');
     } finally {
       setUndeployLoading(false);
+    }
+  };
+
+  const handleDeleteEnv = async () => {
+    if (!selectedEnv) return;
+    setCreateLoading(true);
+    try {
+      await deleteEnvironment(selectedEnv.id);
+      setShowDeleteEnvModal(false);
+      setSelectedEnv(null);
+    } catch (err: any) {
+      setCreateError(err.response?.data?.message || 'Delete failed');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
+  const handleEditEnv = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEnv) return;
+    setCreateLoading(true);
+    try {
+      await updateEnvironment(selectedEnv.id, editEnvData);
+      setShowEditModal(false);
+    } catch (err: any) {
+      setCreateError(err.response?.data?.message || 'Update failed');
+    } finally {
+      setCreateLoading(false);
     }
   };
 
@@ -171,7 +201,10 @@ const EnvironmentsPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button className="h-11 px-6 shadow-lg shadow-primary/20" onClick={() => setShowCreateModal(true)}>
+          <Button className="h-11 px-6 shadow-lg shadow-primary/20" onClick={() => {
+            setCreateError(null);
+            setShowCreateModal(true);
+          }}>
             <Plus className="w-4 h-4 mr-2" />
             Create New
           </Button>
@@ -242,6 +275,17 @@ const EnvironmentsPage: React.FC = () => {
               onDeployClick={() => {
                 setSelectedEnv(env);
                 setShowDeployModal(true);
+              }}
+              onEdit={() => {
+                setSelectedEnv(env);
+                setEditEnvData({ name: env.name, description: env.description || '', prometheusLabel: env.prometheusLabel || '' });
+                setCreateError(null);
+                setShowEditModal(true);
+              }}
+              onDelete={() => {
+                setSelectedEnv(env);
+                setCreateError(null);
+                setShowDeleteEnvModal(true);
               }}
             />
           );
@@ -381,6 +425,40 @@ const EnvironmentsPage: React.FC = () => {
         />
       )}
 
+      {/* Edit Environment Modal */}
+      {showEditModal && selectedEnv && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-background/95 backdrop-blur-xl" onClick={() => setShowEditModal(false)}></div>
+          <Card className="w-full max-w-lg relative z-10 shadow-3xl border-white/10 overflow-hidden">
+             <CardHeader className="pb-8">
+              <CardTitle className="text-2xl">Edit Environment</CardTitle>
+              <CardDescription>Update logical infrastructure container details.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleEditEnv} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Name</label>
+                  <Input value={editEnvData.name} onChange={e => setEditEnvData({...editEnvData, name: e.target.value})} placeholder="e.g. Staging VPC" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Description</label>
+                  <Input value={editEnvData.description} onChange={e => setEditEnvData({...editEnvData, description: e.target.value})} placeholder="Short description..." required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Prometheus Label</label>
+                  <Input value={editEnvData.prometheusLabel} onChange={e => setEditEnvData({...editEnvData, prometheusLabel: e.target.value})} placeholder="e.g. staging" required />
+                </div>
+                {createError && <p className="text-xs text-destructive bg-destructive/5 p-3 rounded-lg border border-destructive/10">{createError}</p>}
+                <div className="flex gap-4 pt-4">
+                  <Button variant="ghost" className="flex-1" type="button" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                  <Button className="flex-1" type="submit" loading={createLoading}>Save Changes</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Create Environment Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -427,8 +505,39 @@ const EnvironmentsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Delete Environment Confirmation Modal */}
+      {showDeleteEnvModal && selectedEnv && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-md bg-black/90 border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-white/5 pb-6">
+              <CardTitle className="text-xl flex items-center gap-3 text-destructive">
+                <AlertCircle className="w-5 h-5" />
+                Delete Environment
+              </CardTitle>
+              <CardDescription className="mt-2 text-muted-foreground leading-relaxed">
+                Are you sure you want to delete <span className="text-white font-bold">{selectedEnv.name}</span>? This will permanently remove all associated metadata, tickets, and application records. 
+                <br /><br />
+                <span className="text-amber-500 font-semibold text-xs uppercase tracking-wider">Note: Remote agents will not be uninstalled.</span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="flex gap-4">
+                <Button variant="ghost" className="flex-1" onClick={() => setShowDeleteEnvModal(false)}>Cancel</Button>
+                <Button 
+                  className="flex-1 bg-destructive hover:bg-destructive/90 text-white" 
+                  onClick={handleDeleteEnv}
+                  loading={createLoading}
+                >
+                  Confirm Delete
+                </Button>
+              </div>
+              {createError && <p className="text-xs text-destructive mt-4">{createError}</p>}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Undeploy Confirmation Modal */}
-      {undeployIp && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-md bg-black/90 border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
             <CardHeader className="border-b border-white/5 pb-6">

@@ -11,6 +11,8 @@ interface EnvironmentContextType {
   initialized: boolean;
   refreshEnvironments: () => Promise<void>;
   createEnvironment: (env: Partial<Environment>) => Promise<void>;
+  updateEnvironment: (id: number, env: Partial<Environment>) => Promise<void>;
+  deleteEnvironment: (id: number) => Promise<void>;
 }
 
 const EnvironmentContext = createContext<EnvironmentContextType | undefined>(undefined);
@@ -38,12 +40,33 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
   
+  
   const createEnvironment = async (env: Partial<Environment>) => {
     try {
       await api.post('/environments', env);
       await refreshEnvironments();
     } catch (error) {
       console.error('Failed to create environment', error);
+      throw error;
+    }
+  };
+
+  const updateEnvironment = async (id: number, env: Partial<Environment>) => {
+    try {
+      await api.put(`/environments/${id}`, env);
+      await refreshEnvironments();
+    } catch (error) {
+      console.error('Failed to update environment', error);
+      throw error;
+    }
+  };
+
+  const deleteEnvironment = async (id: number) => {
+    try {
+      await api.delete(`/environments/${id}`);
+      await refreshEnvironments();
+    } catch (error) {
+      console.error('Failed to delete environment', error);
       throw error;
     }
   };
@@ -61,7 +84,9 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
         loading, 
         initialized: environments.length > 0,
         refreshEnvironments,
-        createEnvironment
+        createEnvironment,
+        updateEnvironment,
+        deleteEnvironment
       }}
     >
       {children}

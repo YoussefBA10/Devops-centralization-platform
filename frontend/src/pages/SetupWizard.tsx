@@ -38,7 +38,7 @@ const SetupWizard: React.FC = () => {
       setTimeout(async () => {
         await refreshEnvironments();
         navigate('/');
-      }, 3000);
+      }, 15000);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to initialize system. Please verify the IP address and backend status.');
     } finally {
