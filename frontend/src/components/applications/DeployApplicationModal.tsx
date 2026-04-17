@@ -27,7 +27,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     targetNode: '',
     branch: 'main',
     port: '8080',
-    envVars: ''
+    envVars: '',
+    sshPassword: ''
   });
 
   useEffect(() => {
@@ -81,7 +82,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         targetNode: formData.targetNode,
         branch: formData.branch,
         port: parseInt(formData.port),
-        envVars: envMap
+        envVars: envMap,
+        sshPassword: formData.sshPassword
     };
 
     try {
@@ -196,6 +198,10 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                                 <option key={node.ip} value={node.ip}>{node.hostname || node.ip}</option>
                             ))}
                         </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH Password (Optional)</label>
+                        <Input type="password" name="sshPassword" value={formData.sshPassword} onChange={handleChange} placeholder="••••••••" className="bg-black/40 border-white/10" />
                     </div>
                     <div>
                         <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Port Mapping</label>

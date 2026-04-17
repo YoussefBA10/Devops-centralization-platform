@@ -251,7 +251,7 @@ public class DeploymentService {
 
             // Execute Application Playbook
             // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType
-            executeProcess(new String[] {
+            List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
@@ -263,7 +263,15 @@ public class DeploymentService {
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-")
-            }, deploymentLog, 600); // 10 minutes timeout for builds
+            ));
+
+            if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_ssh_pass=" + request.getSshPassword());
+                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600); // 10 minutes timeout for builds
+            } else {
+                executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
+            }
 
             deploymentLog.setStatus("SUCCESS");
             
