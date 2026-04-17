@@ -17,6 +17,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -59,7 +62,7 @@ public class DeploymentService {
             executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
-            updateInventory(sshUser, targetIp, sshUser);
+            updateInventory(environment.getName(), targetIp, sshUser);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
             executeProcessSecure(
@@ -207,38 +210,39 @@ public class DeploymentService {
     }
 
     private void updateInventory(String envName, String targetIp, String sshUser) {
-        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with host: {}, User: {}", gitopsPath, targetIp,
-                sshUser);
+        log.info("Updating Ansible inventory with host: {}, Alias: {}, User: {}", targetIp, envName, sshUser);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             inventoryFile.getParentFile().mkdirs();
 
-            java.util.List<String> lines = inventoryFile.exists()
-                    ? java.nio.file.Files.readAllLines(inventoryFile.toPath())
-                    : new java.util.ArrayList<>();
+            List<String> lines = inventoryFile.exists()
+                    ? Files.readAllLines(inventoryFile.toPath())
+                    : new ArrayList<>();
 
             if (lines.isEmpty() || !lines.get(0).trim().equals("[agents]")) {
-                lines.add(0, "[agents]");
-            }
-
-            String hostLine = targetIp + " ansible_user=" + sshUser;
-            boolean found = false;
-            for (int i = 0; i < lines.size(); i++) {
-                String line = lines.get(i).trim();
-                // Match either exact IP or IP as part of tokens
-                if (line.startsWith(targetIp + " ") || line.equals(targetIp)) {
-                    lines.set(i, hostLine);
-                    found = true;
-                    break;
+                if (lines.isEmpty()) {
+                    lines.add("[agents]");
+                } else {
+                    lines.add(0, "[agents]");
                 }
             }
 
-            if (!found) {
-                lines.add(hostLine);
-            }
+            String ipLine = targetIp + " ansible_user=" + sshUser;
+            String aliasLine = envName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
-            java.nio.file.Files.write(inventoryFile.toPath(), lines);
-            log.info("Inventory updated successfully for host: {}", targetIp);
+            // Remove any existing entries for this IP or this Alias to avoid duplicates/stale entries
+            lines.removeIf(line -> {
+                String trimmed = line.trim();
+                return trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp) ||
+                       trimmed.startsWith(envName + " ") || trimmed.equals(envName);
+            });
+
+            // Add the new entries after the [agents] header (at the end of the list is fine)
+            lines.add(ipLine);
+            lines.add(aliasLine);
+
+            Files.write(inventoryFile.toPath(), lines);
+            log.info("Inventory updated successfully for host: {} and alias: {}", targetIp, envName);
         } catch (Exception e) {
             log.error("Failed to update inventory: {}", e.getMessage(), e);
         }
@@ -251,28 +255,27 @@ public class DeploymentService {
             if (!inventoryFile.exists())
                 return;
 
-            java.util.List<String> lines = java.nio.file.Files.readAllLines(inventoryFile.toPath());
-            java.util.List<String> updatedLines = new java.util.ArrayList<>();
+            List<String> lines = Files.readAllLines(inventoryFile.toPath());
+            List<String> updatedLines = new ArrayList<>();
 
             for (String line : lines) {
                 String trimmed = line.trim();
-                // Don't remove if it's the [agents] header
                 if (trimmed.equals("[agents]")) {
                     updatedLines.add(line);
                     continue;
                 }
 
-                // Match exact IP or IP at start of line
+                // Remove both IP-indexed and Alias-indexed lines that point to this IP
                 if (trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp)
                         || trimmed.contains("ansible_host=" + targetIp)) {
-                    log.info("Found and removing host entry: {}", trimmed);
+                    log.info("Removing inventory entry: {}", trimmed);
                     continue;
                 }
                 updatedLines.add(line);
             }
 
-            java.nio.file.Files.write(inventoryFile.toPath(), updatedLines);
-            log.info("Successfully removed {} from inventory. Final line count: {}", targetIp, updatedLines.size());
+            Files.write(inventoryFile.toPath(), updatedLines);
+            log.info("Inventory cleaned for {}. Remaining lines: {}", targetIp, updatedLines.size());
         } catch (Exception e) {
             log.error("Failed to remove from inventory: {}", e.getMessage(), e);
         }
