@@ -110,13 +110,14 @@ public class DeploymentService {
             // 1. Run Ansible Undeploy Playbook
             String playbookPath = gitopsPath + "/ansible/undeploy-node.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            
-            // Generate a temporary inventory for just this target to ensure we don't undeploy others accidentally
+
+            // Generate a temporary inventory for just this target to ensure we don't
+            // undeploy others accidentally
             File tempInventory = File.createTempFile("undeploy-inventory", ".ini");
             try (FileWriter writer = new FileWriter(tempInventory)) {
                 writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
             }
-            
+
             executeProcess(new String[] {
                     "ansible-playbook",
                     "-i", tempInventory.getAbsolutePath(),
@@ -124,7 +125,7 @@ public class DeploymentService {
                     "-e", "target_host=" + targetIp,
                     "-e", "ssh_user=" + sshUser
             }, new DeploymentLog(), 300);
-            
+
             tempInventory.delete();
 
             // 2. Remove from Prometheus
@@ -132,7 +133,7 @@ public class DeploymentService {
 
             // 3. Remove from main inventory
             removeFromInventory(targetIp);
-            
+
             log.info("Successfully undeployed agent {}", targetIp);
         } catch (Exception e) {
             log.error("Undeployment failed for {}: {}", targetIp, e.getMessage());
@@ -205,33 +206,75 @@ public class DeploymentService {
         }
     }
 
-    private void updateInventory(String envName, String targetIp, String sshUser) throws Exception {
-        String hostAlias = envName.toLowerCase().replaceAll("[^a-z0-9]", "-");
-        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with host: {}, User: {}", gitopsPath,
-                hostAlias, sshUser);
-        File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
-        inventoryFile.getParentFile().mkdirs();
-        try (FileWriter writer = new FileWriter(inventoryFile)) {
-            writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
+    private void updateInventory(String envName, String targetIp, String sshUser) {
+        log.info("Updating Ansible inventory at {}/ansible/inventory.ini with host: {}, User: {}", gitopsPath, targetIp,
+                sshUser);
+        try {
+            File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
+            inventoryFile.getParentFile().mkdirs();
+
+            java.util.List<String> lines = inventoryFile.exists()
+                    ? java.nio.file.Files.readAllLines(inventoryFile.toPath())
+                    : new java.util.ArrayList<>();
+
+            if (lines.isEmpty() || !lines.get(0).trim().equals("[agents]")) {
+                lines.add(0, "[agents]");
+            }
+
+            String hostLine = targetIp + " ansible_user=" + sshUser;
+            boolean found = false;
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i).trim();
+                // Match either exact IP or IP as part of tokens
+                if (line.startsWith(targetIp + " ") || line.equals(targetIp)) {
+                    lines.set(i, hostLine);
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                lines.add(hostLine);
+            }
+
+            java.nio.file.Files.write(inventoryFile.toPath(), lines);
+            log.info("Inventory updated successfully for host: {}", targetIp);
+        } catch (Exception e) {
+            log.error("Failed to update inventory: {}", e.getMessage(), e);
         }
     }
 
     private void removeFromInventory(String targetIp) {
+        log.info("Removing {} from inventory", targetIp);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
-            if (!inventoryFile.exists()) return;
-            
+            if (!inventoryFile.exists())
+                return;
+
             java.util.List<String> lines = java.nio.file.Files.readAllLines(inventoryFile.toPath());
             java.util.List<String> updatedLines = new java.util.ArrayList<>();
+
             for (String line : lines) {
-                if (!line.contains("ansible_host=" + targetIp)) {
+                String trimmed = line.trim();
+                // Don't remove if it's the [agents] header
+                if (trimmed.equals("[agents]")) {
                     updatedLines.add(line);
+                    continue;
                 }
+
+                // Match exact IP or IP at start of line
+                if (trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp)
+                        || trimmed.contains("ansible_host=" + targetIp)) {
+                    log.info("Found and removing host entry: {}", trimmed);
+                    continue;
+                }
+                updatedLines.add(line);
             }
+
             java.nio.file.Files.write(inventoryFile.toPath(), updatedLines);
-            log.info("Removed {} from inventory", targetIp);
+            log.info("Successfully removed {} from inventory. Final line count: {}", targetIp, updatedLines.size());
         } catch (Exception e) {
-            log.error("Failed to remove from inventory: {}", e.getMessage());
+            log.error("Failed to remove from inventory: {}", e.getMessage(), e);
         }
     }
 
@@ -305,11 +348,12 @@ public class DeploymentService {
         log.info("Deregistering node {} from Prometheus", ip);
         try {
             File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
-            if (!configFile.exists()) return;
+            if (!configFile.exists())
+                return;
 
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
                     new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-            
+
             java.util.List<java.util.Map<String, Object>> targets = mapper.readValue(configFile,
                     new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
                     });
@@ -378,6 +422,7 @@ public class DeploymentService {
         log.info("Executing command: {}", cmdStr);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(gitopsPath));
+        pb.environment().put("ANSIBLE_HOST_KEY_CHECKING", "False");
         pb.redirectErrorStream(true);
 
         Process process = pb.start();
