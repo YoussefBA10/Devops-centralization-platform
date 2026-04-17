@@ -26,11 +26,11 @@ public class EnvironmentController {
     private final com.monetique.eye.service.PrometheusClient prometheusClient;
     private final DeploymentLogRepository deploymentLogRepository;
 
-    public EnvironmentController(EnvironmentRepository environmentRepository, 
-                                 DeploymentService deploymentService, 
-                                 SecurityService securityService,
-                                 com.monetique.eye.service.PrometheusClient prometheusClient,
-                                 DeploymentLogRepository deploymentLogRepository) {
+    public EnvironmentController(EnvironmentRepository environmentRepository,
+            DeploymentService deploymentService,
+            SecurityService securityService,
+            com.monetique.eye.service.PrometheusClient prometheusClient,
+            DeploymentLogRepository deploymentLogRepository) {
         this.environmentRepository = environmentRepository;
         this.deploymentService = deploymentService;
         this.securityService = securityService;
@@ -57,25 +57,23 @@ public class EnvironmentController {
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getStats() {
         return ResponseEntity.ok(Map.of(
-            "totalEnvironments", environmentRepository.count(),
-            "totalActiveNodes", prometheusClient.getTotalActiveNodes(),
-            "avgStability", prometheusClient.getAvgStability()
-        ));
+                "totalEnvironments", environmentRepository.count(),
+                "totalActiveNodes", prometheusClient.getTotalActiveNodes(),
+                "avgStability", prometheusClient.getAvgStability()));
     }
 
     @GetMapping("/{id}/resources")
     public ResponseEntity<Map<String, Object>> getResources(@PathVariable Long id) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
+
         String label = resolvePrometheusLabel(env);
-        
+
         return ResponseEntity.ok(Map.of(
-            "cpuUsage", prometheusClient.getCpuUsage(label),
-            "ramUsagePercent", prometheusClient.getMemoryUsagePercent(label),
-            "diskUsagePercent", prometheusClient.getDiskUsagePercent(label),
-            "nodeCount", prometheusClient.getActiveNodeCount(label)
-        ));
+                "cpuUsage", prometheusClient.getCpuUsage(label),
+                "ramUsagePercent", prometheusClient.getMemoryUsagePercent(label),
+                "diskUsagePercent", prometheusClient.getDiskUsagePercent(label),
+                "nodeCount", prometheusClient.getActiveNodeCount(label)));
     }
 
     @GetMapping("/{id}/nodes")
@@ -108,26 +106,24 @@ public class EnvironmentController {
             String rawIp = instance != null ? instance.split(":")[0] : "unknown";
             String nodeKey = rawIp;
             String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", ""); // e.g., node-131
-            
-            // Only collapse into "vmpipe" if it's an internal service name or the central node IP
-            if ("vmpipe".equals(label) && (
-                "node-exporter".equals(rawIp) || 
-                "cadvisor".equals(rawIp) || 
-                "filebeat".equals(rawIp) || 
-                "localhost".equals(rawIp) ||
-                rawIp.equals(env.getCentralNodeIp())
-            )) {
+
+            // Only collapse into "vmpipe" if it's an internal service name or the central
+            // node IP
+            if ("vmpipe".equals(label) && ("node-exporter".equals(rawIp) ||
+                    "cadvisor".equals(rawIp) ||
+                    "filebeat".equals(rawIp) ||
+                    "localhost".equals(rawIp) ||
+                    rawIp.equals(env.getCentralNodeIp()))) {
                 nodeKey = "vmpipe";
                 rawIp = env.getCentralNodeIp() != null ? env.getCentralNodeIp() : "127.0.0.1";
                 nodeDisplayName = "vmpipe";
             }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
-                "nodeName", nodeDisplayName,
-                "ip", rawIp,
-                "status", "Offline",
-                "services", new ArrayList<Map<String, String>>()
-            )));
+                    "nodeName", nodeDisplayName,
+                    "ip", rawIp,
+                    "status", "Offline",
+                    "services", new ArrayList<Map<String, String>>())));
 
             Map<String, Object> nodeInfo = nodeMap.get(nodeKey);
             List<Map<String, String>> services = (List<Map<String, String>>) nodeInfo.get("services");
@@ -143,9 +139,10 @@ public class EnvironmentController {
                 }
             }
             if (!exists) {
-                services.add(new HashMap<>(Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT")));
+                services.add(new HashMap<>(
+                        Map.of("name", job, "status", "1".equals(value) ? "Online" : "Offline", "type", "AGENT")));
             }
-            
+
             if ("node-exporter".equals(job) && "1".equals(value)) {
                 nodeInfo.put("status", "Online");
             }
@@ -156,32 +153,30 @@ public class EnvironmentController {
             Map<String, String> metric = (Map<String, String>) metricData.get("metric");
             String name = metric.get("name");
             String instance = metric.get("instance");
-            
-            if (name == null || name.trim().isEmpty()) continue;
+
+            if (name == null || name.trim().isEmpty())
+                continue;
 
             String rawIp = instance != null ? instance.split(":")[0] : "unknown";
             String nodeKey = rawIp;
             String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", "");
-            
-            if ("vmpipe".equals(label) && (
-                "cadvisor".equals(rawIp) || 
-                "localhost".equals(rawIp) ||
-                rawIp.equals(env.getCentralNodeIp())
-            )) {
+
+            if ("vmpipe".equals(label) && ("cadvisor".equals(rawIp) ||
+                    "localhost".equals(rawIp) ||
+                    rawIp.equals(env.getCentralNodeIp()))) {
                 nodeKey = "vmpipe";
                 rawIp = env.getCentralNodeIp() != null ? env.getCentralNodeIp() : "127.0.0.1";
                 nodeDisplayName = "vmpipe";
             }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
-                "nodeName", nodeDisplayName,
-                "ip", rawIp,
-                "status", "Online",
-                "services", new ArrayList<Map<String, String>>()
-            )));
+                    "nodeName", nodeDisplayName,
+                    "ip", rawIp,
+                    "status", "Online",
+                    "services", new ArrayList<Map<String, String>>())));
 
             List<Map<String, String>> services = (List<Map<String, String>>) nodeMap.get(nodeKey).get("services");
-            
+
             // Deduplicate containers against both agents and other containers
             boolean exists = false;
             for (Map<String, String> s : services) {
@@ -201,76 +196,84 @@ public class EnvironmentController {
 
     @PostMapping("/{id}/deploy-agent")
     @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#id)")
-    public ResponseEntity<Map<String, Object>> deployAgent(@PathVariable Long id, @RequestBody Map<String, String> request) {
+    public ResponseEntity<Map<String, Object>> deployAgent(@PathVariable Long id,
+            @RequestBody Map<String, String> request) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
+
         String targetIp = request.get("targetIp");
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
-        
-        CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser, sshPassword);
-        
-        // Return immediately with a placeholder, or wait slightly. Here we just return async confirmation.
+
+        CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser,
+                sshPassword);
+
+        // Return immediately with a placeholder, or wait slightly. Here we just return
+        // async confirmation.
         return ResponseEntity.ok(Map.of(
-            "message", "Agent deployment triggered for " + targetIp,
-            "status", "IN_PROGRESS"
-        ));
+                "message", "Agent deployment triggered for " + targetIp,
+                "status", "IN_PROGRESS"));
     }
 
     @DeleteMapping("/{id}/nodes/{ip}")
     @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#id)")
-    public ResponseEntity<Map<String, Object>> undeployAgent(@PathVariable Long id, @PathVariable String ip, @RequestParam(defaultValue = "root") String sshUser) {
+    public ResponseEntity<Map<String, Object>> undeployAgent(
+            @PathVariable Long id,
+            @PathVariable String ip,
+            @RequestBody Map<String, String> request) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
-        deploymentService.undeployAgentAsync(env, ip, sshUser);
-        
+
+        String sshUser = request.getOrDefault("sshUser", "root");
+        String sshPassword = request.get("sshPassword");
+
+        deploymentService.undeployAgentAsync(env, ip, sshUser, sshPassword);
+
         return ResponseEntity.ok(Map.of(
-            "message", "Agent undeployment triggered for " + ip,
-            "status", "IN_PROGRESS"
-        ));
+                "message", "Agent undeployment triggered for " + ip,
+                "status", "IN_PROGRESS"));
     }
 
     @GetMapping("/deployments/status")
     @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#environmentId)")
     public ResponseEntity<Map<String, Object>> getDeploymentStatus(
-            @RequestParam Long environmentId, 
+            @RequestParam Long environmentId,
             @RequestParam String targetIp) {
-            
+
         // Find latest deployment log for this environment and IP
         var logOpt = deploymentLogRepository.findAll().stream()
                 .filter(l -> l.getEnvironment().getId().equals(environmentId) && targetIp.equals(l.getTargetIp()))
                 .reduce((first, second) -> second);
-        
+
         if (logOpt.isPresent()) {
             DeploymentLog log = logOpt.get();
             return ResponseEntity.ok(Map.of(
-                "status", log.getStatus(),
-                "action", log.getAction(),
-                "timestamp", log.getExecutedAt(),
-                "log", log.getLogOutput() != null ? log.getLogOutput() : ""
-            ));
+                    "status", log.getStatus(),
+                    "action", log.getAction(),
+                    "timestamp", log.getExecutedAt(),
+                    "log", log.getLogOutput() != null ? log.getLogOutput() : ""));
         }
-        
+
         return ResponseEntity.ok(Map.of("status", "NOT_FOUND"));
     }
 
     @PostMapping("/{id}/deploy-application")
     @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#id)")
-    public ResponseEntity<Map<String, String>> deployApplication(@PathVariable Long id, @RequestBody Map<String, String> request) {
+    public ResponseEntity<Map<String, String>> deployApplication(@PathVariable Long id,
+            @RequestBody Map<String, String> request) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
+
         String targetIp = request.get("targetIp");
         String sshUser = request.getOrDefault("sshUser", "root");
         String appName = request.get("appName");
-        
+
         deploymentService.deployApplication(env, targetIp, sshUser, appName);
-        
-        return ResponseEntity.ok(Map.of("message", "Application deployment triggered for " + appName + " at " + targetIp));
+
+        return ResponseEntity
+                .ok(Map.of("message", "Application deployment triggered for " + appName + " at " + targetIp));
     }
-    
+
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public Environment create(@RequestBody Environment environment) {
@@ -288,11 +291,11 @@ public class EnvironmentController {
     public ResponseEntity<Environment> update(@PathVariable Long id, @RequestBody Environment details) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
+
         env.setName(details.getName());
         env.setDescription(details.getDescription());
         env.setPrometheusLabel(details.getPrometheusLabel());
-        
+
         return ResponseEntity.ok(environmentRepository.save(env));
     }
 
@@ -301,7 +304,7 @@ public class EnvironmentController {
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
+
         deploymentService.removeEnvironmentFromInventory(env.getName());
         environmentRepository.delete(env);
         return ResponseEntity.ok(Map.of("message", "Environment deleted successfully"));

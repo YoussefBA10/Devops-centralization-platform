@@ -64,17 +64,21 @@ const EnvironmentsPage: React.FC = () => {
 
   const [undeployIp, setUndeployIp] = useState<string | null>(null);
   const [undeployUser, setUndeployUser] = useState('root');
+  const [undeployPassword, setUndeployPassword] = useState('');
   const [undeployLoading, setUndeployLoading] = useState(false);
 
   const handleUndeploy = async () => {
     if (!selectedEnv || !undeployIp) return;
     setUndeployLoading(true);
     try {
-      await api.delete(`/environments/${selectedEnv.id}/nodes/${undeployIp}?sshUser=${undeployUser}`);
+      await api.delete(`/environments/${selectedEnv.id}/nodes/${undeployIp}`, { 
+        data: { sshUser: undeployUser, sshPassword: undeployPassword } 
+      });
       // Optimistically remove from list
       setNodes(prev => prev.filter(n => n.ip !== undeployIp));
       setUndeployIp(null);
       setUndeployUser('root');
+      setUndeployPassword('');
     } catch (e) {
       console.error('Failed to undeploy', e);
       alert('Failed to initialize undeployment.');
@@ -561,6 +565,16 @@ const EnvironmentsPage: React.FC = () => {
                     onChange={e => setUndeployUser(e.target.value)} 
                     placeholder="root" 
                     required 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SSH Password / Sudo Password</label>
+                  <p className="text-[10px] text-muted-foreground mb-2">Required if public key authentication is not configured on the remote node.</p>
+                  <Input 
+                    type="password"
+                    value={undeployPassword} 
+                    onChange={e => setUndeployPassword(e.target.value)} 
+                    placeholder="••••••••" 
                   />
                 </div>
                 <div className="flex gap-4 pt-4">

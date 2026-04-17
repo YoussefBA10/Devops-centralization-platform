@@ -107,7 +107,7 @@ public class DeploymentService {
     }
 
     @Async
-    public CompletableFuture<Void> undeployAgentAsync(Environment environment, String targetIp, String sshUser) {
+    public CompletableFuture<Void> undeployAgentAsync(Environment environment, String targetIp, String sshUser, String sshPassword) {
         log.info("Starting undeployment for IP: {} (Environment: {})", targetIp, environment.getName());
         try {
             // 1. Run Ansible Undeploy Playbook
@@ -121,13 +121,21 @@ public class DeploymentService {
                 writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
             }
 
-            executeProcess(new String[] {
+            List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", tempInventory.getAbsolutePath(),
                     playbookPath,
                     "-e", "target_host=" + targetIp,
                     "-e", "ssh_user=" + sshUser
-            }, new DeploymentLog(), 300);
+            ));
+
+            if (sshPassword != null && !sshPassword.isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_ssh_pass=" + sshPassword);
+                executeProcessSecure(commandList.toArray(new String[0]), new DeploymentLog(), 300);
+            } else {
+                executeProcess(commandList.toArray(new String[0]), new DeploymentLog(), 300);
+            }
 
             tempInventory.delete();
 
@@ -520,7 +528,10 @@ public class DeploymentService {
         log.info("Executing command: {}", cmdStr);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(gitopsPath));
+        // Global Host Key Checking solution
         pb.environment().put("ANSIBLE_HOST_KEY_CHECKING", "False");
+        pb.environment().put("ANSIBLE_CONFIG", gitopsPath + "/ansible/ansible.cfg");
+        pb.environment().put("ANSIBLE_SSH_ARGS", "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null");
         pb.redirectErrorStream(true);
 
         Process process = pb.start();
