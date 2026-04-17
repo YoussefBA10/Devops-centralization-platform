@@ -357,7 +357,7 @@ public class DeploymentService {
             }
 
             Files.write(inventoryFile.toPath(), newLines);
-            log.info("Environment {} removed from inventory successfully.", groupName);
+            log.info("Environment {} removed from inventory successfully.", envName);
         } catch (Exception e) {
             log.error("Failed to remove environment from inventory: {}", e.getMessage(), e);
         }
