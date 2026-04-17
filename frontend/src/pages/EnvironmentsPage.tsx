@@ -35,6 +35,7 @@ interface EnvResources {
 
 
 
+const EnvironmentsPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteEnvModal, setShowDeleteEnvModal] = useState(false);
   const { environments, refreshEnvironments, createEnvironment, updateEnvironment, deleteEnvironment, loading: envLoading } = useEnvironment();
@@ -538,6 +539,7 @@ interface EnvResources {
       )}
 
       {/* Undeploy Confirmation Modal */}
+      {undeployIp && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-md bg-black/90 border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
             <CardHeader className="border-b border-white/5 pb-6">

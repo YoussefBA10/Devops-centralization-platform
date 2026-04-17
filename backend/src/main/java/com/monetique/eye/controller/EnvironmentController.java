@@ -274,6 +274,9 @@ public class EnvironmentController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public Environment create(@RequestBody Environment environment) {
+        if (environmentRepository.findByName(environment.getName()).isPresent()) {
+            throw new RuntimeException("Environment with name '" + environment.getName() + "' already exists");
+        }
         Environment env = environmentRepository.save(environment);
         // Initialize inventory group for this environment
         deploymentService.updateInventory(env.getName(), null, null);

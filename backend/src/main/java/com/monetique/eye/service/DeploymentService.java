@@ -269,14 +269,14 @@ public class DeploymentService {
             // 4. Update node entries if IP is provided
             if (targetIp != null && sshUser != null) {
                 String ipLine = targetIp + " ansible_user=" + sshUser;
-                String aliasLine = envName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
+                String aliasLine = sshUser + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
                 // Remove existing stale entries for this IP or this Alias across the whole file
                 lines.removeIf(line -> {
                     String trimmed = line.trim();
                     if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false; // Don't remove headers
                     return trimmed.startsWith(targetIp + " ") || trimmed.equals(targetIp) ||
-                           trimmed.startsWith(envName + " ") || trimmed.contains("ansible_host=" + targetIp);
+                           trimmed.startsWith(sshUser + " ") || trimmed.contains("ansible_host=" + targetIp);
                 });
 
                 // Find env header again because indices might have changed after removal
