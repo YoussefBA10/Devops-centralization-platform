@@ -1,7 +1,7 @@
----
 - name: Undeploy Observability Tools from Agent Node
   hosts: "{{ target_host | default('all') }}"
   become: yes
+  any_errors_fatal: yes
 
   tasks:
     - name: Remove observability containers

@@ -12,18 +12,27 @@ import {
   X,
   Trash2
 } from 'lucide-react';
-import api, { getEnvironmentStats, getEnvironmentResources, getEnvironmentNodes } from '../services/api';
+import api, { getEnvironmentStats, getEnvironmentResources, getEnvironmentNodes, getGlobalStability } from '../services/api';
 import type { Environment } from '../types/index';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 import EnvironmentCard from '../components/environment/EnvironmentCard';
 import DeployNodeModal from '../components/environment/DeployNodeModal';
+import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 interface EnvStats {
   totalEnvironments: number;
   totalActiveNodes: number;
   avgStability: number;
+}
+
+interface StabilityInfo {
+  avgStability: number;
+  trend: number;
+  totalEnvironments: number;
+  activeAgents: number;
+  calculationTimestamp: string;
 }
 
 interface EnvResources {
@@ -47,6 +56,7 @@ const EnvironmentsPage: React.FC = () => {
   
   // Monitoring Data State
   const [stats, setStats] = useState<EnvStats | null>(null);
+  const [stabilityInfo, setStabilityInfo] = useState<StabilityInfo | null>(null);
   const [resources, setResources] = useState<Record<number, EnvResources>>({});
   const [nodes, setNodes] = useState<any[]>([]);
   const [nodesLoading, setNodesLoading] = useState(false);
@@ -129,8 +139,13 @@ const EnvironmentsPage: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
-      const statsRes = await getEnvironmentStats();
+      const [statsRes, stabilityRes] = await Promise.all([
+        getEnvironmentStats(),
+        getGlobalStability()
+      ]);
+      
       setStats(statsRes.data);
+      setStabilityInfo(stabilityRes.data);
 
       const resourcePromises = environments.map(async (env) => {
         try {
@@ -243,7 +258,7 @@ const EnvironmentsPage: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Total Environments</p>
-              <p className="text-3xl font-bold">{stats?.totalEnvironments ?? environments.length}</p>
+              <p className="text-3xl font-bold">{stabilityInfo?.totalEnvironments ?? environments.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -257,11 +272,14 @@ const EnvironmentsPage: React.FC = () => {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Active Agents</p>
-              <p className="text-3xl font-bold">{stats?.totalActiveNodes ?? 0}</p>
+              <p className="text-3xl font-bold">{stabilityInfo?.activeAgents ?? 0}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-amber-500/5 border-amber-500/10 relative overflow-hidden group">
+        <Card 
+          className="bg-amber-500/5 border-amber-500/10 relative overflow-hidden group cursor-pointer transition-all hover:border-amber-500/30"
+          onClick={() => window.location.href = '/operational-intelligence'}
+        >
           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
             <Activity className="w-24 h-24" />
           </div>
@@ -269,9 +287,25 @@ const EnvironmentsPage: React.FC = () => {
             <div className="p-3 bg-amber-500/10 rounded-xl">
               <Activity className="w-6 h-6 text-amber-500" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Avg Stability</p>
-              <p className="text-3xl font-bold">{stats?.avgStability?.toFixed(1) ?? '0.0'}%</p>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-muted-foreground">Avg Stability</p>
+                {stabilityInfo && stabilityInfo.trend !== 0 && (
+                  <div className={`flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded ${stabilityInfo.trend > 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-destructive/10 text-destructive'}`}>
+                    {stabilityInfo.trend > 0 ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                    {Math.abs(stabilityInfo.trend).toFixed(1)}%
+                  </div>
+                )}
+              </div>
+              <p className={`text-3xl font-bold ${
+                stabilityInfo ? (
+                  stabilityInfo.avgStability > 95 ? 'text-emerald-500' :
+                  stabilityInfo.avgStability > 85 ? 'text-amber-500' :
+                  'text-destructive'
+                ) : ''
+              }`}>
+                {stabilityInfo ? stabilityInfo.avgStability.toFixed(1) : '0.0'}%
+              </p>
             </div>
           </CardContent>
         </Card>

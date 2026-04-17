@@ -1,14 +1,17 @@
 ---
 - name: Deploy Observability Tools to Agent Node
-  hosts: "{{ target_host | default('node-1') }}"
+  hosts: "{{ target_host | default('all') }}"
   become: yes
+  any_errors_fatal: yes
 
   vars:
     filebeat_version: "8.11.1"
     central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
     env_label: "{{ environment_label | default('production') }}"
 
-  tasks:
+  pre_tasks:
+    - name: Pre-flight Check - Verify connectivity
+      ping:
     # -----------------------------
     # Check if Docker exists
     # -----------------------------
