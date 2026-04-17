@@ -8,7 +8,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -34,7 +34,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
@@ -68,7 +68,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -90,7 +90,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw
@@ -109,7 +109,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     volumes:
       - /var/log:/var/log:ro
@@ -130,7 +130,7 @@ services:
     # ... (other blackbox config)
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     ports:
       - "9115:9115"
@@ -147,7 +147,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     ports:
       - "9093:9093"
@@ -163,7 +163,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
@@ -183,7 +183,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     environment:
       - discovery.type=single-node
@@ -201,7 +201,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     volumes:
       - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
@@ -241,7 +241,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     volumes:
       - ../:/app/gitops
@@ -289,7 +289,7 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "production"
+      env: "vmpipe"
       node: "vmpipe"
     ports:
       - "80:80"

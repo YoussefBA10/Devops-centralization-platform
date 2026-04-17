@@ -39,6 +39,9 @@ export const initializeSetup = (data: { vmpipeIp: string; vmpipeHostname?: strin
 
 export const getEnvironmentStats = () => api.get('/environments/stats');
 export const getGlobalStability = () => api.get('/infrastructure/global/stability');
+export const getGlobalInfrastructureStats = () => api.get('/infrastructure/global');
+export const getInfrastructureTopology = (envId: number) => api.get('/infrastructure/global/topology', { params: { environmentId: envId } });
+export const getAllInfrastructureTopology = () => api.get('/infrastructure/global/topology/all');
 export const getEnvironmentResources = (id: number) => api.get(`/environments/${id}/resources`);
 export const getEnvironmentNodes = (id: number) => api.get(`/environments/${id}/nodes`);
 export const getDeploymentStatus = (envId: number, targetIp: string) => 

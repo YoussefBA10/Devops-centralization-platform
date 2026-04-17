@@ -77,6 +77,8 @@ public class DeploymentService {
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+
             executeProcess(new String[] {
                     "ansible-playbook",
                     "-i", inventoryPath,
@@ -86,7 +88,8 @@ public class DeploymentService {
                     "-e", "ansible_user=" + sshUser,
                     "-e", "ssh_user=" + sshUser,
                     "-e", "target_host=" + targetIp,
-                    "-e", "central_logstash_ip=" + centralIp
+                    "-e", "central_logstash_ip=" + centralIp,
+                    "-e", "nodename=" + nodeName
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
@@ -182,6 +185,8 @@ public class DeploymentService {
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+
             // 3. Execute Application Playbook
             executeProcess(new String[] {
                     "ansible-playbook",
@@ -190,7 +195,8 @@ public class DeploymentService {
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
                     "-e", "ansible_user=" + sshUser,
-                    "-e", "central_ip=" + centralIp
+                    "-e", "central_ip=" + centralIp,
+                    "-e", "nodename=" + nodeName
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
@@ -410,35 +416,34 @@ public class DeploymentService {
             }
 
             String envLabel = environment.getName().toLowerCase().replace(" ", "-");
+            String nodeName = ip.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + ip.replace(".", "-");
 
             // Determine targets based on whether the IP matches the central node
             String nodeExporterTarget = ip + ":9100";
             String cadvisorTarget = ip + ":8081";
+            String filebeatTarget = ip + ":5066";
 
             if (ip.equals(environment.getCentralNodeIp())) {
                 log.info("Node {} is detected as Central Node. Using internal service names.", ip);
                 nodeExporterTarget = "node-exporter:9100";
                 cadvisorTarget = "cadvisor:8080";
+                filebeatTarget = "filebeat:5066";
             }
 
             // Add Node Exporter target
             java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
             nodeExporter.put("targets", java.util.List.of(nodeExporterTarget));
-            nodeExporter.put("labels", java.util.Map.of("job", "node-exporter", "environment", envLabel));
+            nodeExporter.put("labels", java.util.Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName));
 
             // Add cAdvisor target
             java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
             cadvisor.put("targets", java.util.List.of(cadvisorTarget));
-            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel));
+            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel, "nodename", nodeName));
 
             // Add Filebeat target
-            String filebeatTarget = ip + ":5066";
-            if (ip.equals(environment.getCentralNodeIp())) {
-                filebeatTarget = "filebeat:5066";
-            }
             java.util.Map<String, Object> filebeat = new java.util.HashMap<>();
             filebeat.put("targets", java.util.List.of(filebeatTarget));
-            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel));
+            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel, "nodename", nodeName));
 
             // Check for duplicates and update or add
             updateOrAdd(targets, nodeExporter);

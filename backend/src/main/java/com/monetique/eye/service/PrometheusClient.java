@@ -96,6 +96,16 @@ public class PrometheusClient {
         return Math.round(queryMetric("count(up{job=\"node-exporter\"} == 1)"));
     }
 
+    public Double getCpuUsageForInstance(String instance) {
+        String query = String.format("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\", instance=\"%s\"}[5m])) * 100", instance);
+        return queryMetric(query);
+    }
+
+    public Double getMemoryUsagePercentForInstance(String instance) {
+        String query = String.format("(1 - (node_memory_MemAvailable_bytes{instance=\"%s\"} / node_memory_MemTotal_bytes{instance=\"%s\"})) * 100", instance, instance);
+        return queryMetric(query);
+    }
+
     public Double getAvgStability() {
         // Mock stability or query instance uptime percentage
         return queryMetric("avg(avg_over_time(up{job=\"node-exporter\"}[1h])) * 100");

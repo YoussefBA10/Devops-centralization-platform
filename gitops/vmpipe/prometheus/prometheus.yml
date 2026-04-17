@@ -20,6 +20,7 @@ scrape_configs:
       - targets: ['backend:9001']
         labels:
           environment: "vmpipe"
+          nodename: "vmpipe"
 
   # 2. Central Node (vmpipe) - Self monitoring
   - job_name: 'vmpipe'
@@ -28,6 +29,7 @@ scrape_configs:
         labels:
           environment: "vmpipe"
           role: "central-node"
+          nodename: "vmpipe"
 
   # 3. Dynamic scraping of all Agent Nodes (Environment-aware)
   # Prometheus will automatically discover nodes based on labels added by Ansible
@@ -85,6 +87,7 @@ scrape_configs:
       - targets: ['elasticsearch-exporter:9114']
         labels:
           environment: "vmpipe"
+          nodename: "vmpipe"
 
   # 8. Alertmanager (Self monitoring)
   - job_name: 'alertmanager'
@@ -92,6 +95,7 @@ scrape_configs:
       - targets: ['alertmanager:9093']
         labels:
           environment: "vmpipe"
+          nodename: "vmpipe"
 
   # 9. Grafana (Self monitoring)
   - job_name: 'grafana'
@@ -99,6 +103,7 @@ scrape_configs:
       - targets: ['grafana:3000']
         labels:
           environment: "vmpipe"
+          nodename: "vmpipe"
 
   # 10. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  ReactFlow, 
-  Background, 
-  Controls, 
+import {
+  ReactFlow,
+  Background,
+  Controls,
   Panel,
   useNodesState,
   useEdgesState,
@@ -10,67 +10,111 @@ import {
   Position
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { 
-  Server, 
-  Database, 
-  Cpu, 
-  Zap, 
-  Shield, 
+import {
+  Server,
+  Database,
+  Cpu,
+  Zap,
+  Shield,
   RefreshCw,
   Search,
   Activity
 } from 'lucide-react';
-import api from '../services/api';
+import api, { getGlobalInfrastructureStats, getInfrastructureTopology, getAllInfrastructureTopology } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
+import { useAuth } from '../context/AuthContext';
 import type { TopologyData, Node as TopologyNode } from '../types/index';
 import { Card } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 
+interface GlobalStats {
+  totalEnvironments: number;
+  activeAgents: number;
+  avgStability: number;
+}
+
 // Custom Node Component
 const ServerNode = ({ data }: { data: TopologyNode }) => {
-  const isHealthy = data.status !== 'CRITICAL' && (data.cpu || 0) < 90;
-  
+  const isHealthy = data.status === 'HEALTHY';
+
+  // Progress Bar Colors: Blue < 70, Orange 70-85, Red > 85
+  const getProgressColor = (val: number) => {
+    if (val < 70) return 'bg-blue-500';
+    if (val < 85) return 'bg-amber-500';
+    return 'bg-destructive';
+  };
+
   return (
-    <div className={`px-4 py-3 shadow-2xl rounded-xl border-2 transition-all duration-300 w-64 bg-card/80 backdrop-blur-md ${
-      isHealthy ? 'border-primary/20 hover:border-primary/50' : 'border-destructive/50 hover:border-destructive shadow-destructive/10'
-    }`}>
+    <div className={`px-4 py-3 shadow-2xl rounded-xl border-2 transition-all duration-300 w-64 bg-[#0c0c0e]/90 backdrop-blur-md ${isHealthy
+      ? 'border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] shadow-[0_0_10px_rgba(16,185,129,0.05)]'
+      : data.status === 'WARNING'
+        ? 'border-amber-500/30 hover:border-amber-500/60'
+        : 'border-destructive/40 hover:border-destructive shadow-destructive/10'
+      }`}>
       <Handle type="target" position={Position.Top} className="!bg-primary/50" />
-      
+
       <div className="flex items-center gap-3 mb-3">
-        <div className={`p-2 rounded-lg ${isHealthy ? 'bg-primary/10 text-primary' : 'bg-destructive/10 text-destructive'}`}>
+        <div className={`p-2 rounded-lg ${isHealthy ? 'bg-emerald-500/10 text-emerald-500' : data.status === 'WARNING' ? 'bg-amber-500/10 text-amber-500' : 'bg-destructive/10 text-destructive'}`}>
           {data.type === 'db-server' ? <Database className="w-5 h-5" /> : <Server className="w-5 h-5" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold truncate">{data.id}</p>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{data.ip}</p>
+          <p className="text-sm font-bold truncate">{data.label}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{data.ip}</p>
+            {data.environmentName && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-bold uppercase">
+                {data.environmentName}
+              </span>
+            )}
+          </div>
         </div>
         {isHealthy ? <Zap className="w-4 h-4 text-emerald-500 fill-emerald-500/20" /> : <Activity className="w-4 h-4 text-destructive animate-pulse" />}
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="flex items-center gap-1 text-muted-foreground">
-            <Cpu className="w-3 h-3" />
-            CPU
-          </span>
-          <span className={`font-bold ${data.cpu! > 80 ? 'text-destructive' : 'text-foreground'}`}>{data.cpu}%</span>
+      <div className="space-y-4">
+        {/* CPU Bar */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-widest">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Cpu className="w-3 h-3" />
+              CPU Load
+            </span>
+            <span className={`font-bold ${data.cpu! > 85 ? 'text-destructive' : 'text-foreground'}`}>{data.cpu}%</span>
+          </div>
+          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(data.cpu!)}`}
+              style={{ width: `${data.cpu}%` }}
+            ></div>
+          </div>
         </div>
-        <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-          <div 
-            className={`h-full rounded-full transition-all duration-1000 ${data.cpu! > 80 ? 'bg-destructive' : 'bg-primary'}`}
-            style={{ width: `${data.cpu}%` }}
-          ></div>
+
+        {/* RAM Bar */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] uppercase tracking-widest">
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Activity className="w-3 h-3" />
+              Memory
+            </span>
+            <span className={`font-bold ${data.ram! > 85 ? 'text-destructive' : 'text-foreground'}`}>{data.ram}%</span>
+          </div>
+          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(data.ram!)}`}
+              style={{ width: `${data.ram}%` }}
+            ></div>
+          </div>
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
-         <div className="flex items-center gap-2">
-           <Shield className="w-3 h-3 text-primary/50" />
-           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Encrypted</span>
-         </div>
-         <span className={`text-[10px] font-bold uppercase ${isHealthy ? 'text-emerald-500/80' : 'text-destructive'}`}>
-            {data.status || (isHealthy ? 'Healthy' : 'Error')}
-         </span>
+      <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Shield className="w-3 h-3 text-white/20" />
+          <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight">Encrypted Layer</span>
+        </div>
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${isHealthy ? 'text-emerald-500' : data.status === 'WARNING' ? 'text-amber-500' : 'text-destructive'}`}>
+          {data.status}
+        </span>
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!bg-primary/50" />
@@ -84,32 +128,61 @@ const nodeTypes = {
 
 const InfrastructureTopologyPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { isAdmin } = useAuth();
+  const [viewAllEnvs, setViewAllEnvs] = useState(isAdmin);
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<GlobalStats | null>(null);
 
   const fetchTopology = useCallback(async () => {
-    if (!selectedEnvironment) return;
+    if (!selectedEnvironment && !viewAllEnvs) return;
     setLoading(true);
     try {
-      const response = await api.get<TopologyData>(`/infrastructure/topology?environmentId=${selectedEnvironment.id}`);
-      const data = response.data;
+      const fetchCall = (viewAllEnvs && isAdmin)
+        ? getAllInfrastructureTopology()
+        : getInfrastructureTopology(selectedEnvironment!.id);
 
-      // Transform backend nodes to React Flow nodes with positioning
-      const flowNodes = data.nodes.map((node, i) => ({
-        id: node.id,
-        type: 'serverNode',
-        data: node,
-        position: { x: (i % 3) * 350, y: Math.floor(i / 3) * 250 },
-      }));
+      const [topoRes, statsRes] = await Promise.all([
+        fetchCall,
+        getGlobalInfrastructureStats()
+      ]);
+
+      const data = topoRes.data;
+      setStats(statsRes.data);
+
+      // Transform backend nodes with spatial grouping by environment
+      const envIds = Array.from(new Set(data.nodes.map((n: any) => n.environmentId?.toString())));
+
+      const flowNodes = data.nodes.map((node: any) => {
+        const envIdStr = node.environmentId?.toString();
+        const envIndex = envIds.indexOf(envIdStr);
+        const nodesInEnv = data.nodes.filter((n: any) => n.environmentId?.toString() === envIdStr);
+        const nodeIndex = nodesInEnv.indexOf(node);
+
+        // Calculate position: Tighter spacing for better visual grouping
+        const offsetX = (envIndex >= 0 ? envIndex : 0) * 550;
+        const posX = offsetX + (nodeIndex % 2) * 350;
+        const posY = Math.floor(nodeIndex / 2) * 220;
+
+        return {
+          id: node.id,
+          type: 'serverNode',
+          data: {
+            ...node,
+            environmentName: node.environmentName || selectedEnvironment?.name
+          },
+          position: { x: posX, y: posY },
+        };
+      });
 
       // Transform backend edges
-      const flowEdges = data.edges.map((edge, i) => ({
+      const flowEdges = data.edges.map((edge: any, i: number) => ({
         id: `e-${i}`,
         source: edge.source,
         target: edge.target,
         animated: true,
-        style: { stroke: '#3b82f6', strokeWidth: 2, opacity: 0.5 },
+        style: { stroke: '#3b82f6', strokeWidth: 1.5, opacity: 0.3 },
       }));
 
       setNodes(flowNodes);
@@ -119,7 +192,7 @@ const InfrastructureTopologyPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedEnvironment, setNodes, setEdges]);
+  }, [selectedEnvironment, viewAllEnvs, isAdmin, setNodes, setEdges]);
 
   useEffect(() => {
     fetchTopology();
@@ -131,24 +204,32 @@ const InfrastructureTopologyPage: React.FC = () => {
     <div className="h-full flex flex-col relative animate-in fade-in duration-700">
       {/* Topology Header Panel */}
       <div className="absolute top-8 left-8 z-10 w-80 space-y-4">
-        <Card className="bg-card/80 backdrop-blur-xl border-white/10 shadow-2xl">
+        <Card className="bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5 shadow-3xl">
           <div className="p-6">
             <h1 className="text-2xl font-bold tracking-tight">Cluster Graph</h1>
-            <p className="text-xs text-muted-foreground mt-1 uppercase tracking-widest font-bold">
-              {selectedEnvironment?.name} Infrastructure
+            <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-[0.2em] font-bold text-primary">
+              {viewAllEnvs ? 'Global Infrastructure' : `${selectedEnvironment?.name} Infrastructure`}
             </p>
             <div className="mt-6 space-y-3">
+              {/* Toggle removed for admins as Global view is now mandatory default */}
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total Nodes</span>
-                <span className="font-bold">{nodes.length}</span>
+                <span className="text-muted-foreground">Total Agents</span>
+                <span className="font-bold text-white">{nodes.length}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Active Connections</span>
-                <span className="font-bold">{edges.length}</span>
+                <span className="text-muted-foreground">Active Peers</span>
+                <span className="font-bold text-white">{edges.length}</span>
               </div>
-              <div className="h-px bg-border my-2"></div>
-              <Button className="w-full" size="sm" onClick={fetchTopology} loading={loading}>
-                <RefreshCw className="w-3 h-3" />
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Network Load</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="font-bold text-emerald-500">Nominal</span>
+                </div>
+              </div>
+              <div className="h-px bg-white/5 my-2"></div>
+              <Button className="w-full h-10 transition-all hover:shadow-lg hover:shadow-primary/20" size="sm" onClick={fetchTopology} loading={loading}>
+                <RefreshCw className="w-3 h-3 mr-2" />
                 Rescan Topology
               </Button>
             </div>
@@ -157,7 +238,7 @@ const InfrastructureTopologyPage: React.FC = () => {
 
         <div className="relative group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input placeholder="Find node by ID or IP..." className="pl-10 bg-card/80 backdrop-blur-xl border-white/10 shadow-xl h-11" />
+          <Input placeholder="Find node by ID or IP..." className="pl-10 bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5 shadow-2xl h-11 focus:border-primary/50 transition-all" />
         </div>
       </div>
 
@@ -188,6 +269,7 @@ const InfrastructureTopologyPage: React.FC = () => {
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ padding: 0.5 }}
           colorMode="dark"
           suppressHydrationWarning
         >

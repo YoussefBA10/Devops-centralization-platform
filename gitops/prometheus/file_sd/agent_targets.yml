@@ -4,8 +4,16 @@
   labels:
     environment: "vmpipe"
     job: "node-exporter"
+    nodename: "vmpipe"
 - targets:
   - "192.168.126.130:8081"
   labels:
     environment: "vmpipe"
     job: "cadvisor"
+    nodename: "vmpipe"
+- targets:
+  - "192.168.126.130:5066"
+  labels:
+    environment: "vmpipe"
+    job: "filebeat"
+    nodename: "vmpipe"
