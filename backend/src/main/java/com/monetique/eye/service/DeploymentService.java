@@ -320,21 +320,22 @@ public class DeploymentService {
                 if (trimmed.isEmpty() || trimmed.startsWith("[")) continue;
                 if (trimmed.contains(targetIp)) {
                     String[] parts = trimmed.split("\\s+");
-                    // If first part isn't the IP, it's an alias (e.g. "node-1 ansible_host=...")
-                    if (parts.length > 0 && !parts[0].equals(targetIp) && !parts[0].contains("=")) {
+                    // If first part isn't the IP and isn't a common username, it's a good alias
+                    if (parts.length > 0 && !parts[0].equals(targetIp) && !parts[0].contains("=") && !parts[0].equalsIgnoreCase("root")) {
                         discoveredAlias = parts[0];
                     }
                     if (trimmed.contains("ansible_user=")) {
                         String userPart = trimmed.substring(trimmed.indexOf("ansible_user=") + "ansible_user=".length()).split("\\s+")[0];
-                        // If provided user is generic "root", prefer the one found in the file
-                        if ("root".equals(sshUser)) {
+                        // If the found user is more specific than "root", prefer it
+                        if (!userPart.equalsIgnoreCase("root") || discoveredUser.equalsIgnoreCase("root")) {
                             discoveredUser = userPart;
                         }
                     }
-                    log.info("Discovered mapping in inventory for {}: Alias={}, User={}", targetIp, discoveredAlias, discoveredUser);
-                    break;
+                    log.info("Inspected line for {}: Alias candidate={}, User candidate={}", targetIp, discoveredAlias, discoveredUser);
+                    // NO BREAK: Continue scanning the whole file to find the best possible alias/user mapping
                 }
             }
+
 
             final String finalAlias = discoveredAlias;
             final String finalUser = discoveredUser;
