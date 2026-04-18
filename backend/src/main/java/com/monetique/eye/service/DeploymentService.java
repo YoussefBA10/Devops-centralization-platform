@@ -676,16 +676,19 @@ public class DeploymentService {
     }
 
     private String serializeExtraHosts(String extraHosts) {
-        if (extraHosts == null || extraHosts.trim().isEmpty()) return "[]";
+        if (extraHosts == null || extraHosts.trim().isEmpty()) return "{}";
         try {
             String[] lines = extraHosts.split("\\n");
-            List<String> hosts = new ArrayList<>();
+            java.util.Map<String, String> hostsMap = new java.util.HashMap<>();
             for (String line : lines) {
-                if (!line.trim().isEmpty()) hosts.add(line.trim());
+                if (line.contains(":")) {
+                    String[] parts = line.split(":", 2);
+                    hostsMap.put(parts[0].trim(), parts[1].trim());
+                }
             }
-            return objectMapper.writeValueAsString(hosts);
+            return objectMapper.writeValueAsString(hostsMap);
         } catch (Exception e) {
-            return "[]";
+            return "{}";
         }
     }
 }

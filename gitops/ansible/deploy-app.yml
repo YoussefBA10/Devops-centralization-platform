@@ -53,7 +53,7 @@
         networks:
           - name: "monetique-{{ envLabel }}"
         purge_networks: yes
-        etc_hosts: "{{ extra_hosts | default([]) | from_json }}"
+        etc_hosts: "{{ extra_hosts | default('{}') | from_json }}"
         labels:
           app: "{{ appName }}"
           env: "{{ envLabel }}"
