@@ -6,7 +6,10 @@ import lombok.*;
 
 @Entity
 @Table(name = "applications")
-@Data
+@Getter
+@Setter
+@ToString
+@EqualsAndHashCode
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
@@ -59,35 +62,41 @@ public class Application {
     @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
+    @Builder.Default
     private java.util.List<Ticket> tickets = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
+    @Builder.Default
     private java.util.List<RecurringPattern> recurringPatterns = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
+    @Builder.Default
     private java.util.List<LogAggregationWindow> logAggregationWindows = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
+    @Builder.Default
     private java.util.List<Incident> incidents = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
+    @Builder.Default
     private java.util.List<Conversation> conversations = new java.util.ArrayList<>();
 
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
+    @Builder.Default
     private java.util.List<AiOperationalSummary> aiOperationalSummaries = new java.util.ArrayList<>();
 }

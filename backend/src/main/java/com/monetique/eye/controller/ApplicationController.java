@@ -90,7 +90,7 @@ public class ApplicationController {
         applicationRepository.save(app);
 
         // Async deployment
-        deploymentService.deployApplicationFull(env, request, app);
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId());
 
         return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
     }

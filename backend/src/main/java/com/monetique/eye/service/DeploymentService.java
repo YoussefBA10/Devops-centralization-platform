@@ -228,8 +228,14 @@ public class DeploymentService {
     }
 
     @Async
-    public void deployApplicationFull(Environment environment, com.monetique.eye.dto.DeployRequestDTO request,
-            Application app) {
+    public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
+            Long applicationId) {
+        
+        Environment environment = environmentRepository.findById(environmentId)
+                .orElseThrow(() -> new RuntimeException("Environment not found: " + environmentId));
+        Application app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RuntimeException("Application not found: " + applicationId));
+
         log.info("Starting full application deployment for environment: {} at Target Node: {}, App: {}",
                 environment.getName(), request.getTargetNode(), request.getName());
 
