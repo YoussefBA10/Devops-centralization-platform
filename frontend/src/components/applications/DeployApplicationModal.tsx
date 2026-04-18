@@ -29,7 +29,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     port: '8080',
     envVars: '',
     sshPassword: '',
-    srcPath: 'backend/'
+    srcPath: 'backend/',
+    extraHosts: ''
   });
 
   useEffect(() => {
@@ -85,7 +86,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         port: parseInt(formData.port),
         envVars: envMap,
         sshPassword: formData.sshPassword,
-        srcPath: formData.srcPath
+        srcPath: formData.srcPath,
+        extraHosts: formData.extraHosts
     };
 
     try {
@@ -215,6 +217,20 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                         <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Source Directory (Relative to Repo Root)</label>
                         <Input name="srcPath" value={formData.srcPath} onChange={handleChange} placeholder="e.g. backend/ or . " className="bg-black/40 border-white/10" />
                         <p className="text-[10px] text-muted-foreground mt-1 italic">Leave empty or use "." if your application is in the root directory.</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1">
+                    <div>
+                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Extra Hosts Mapping (One per line)</label>
+                        <textarea 
+                            name="extraHosts" 
+                            value={formData.extraHosts} 
+                            onChange={(e) => setFormData({...formData, extraHosts: e.target.value})}
+                            placeholder="e.g. backend:192.168.126.130"
+                            className="w-full bg-black/40 border border-white/10 rounded-md p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[60px]"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1 italic">Format: hostname:ip (Fixes "host not found" in Nginx configs)</p>
                     </div>
                 </div>
             </div>

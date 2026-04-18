@@ -26,6 +26,7 @@ public class ApplicationController {
     private final EnvironmentRepository environmentRepository;
     private final DeploymentService deploymentService;
     private final DeploymentLogRepository deploymentLogRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @GetMapping
     public ResponseEntity<List<ApplicationDTO>> getApplications(@RequestParam Long environmentId) {
@@ -44,8 +45,19 @@ public class ApplicationController {
                 .createdAt(app.getCreatedAt())
                 .environmentId(app.getEnvironment().getId())
                 .srcPath(app.getSrcPath())
+                .extraHosts(app.getExtraHosts())
+                .envVars(parseEnvVars(app.getEnvVarsJson()))
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
+    }
+
+    private Map<String, String> parseEnvVars(String json) {
+        if (json == null || json.isEmpty()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 
     @PostMapping("/deploy")
@@ -70,6 +82,12 @@ public class ApplicationController {
         app.setBranch(request.getBranch());
         app.setPort(request.getPort());
         app.setSrcPath(request.getSrcPath());
+        app.setExtraHosts(request.getExtraHosts());
+        try {
+            app.setEnvVarsJson(objectMapper.writeValueAsString(request.getEnvVars()));
+        } catch (Exception e) {
+            app.setEnvVarsJson("{}");
+        }
         app.setStatus("DEPLOYING");
         app.setLastDeployedAt(LocalDateTime.now());
 

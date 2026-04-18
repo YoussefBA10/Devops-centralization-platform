@@ -37,6 +37,11 @@
         name: "{{ container_name }}"
         state: absent
 
+    - name: Ensure Docker network exists for environment
+      docker_network:
+        name: "monetique-{{ envLabel }}"
+        state: present
+
     - name: Run Application Container
       docker_container:
         name: "{{ container_name }}"
@@ -45,13 +50,16 @@
         restart_policy: always
         ports:
           - "{{ appPort }}:{{ appPort }}"
+        networks:
+          - name: "monetique-{{ envLabel }}"
+        purge_networks: yes
+        etc_hosts: "{{ extra_hosts | default([]) | from_json }}"
         labels:
           app: "{{ appName }}"
           env: "{{ envLabel }}"
           com.monetique.environment: "{{ envLabel }}"
           node: "{{ nodename }}"
-        env:
-          NODE_ENV: "production"
+        env: "{{ app_env | default('{}') | from_json }}"
 
     - name: Clean up dangling images
       command: docker image prune -f

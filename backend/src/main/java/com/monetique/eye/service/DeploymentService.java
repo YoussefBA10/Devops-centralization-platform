@@ -31,16 +31,19 @@ public class DeploymentService {
     private final DeploymentLogRepository deploymentLogRepository;
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
 
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
             EnvironmentRepository environmentRepository,
-            ApplicationRepository applicationRepository) {
+            ApplicationRepository applicationRepository,
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Async
@@ -276,7 +279,9 @@ public class DeploymentService {
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
                     "-e", "nodename=" + nodeName,
-                    "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : ".")
+                    "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
+                    "-e", "app_env=" + serializeEnvVars(request.getEnvVars()),
+                    "-e", "extra_hosts=" + serializeExtraHosts(request.getExtraHosts())
             ));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
@@ -658,6 +663,29 @@ public class DeploymentService {
 
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
+        }
+    }
+
+    private String serializeEnvVars(java.util.Map<String, String> envVars) {
+        if (envVars == null) return "{}";
+        try {
+            return objectMapper.writeValueAsString(envVars);
+        } catch (Exception e) {
+            return "{}";
+        }
+    }
+
+    private String serializeExtraHosts(String extraHosts) {
+        if (extraHosts == null || extraHosts.trim().isEmpty()) return "[]";
+        try {
+            String[] lines = extraHosts.split("\\n");
+            List<String> hosts = new ArrayList<>();
+            for (String line : lines) {
+                if (!line.trim().isEmpty()) hosts.add(line.trim());
+            }
+            return objectMapper.writeValueAsString(hosts);
+        } catch (Exception e) {
+            return "[]";
         }
     }
 }

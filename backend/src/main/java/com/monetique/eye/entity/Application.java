@@ -44,6 +44,12 @@ public class Application {
     private java.time.LocalDateTime lastDeployedAt;
     
     private String srcPath;
+    
+    private String extraHosts;
+    
+    @Column(columnDefinition = "TEXT")
+    private String envVarsJson;
+
 
 
     private java.time.LocalDateTime createdAt;
