@@ -249,7 +249,7 @@ public class DeploymentService {
             // Application deployment should use the existing inventory from agent deployment
             // No need to call updateInventory overriding the sshUser with "root"
 
-            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
+            String targetAlias = getSshAliasForIp(request.getTargetNode());
 
             // Execute Application Playbook
             // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType, nodename
@@ -257,15 +257,15 @@ public class DeploymentService {
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
-                    "--limit", request.getTargetNode(),
+                    "--limit", targetAlias,
                     "-e", "appName=" + request.getName(),
-                    "-e", "target_host=" + request.getTargetNode(),
+                    "-e", "target_host=" + targetAlias,
                     "-e", "repoUrl=" + request.getRepoUrl(),
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
-                    "-e", "nodename=" + nodeName
+                    "-e", "nodename=" + targetAlias
             ));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
@@ -639,6 +639,23 @@ public class DeploymentService {
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
         }
+    }
+
+    private String getSshAliasForIp(String ip) {
+        try {
+            File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
+            if (!inventoryFile.exists()) return ip;
+            for (String line : Files.readAllLines(inventoryFile.toPath())) {
+                line = line.trim();
+                // We stored alias as: [alias] ansible_host=[ip] ansible_user=[alias]
+                if (line.contains("ansible_host=" + ip)) {
+                    return line.split(" ")[0];
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error reading inventory for alias lookup: {}", e.getMessage());
+        }
+        return ip; // fallback to IP
     }
 }
 
