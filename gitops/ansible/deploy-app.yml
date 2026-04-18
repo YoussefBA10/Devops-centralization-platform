@@ -4,16 +4,15 @@
   become: yes
   vars:
     app_dir: "/opt/monetique/apps/{{ appName }}"
+    build_dir: "{{ app_dir }}{{ '/' + appType | lower if appType is defined and appType != '' and appType | lower != 'monolith' else '' }}"
     image_name: "{{ appName | lower }}"
     container_name: "{{ appName | lower }}"
     
   tasks:
-    - name: Ensure git is installed
-      apt:
+    - name: Ensure git is installed (fast)
+      package:
         name: git
         state: present
-        update_cache: yes
-      when: ansible_os_family == 'Debian'
 
     - name: Ensure app directory exists
       file:
@@ -28,10 +27,10 @@
         version: "{{ branch | default('main') }}"
         force: yes
 
-    - name: Build Docker Image (Assumption: Repo contains a valid Dockerfile)
+    - name: Build Docker Image
       command: docker build -t {{ image_name }}:latest .
       args:
-        chdir: "{{ app_dir }}"
+        chdir: "{{ build_dir }}"
       register: build_output
 
     - name: Stop and remove existing container

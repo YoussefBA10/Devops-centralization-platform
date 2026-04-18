@@ -249,8 +249,10 @@ public class DeploymentService {
             // Ensure the target node is in the inventory for the environment
             updateInventory(environment.getName(), request.getTargetNode(), "root");
 
+            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
+
             // Execute Application Playbook
-            // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType
+            // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType, nodename
             List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", inventoryPath,
@@ -262,7 +264,8 @@ public class DeploymentService {
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
-                    "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-")
+                    "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
+                    "-e", "nodename=" + nodeName
             ));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
