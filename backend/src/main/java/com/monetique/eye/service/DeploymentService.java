@@ -310,6 +310,36 @@ public class DeploymentService {
                     ? Files.readAllLines(inventoryFile.toPath())
                     : new ArrayList<>();
 
+            // --- SMART DISCOVERY ---
+            // If the IP is already in the inventory, try to preserve its alias and user
+            String discoveredAlias = nodeName;
+            String discoveredUser = sshUser;
+
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("[")) continue;
+                if (trimmed.contains(targetIp)) {
+                    String[] parts = trimmed.split("\\s+");
+                    // If first part isn't the IP, it's an alias (e.g. "node-1 ansible_host=...")
+                    if (parts.length > 0 && !parts[0].equals(targetIp) && !parts[0].contains("=")) {
+                        discoveredAlias = parts[0];
+                    }
+                    if (trimmed.contains("ansible_user=")) {
+                        String userPart = trimmed.substring(trimmed.indexOf("ansible_user=") + "ansible_user=".length()).split("\\s+")[0];
+                        // If provided user is generic "root", prefer the one found in the file
+                        if ("root".equals(sshUser)) {
+                            discoveredUser = userPart;
+                        }
+                    }
+                    log.info("Discovered mapping in inventory for {}: Alias={}, User={}", targetIp, discoveredAlias, discoveredUser);
+                    break;
+                }
+            }
+
+            final String finalAlias = discoveredAlias;
+            final String finalUser = discoveredUser;
+            // -----------------------
+
             // 1. Ensure [agents:children] group exists at the top
             int childrenIdx = -1;
             for (int i = 0; i < lines.size(); i++) {
@@ -358,9 +388,9 @@ public class DeploymentService {
             }
 
             // 4. Update node entries if IP is provided
-            if (targetIp != null && sshUser != null) {
-                String ipLine = targetIp + " ansible_user=" + sshUser;
-                String aliasLine = nodeName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
+            if (targetIp != null) {
+                String ipLine = targetIp + " ansible_user=" + finalUser;
+                String aliasLine = finalAlias + " ansible_host=" + targetIp + " ansible_user=" + finalUser;
 
                 // DEEP CLEAN: Remove ANY line that could cause a collision
                 lines.removeIf(line -> {
@@ -370,11 +400,13 @@ public class DeploymentService {
                         return false; 
                     }
                     
-                    // Kill lines starting with the Node Name or SSH User (your preferred alias) to ensure it's fresh
+                    // Kill lines starting with the discovered Alias, Node Name or SSH User (your preferred alias) to ensure it's fresh
+                    if (trimmed.startsWith(finalAlias + " ")) return true;
+                    if (trimmed.equals(finalAlias)) return true;
                     if (trimmed.startsWith(nodeName + " ")) return true;
                     if (trimmed.equals(nodeName)) return true;
-                    if (trimmed.startsWith(sshUser + " ")) return true;
-                    if (trimmed.equals(sshUser)) return true;
+                    if (trimmed.startsWith(finalUser + " ")) return true;
+                    if (trimmed.equals(finalUser)) return true;
 
                     // Kill lines containing the target IP or mentions of the old alias style
                     return trimmed.startsWith(targetIp + " ") || 
@@ -398,11 +430,12 @@ public class DeploymentService {
             }
 
             Files.write(inventoryFile.toPath(), lines);
-            log.info("Inventory successfully deep-cleaned and restructured for env: {}", envName);
+            log.info("Inventory successfully updated with discovered naming conventions for env: {}", envName);
         } catch (Exception e) {
             log.error("Failed to update inventory: {}", e.getMessage(), e);
         }
     }
+
 
     public void removeEnvironmentFromInventory(String envName) {
         log.info("Removing environment group from inventory: {}", envName);
