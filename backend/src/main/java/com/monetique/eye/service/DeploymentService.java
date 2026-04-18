@@ -246,8 +246,8 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
-            // Ensure the target node is in the inventory for the environment
-            updateInventory(environment.getName(), request.getTargetNode(), "root");
+            // Application deployment should use the existing inventory from agent deployment
+            // No need to call updateInventory overriding the sshUser with "root"
 
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
 
