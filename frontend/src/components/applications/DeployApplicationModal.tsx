@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Server, Code, Box, GitBranch } from 'lucide-react';
+import { X, Server, Code, Box, GitBranch, Info, Settings2 } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';
@@ -30,14 +30,26 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     envVars: '',
     sshPassword: '',
     srcPath: 'backend/',
-    containerPort: '8080'
+    containerPort: '8080',
+    autoGenerateConfig: true,
+    
+    // Fullstack distinct fields
+    frontendSrcPath: 'frontend/',
+    frontendPort: '3000',
+    frontendContainerPort: '80',
+    frontendAppLanguage: 'React',
+    
+    backendSrcPath: 'backend/',
+    backendPort: '8080',
+    backendContainerPort: '8080',
+    backendAppLanguage: 'Java Spring Boot'
   });
 
   useEffect(() => {
     if (formData.type === 'FRONTEND') {
-        setFormData(prev => ({ ...prev, containerPort: '80' }));
-    } else {
-        setFormData(prev => ({ ...prev, containerPort: '8080' }));
+        setFormData(prev => ({ ...prev, containerPort: '80', port: '8080' }));
+    } else if (formData.type === 'BACKEND') {
+        setFormData(prev => ({ ...prev, containerPort: '8080', port: '8080' }));
     }
   }, [formData.type]);
 
@@ -50,14 +62,13 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   }, [isOpen, selectedEnvironment]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
+    setFormData({ ...formData, [e.target.name]: value });
   };
 
   const validateGithub = async () => {
     if (!formData.repoUrl) return;
     setValidating(true);
-    // Simple mock validation for demonstration. 
-    // In reality, this could hit public GitHub API or use the backend to fetch Groq analysis.
     setTimeout(() => {
       let repoName = formData.repoUrl.split('/').pop()?.replace('.git', '') || 'Application Repository';
       setRepoInfo({
@@ -74,7 +85,6 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     e.preventDefault();
     setLoading(true);
     
-    // Parse envVars basic implementation
     let envMap: Record<string, string> = {};
     if (formData.envVars) {
         formData.envVars.split('\n').forEach(line => {
@@ -83,23 +93,49 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         });
     }
 
-    const payload = {
-        name: formData.name,
-        environmentId: selectedEnvironment?.id,
-        type: formData.type,
-        appLanguage: formData.appLanguage,
-        repoUrl: formData.repoUrl,
-        targetNode: formData.targetNode,
-        branch: formData.branch,
-        port: parseInt(formData.port),
-        envVars: envMap,
-        sshPassword: formData.sshPassword,
-        srcPath: formData.srcPath,
-        containerPort: parseInt(formData.containerPort)
+    const basePayload = {
+      name: formData.name,
+      environmentId: selectedEnvironment?.id,
+      repoUrl: formData.repoUrl,
+      targetNode: formData.targetNode,
+      branch: formData.branch,
+      envVars: envMap,
+      sshPassword: formData.sshPassword,
+      autoGenerateConfig: formData.autoGenerateConfig
     };
 
     try {
-      await onDeploy(payload);
+      if (formData.type === 'FULLSTACK') {
+          // Backend
+          await onDeploy({
+              ...basePayload,
+              name: formData.name + '-backend',
+              type: 'BACKEND',
+              appLanguage: formData.backendAppLanguage,
+              port: parseInt(formData.backendPort),
+              containerPort: parseInt(formData.backendContainerPort),
+              srcPath: formData.backendSrcPath
+          });
+          // Frontend
+          await onDeploy({
+              ...basePayload,
+              name: formData.name + '-frontend',
+              type: 'FRONTEND',
+              appLanguage: formData.frontendAppLanguage,
+              port: parseInt(formData.frontendPort),
+              containerPort: parseInt(formData.frontendContainerPort),
+              srcPath: formData.frontendSrcPath
+          });
+      } else {
+          await onDeploy({
+              ...basePayload,
+              type: formData.type,
+              appLanguage: formData.appLanguage,
+              port: parseInt(formData.port),
+              containerPort: parseInt(formData.containerPort),
+              srcPath: formData.srcPath
+          });
+      }
       onClose();
     } catch (error) {
       console.error(error);
@@ -130,6 +166,12 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
 
         <div className="p-6 overflow-y-auto">
           <form id="deploy-form" onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* Informational Banner */}
+            <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg text-primary/90 text-sm">
+                <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                <p><strong>Containerized Architecture:</strong> All applications are dynamically compiled and deployed as independent Docker containers on your target infrastructure.</p>
+            </div>
             
             {/* GitHub Section */}
             <div className="space-y-4">
@@ -177,25 +219,121 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
-               <div className="space-y-2">
-                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Type</label>
+            {/* General Type Select */}
+            <div className="space-y-2 border-b border-white/5 pb-4">
+                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Architecture Type</label>
                  <select name="type" value={formData.type} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none">
                     <option value="BACKEND">Backend API</option>
                     <option value="FRONTEND">Frontend Web</option>
-                    <option value="FULLSTACK">Fullstack Monolith</option>
+                    <option value="FULLSTACK">Fullstack Monolith (Deploys 2 Containers)</option>
                  </select>
-               </div>
-               <div className="space-y-2">
-                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Code className="w-3 h-3" /> Framework</label>
-                 <select name="appLanguage" value={formData.appLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none">
-                    <option value="Java Spring Boot">Java (Spring Boot)</option>
-                    <option value="Node.js">Node.js (Express/Nest)</option>
-                    <option value="React">React (Vite/CRA)</option>
-                    <option value="Python">Python (FastAPI/Flask)</option>
-                    <option value="Go">Go (Gin/Fiber)</option>
-                 </select>
-               </div>
+            </div>
+
+            {/* STANDARD CONFIG (Backend/Frontend) */}
+            {formData.type !== 'FULLSTACK' && (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Code className="w-3 h-3" /> Framework</label>
+                            <select name="appLanguage" value={formData.appLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none">
+                                <option value="Java Spring Boot">Java (Spring Boot)</option>
+                                <option value="Node.js">Node.js (Express/Nest)</option>
+                                <option value="React">React (Vite/CRA)</option>
+                                <option value="Python">Python (FastAPI/Flask)</option>
+                                <option value="Go">Go (Gin/Fiber)</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-muted-foreground">Source Directory</label>
+                            <Input name="srcPath" value={formData.srcPath} onChange={handleChange} placeholder="e.g. backend/ or ." className="bg-black/20 border-white/10" />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Exposed Port (Host)</label>
+                            <Input name="port" type="number" value={formData.port} onChange={handleChange} placeholder="8080" className="bg-black/20 border-white/10" required />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Internal Port (Container)</label>
+                            <Input name="containerPort" type="number" value={formData.containerPort} onChange={handleChange} placeholder="80" className="bg-black/20 border-white/10" required />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FULLSTACK CONFIG */}
+            {formData.type === 'FULLSTACK' && (
+                <div className="space-y-6">
+                    {/* Backend Section */}
+                    <div className="p-4 bg-black/20 border border-blue-500/10 rounded-lg space-y-4">
+                        <h4 className="text-sm font-bold text-blue-400">Backend Configuration</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework</label>
+                                <select name="backendAppLanguage" value={formData.backendAppLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-blue-500 text-white appearance-none">
+                                    <option value="Java Spring Boot">Java (Spring Boot)</option>
+                                    <option value="Node.js">Node.js</option>
+                                    <option value="Python">Python</option>
+                                    <option value="Go">Go</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Source Directory</label>
+                                <Input name="backendSrcPath" value={formData.backendSrcPath} onChange={handleChange} placeholder="backend/" className="bg-black/40 border-white/10" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port</label>
+                                <Input name="backendPort" type="number" value={formData.backendPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port</label>
+                                <Input name="backendContainerPort" type="number" value={formData.backendContainerPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Frontend Section */}
+                    <div className="p-4 bg-black/20 border border-emerald-500/10 rounded-lg space-y-4">
+                        <h4 className="text-sm font-bold text-emerald-400">Frontend Configuration</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework</label>
+                                <select name="frontendAppLanguage" value={formData.frontendAppLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-emerald-500 text-white appearance-none">
+                                    <option value="React">React (Vite/CRA)</option>
+                                    <option value="Node.js">Next.js/Nuxt</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Source Directory</label>
+                                <Input name="frontendSrcPath" value={formData.frontendSrcPath} onChange={handleChange} placeholder="frontend/" className="bg-black/40 border-white/10" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port</label>
+                                <Input name="frontendPort" type="number" value={formData.frontendPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port</label>
+                                <Input name="frontendContainerPort" type="number" value={formData.frontendContainerPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Auto Generate Toggle */}
+            <div className="flex items-center gap-3 mt-4">
+                <input 
+                    type="checkbox" 
+                    id="autoGen" 
+                    name="autoGenerateConfig" 
+                    checked={formData.autoGenerateConfig} 
+                    onChange={handleChange} 
+                    className="w-4 h-4 rounded border-white/10 bg-black/20 text-primary accent-primary" 
+                />
+                <label htmlFor="autoGen" className="text-sm font-medium flex items-center gap-2 cursor-pointer">
+                    <Settings2 className="w-4 h-4 text-muted-foreground" />
+                    Auto-generate Dockerfile and Nginx configuration if missing
+                </label>
             </div>
 
             {/* Infrastructure Target */}
@@ -215,28 +353,13 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                         <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH Password (Optional)</label>
                         <Input type="password" name="sshPassword" value={formData.sshPassword} onChange={handleChange} placeholder="••••••••" className="bg-black/40 border-white/10" />
                     </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Port Mapping</label>
-                        <Input name="port" type="number" value={formData.port} onChange={handleChange} placeholder="8080" className="bg-black/40 border-white/10" required />
-                    </div>
-                </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Internal Port</label>
-                        <Input name="containerPort" type="number" value={formData.containerPort} onChange={handleChange} placeholder="80" className="bg-black/40 border-white/10" required />
-                    </div>
-                </div>
-                <div className="grid grid-cols-1">
-                    <div>
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Source Directory (Relative to Repo Root)</label>
-                        <Input name="srcPath" value={formData.srcPath} onChange={handleChange} placeholder="e.g. backend/ or . " className="bg-black/40 border-white/10" />
-                        <p className="text-[10px] text-muted-foreground mt-1 italic">Leave empty or use "." if your application is in the root directory.</p>
-                    </div>
                 </div>
             </div>
 
             {/* Env Vars */}
             <div className="space-y-2">
-                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Environment Variables (Optional)</label>
+                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Environment Variables</label>
+                 <p className="text-[10px] text-muted-foreground italic mb-1">For Frontend apps, these are securely injected as Docker build arguments.</p>
                  <textarea 
                     name="envVars" 
                     value={formData.envVars}

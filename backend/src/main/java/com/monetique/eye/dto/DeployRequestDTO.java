@@ -17,5 +17,6 @@ public class DeployRequestDTO {
     private String sshPassword;
     private String srcPath;
     private Integer containerPort;
+    private Boolean autoGenerateConfig;
 
 }

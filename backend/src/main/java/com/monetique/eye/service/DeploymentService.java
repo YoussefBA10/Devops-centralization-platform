@@ -260,6 +260,13 @@ public class DeploymentService {
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
                     : "node-" + request.getTargetNode().replace(".", "-");
 
+            String buildArgsStr = "";
+            if (request.getEnvVars() != null && !request.getEnvVars().isEmpty()) {
+                buildArgsStr = request.getEnvVars().entrySet().stream()
+                        .map(e -> "--build-arg " + e.getKey() + "=\"" + e.getValue() + "\"")
+                        .reduce("", (a, b) -> a + " " + b).trim();
+            }
+
             // Execute Application Playbook
             // The playbook takes parameters: appName, repoUrl, branch, target_host,
             // appPort, appType, envLabel, nodename
@@ -274,6 +281,9 @@ public class DeploymentService {
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
+                    "-e", "appLanguage=" + (request.getAppLanguage() != null ? request.getAppLanguage() : ""),
+                    "-e", "autoGenerateConfig=" + (request.getAutoGenerateConfig() != null && request.getAutoGenerateConfig() ? "true" : "false"),
+                    "-e", "dockerBuildArgs=" + buildArgsStr,
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
                     "-e", "nodename=" + nodeName,
                     "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),

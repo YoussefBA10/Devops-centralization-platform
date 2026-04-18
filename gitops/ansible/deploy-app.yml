@@ -27,8 +27,85 @@
         version: "{{ branch | default('main') }}"
         force: yes
 
+    - name: Check if Dockerfile exists
+      stat:
+        path: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+      register: dockerfile_stat
+
+    - name: Generate Frontend Dockerfile (Vite/React)
+      copy:
+        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        content: |
+          FROM node:18-alpine as build
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm install
+          COPY . .
+          RUN npm run build
+          FROM nginx:stable-alpine
+          COPY --from=build /app/dist /usr/share/nginx/html
+          COPY nginx.conf /etc/nginx/conf.d/default.conf
+          EXPOSE {{ containerPort | default(80) }}
+          CMD ["nginx", "-g", "daemon off;"]
+      when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'FRONTEND' and appLanguage == 'React'
+
+    - name: Generate Frontend Dockerfile (Generic Node based)
+      copy:
+        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        content: |
+          FROM node:18-alpine
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm install
+          COPY . .
+          EXPOSE {{ containerPort | default(3000) }}
+          CMD ["npm", "start"]
+      when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'FRONTEND' and appLanguage != 'React'
+
+    - name: Generate Backend Dockerfile (Spring Boot)
+      copy:
+        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        content: |
+          FROM eclipse-temurin:21-jdk-alpine as build
+          WORKDIR /app
+          COPY mvnw .
+          COPY .mvn .mvn
+          COPY pom.xml .
+          COPY src src
+          RUN --mount=type=cache,target=/root/.m2 ./mvnw clean package -DskipTests
+          FROM eclipse-temurin:21-jre-alpine
+          WORKDIR /app
+          COPY --from=build /app/target/*.jar app.jar
+          EXPOSE {{ containerPort | default(8080) }}
+          ENTRYPOINT ["java","-jar","/app/app.jar"]
+      when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'BACKEND' and appLanguage == 'Java Spring Boot'
+
+    - name: Check if nginx.conf exists
+      stat:
+        path: "{{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
+      register: nginx_stat
+
+    - name: Generate nginx.conf
+      copy:
+        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
+        content: |
+          server {
+            listen {{ containerPort | default(80) }};
+            server_name localhost;
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+            location / {
+              try_files $uri $uri/ /index.html;
+            }
+          }
+      when: not nginx_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'FRONTEND' and appLanguage == 'React'
+
+    - name: Patch existing nginx.conf to use requested containerPort
+      shell: "sed -i -E 's/listen\\s+[0-9]+/listen {{ containerPort | default(80) }}/g' {{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
+      when: nginx_stat.stat.exists and appType == 'FRONTEND'
+
     - name: Build Docker Image
-      command: docker build -t {{ image_name }}:latest .
+      command: docker build -t {{ image_name }}:latest {{ dockerBuildArgs | default('') }} .
       args:
         chdir: "{{ app_dir }}/{{ srcPath | default('.') }}"
 
