@@ -43,6 +43,7 @@ public class ApplicationController {
                 .lastDeployedAt(app.getLastDeployedAt())
                 .createdAt(app.getCreatedAt())
                 .environmentId(app.getEnvironment().getId())
+                .srcPath(app.getSrcPath())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -68,6 +69,7 @@ public class ApplicationController {
         app.setTargetNode(request.getTargetNode());
         app.setBranch(request.getBranch());
         app.setPort(request.getPort());
+        app.setSrcPath(request.getSrcPath());
         app.setStatus("DEPLOYING");
         app.setLastDeployedAt(LocalDateTime.now());
 

@@ -28,7 +28,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     branch: 'main',
     port: '8080',
     envVars: '',
-    sshPassword: ''
+    sshPassword: '',
+    srcPath: 'backend/'
   });
 
   useEffect(() => {
@@ -83,7 +84,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         branch: formData.branch,
         port: parseInt(formData.port),
         envVars: envMap,
-        sshPassword: formData.sshPassword
+        sshPassword: formData.sshPassword,
+        srcPath: formData.srcPath
     };
 
     try {
@@ -206,6 +208,13 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                     <div>
                         <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Port Mapping</label>
                         <Input name="port" type="number" value={formData.port} onChange={handleChange} placeholder="8080" className="bg-black/40 border-white/10" required />
+                    </div>
+                </div>
+                <div className="grid grid-cols-1">
+                    <div>
+                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Source Directory (Relative to Repo Root)</label>
+                        <Input name="srcPath" value={formData.srcPath} onChange={handleChange} placeholder="e.g. backend/ or . " className="bg-black/40 border-white/10" />
+                        <p className="text-[10px] text-muted-foreground mt-1 italic">Leave empty or use "." if your application is in the root directory.</p>
                     </div>
                 </div>
             </div>

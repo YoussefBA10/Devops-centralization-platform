@@ -4,7 +4,7 @@
   become: yes
 
   vars:
-    app_dir: "/opt/monetique/apps/{{ appName }}/backend"
+    app_dir: "/opt/monetique/apps/{{ appName }}"
     image_name: "{{ appName | lower }}"
     container_name: "{{ appName | lower }}"
 
@@ -30,7 +30,7 @@
     - name: Build Docker Image
       command: docker build -t {{ image_name }}:latest .
       args:
-        chdir: "{{ app_dir }}/backend"
+        chdir: "{{ app_dir }}/{{ srcPath | default('.') }}"
 
     - name: Stop and remove existing container
       docker_container:

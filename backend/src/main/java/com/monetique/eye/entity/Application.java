@@ -42,6 +42,9 @@ public class Application {
     private String status; // RUNNING, DEPLOYING, FAILED
 
     private java.time.LocalDateTime lastDeployedAt;
+    
+    private String srcPath;
+
 
     private java.time.LocalDateTime createdAt;
 

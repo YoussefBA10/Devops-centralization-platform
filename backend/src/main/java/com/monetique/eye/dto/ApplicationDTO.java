@@ -23,4 +23,6 @@ public class ApplicationDTO {
     private LocalDateTime lastDeployedAt;
     private LocalDateTime createdAt;
     private Long environmentId;
+    private String srcPath;
+
 }

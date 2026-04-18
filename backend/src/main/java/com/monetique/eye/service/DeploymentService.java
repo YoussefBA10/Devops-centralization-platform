@@ -275,7 +275,9 @@ public class DeploymentService {
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
-                    "-e", "nodename=" + nodeName));
+                    "-e", "nodename=" + nodeName,
+                    "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : ".")
+            ));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
                 commandList.add("-e");
