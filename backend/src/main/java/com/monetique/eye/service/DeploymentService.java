@@ -246,26 +246,25 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
-            // Application deployment should use the existing inventory from agent deployment
-            // No need to call updateInventory overriding the sshUser with "root"
-
-            String targetAlias = getSshAliasForIp(request.getTargetNode());
+            // Application deployment uses existing inventory from agent deployment
+            // Derive the node alias for labeling (e.g. "node-1", "vmpipe")
+            String nodeName = getNodeNameForIp(request.getTargetNode(), environment);
 
             // Execute Application Playbook
-            // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType, nodename
+            // --limit uses the raw IP which is a direct entry in the inventory
             List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
-                    "--limit", targetAlias,
+                    "--limit", request.getTargetNode(),
                     "-e", "appName=" + request.getName(),
-                    "-e", "target_host=" + targetAlias,
+                    "-e", "target_host=" + request.getTargetNode(),
                     "-e", "repoUrl=" + request.getRepoUrl(),
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
-                    "-e", "nodename=" + targetAlias
+                    "-e", "nodename=" + nodeName
             ));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
@@ -356,22 +355,28 @@ public class DeploymentService {
 
             // 4. Update node entries if IP is provided
             if (targetIp != null && sshUser != null) {
+                // Count existing non-central nodes in this env section to generate node-N alias
+                int nodeCount = 0;
+                boolean inEnvSection = false;
+                for (String line : lines) {
+                    String t = line.trim();
+                    if (t.equals("[" + envName + "]")) { inEnvSection = true; continue; }
+                    if (inEnvSection && t.startsWith("[")) break;
+                    if (inEnvSection && !t.isEmpty() && !t.startsWith("#") && !t.contains("ansible_host=")) {
+                        nodeCount++;
+                    }
+                }
+
+                // Only the IP line — this is what Ansible uses with --limit <IP>
                 String ipLine = targetIp + " ansible_user=" + sshUser;
-                String aliasLine = sshUser + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
                 // DEEP CLEAN: Remove ANY line that could cause a collision
                 lines.removeIf(line -> {
                     String trimmed = line.trim();
                     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                        // Don't remove the header we just ensured exists
                         return false; 
                     }
-                    
-                    // Kill lines starting with the SSH User (your preferred alias) to ensure it's fresh
-                    if (trimmed.startsWith(sshUser + " ")) return true;
-                    if (trimmed.equals(sshUser)) return true;
-
-                    // Kill lines containing the target IP or mentions of the old alias style
+                    // Kill lines containing the target IP or old aliases
                     return trimmed.startsWith(targetIp + " ") || 
                            trimmed.equals(targetIp) || 
                            trimmed.startsWith("agent-" + targetIp.replace(".", "-")) ||
@@ -387,9 +392,8 @@ public class DeploymentService {
                     }
                 }
                 
-                // Add new entries under the correct header
+                // Add only the IP-based entry under the correct header
                 lines.add(envIdx + 1, ipLine);
-                lines.add(envIdx + 2, aliasLine);
             }
 
             Files.write(inventoryFile.toPath(), lines);
@@ -641,21 +645,42 @@ public class DeploymentService {
         }
     }
 
-    private String getSshAliasForIp(String ip) {
+    /**
+     * Derive a clean node name for a given IP.
+     * Central node → "vmpipe", others → "node-N" based on inventory order.
+     */
+    private String getNodeNameForIp(String ip, Environment environment) {
+        if (ip.equals(environment.getCentralNodeIp())) {
+            return "vmpipe";
+        }
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
-            if (!inventoryFile.exists()) return ip;
-            for (String line : Files.readAllLines(inventoryFile.toPath())) {
-                line = line.trim();
-                // We stored alias as: [alias] ansible_host=[ip] ansible_user=[alias]
-                if (line.contains("ansible_host=" + ip)) {
-                    return line.split(" ")[0];
+            if (!inventoryFile.exists()) return "node-1";
+
+            String envName = environment.getName().toLowerCase().replaceAll("[^a-z0-9-]", "-");
+            List<String> allLines = Files.readAllLines(inventoryFile.toPath());
+            boolean inEnvSection = false;
+            int nodeIndex = 0;
+
+            for (String line : allLines) {
+                String t = line.trim();
+                if (t.equals("[" + envName + "]") || t.equals("[" + environment.getName() + "]")) {
+                    inEnvSection = true;
+                    continue;
+                }
+                if (inEnvSection && t.startsWith("[")) break; // next section
+                if (inEnvSection && !t.isEmpty() && !t.startsWith("#")) {
+                    nodeIndex++;
+                    String entryIp = t.split(" ")[0];
+                    if (entryIp.equals(ip)) {
+                        return "node-" + nodeIndex;
+                    }
                 }
             }
         } catch (Exception e) {
-            log.error("Error reading inventory for alias lookup: {}", e.getMessage());
+            log.error("Error deriving node name for IP {}: {}", ip, e.getMessage());
         }
-        return ip; // fallback to IP
+        return "node-1"; // fallback
     }
 }
 
