@@ -283,7 +283,7 @@ public class DeploymentService {
                     "-e", "appType=" + request.getType(),
                     "-e", "appLanguage=" + (request.getAppLanguage() != null ? request.getAppLanguage() : ""),
                     "-e", "autoGenerateConfig=" + (request.getAutoGenerateConfig() != null && request.getAutoGenerateConfig() ? "true" : "false"),
-                    "-e", "dockerBuildArgs=" + buildArgsStr,
+                    "-e", "dockerBuildArgs='" + buildArgsStr + "'",
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
                     "-e", "nodename=" + nodeName,
                     "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
