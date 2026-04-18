@@ -77,7 +77,8 @@ public class DeploymentService {
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe"
+                    : "node-" + targetIp.replace(".", "-");
 
             executeProcess(new String[] {
                     "ansible-playbook",
@@ -111,12 +112,13 @@ public class DeploymentService {
     }
 
     @Async
-    public CompletableFuture<Void> undeployAgentAsync(Environment environment, String targetIp, String sshUser, String sshPassword) {
+    public CompletableFuture<Void> undeployAgentAsync(Environment environment, String targetIp, String sshUser,
+            String sshPassword) {
         log.info("Starting undeployment for IP: {} (Environment: {})", targetIp, environment.getName());
         try {
             // 1. Run Ansible Undeploy Playbook
             String playbookPath = gitopsPath + "/ansible/undeploy-node.yml";
-            
+
             // Generate a temporary inventory for just this target to ensure we don't
             // undeploy others accidentally
             File tempInventory = File.createTempFile("undeploy-inventory", ".ini");
@@ -130,8 +132,7 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "target_host=" + targetIp,
-                    "-e", "ssh_user=" + sshUser
-            ));
+                    "-e", "ssh_user=" + sshUser));
 
             if (sshPassword != null && !sshPassword.isEmpty()) {
                 commandList.add("-e");
@@ -172,7 +173,7 @@ public class DeploymentService {
 
         try {
             // 1. Update Inventory
-            updateInventory(environment.getName(), targetIp, sshUser);
+            // updateInventory(environment.getName(), targetIp, sshUser);
 
             // 2. Select Playbook
             String playbookFile = "deploy-backend.yml";
@@ -185,7 +186,8 @@ public class DeploymentService {
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe"
+                    : "node-" + targetIp.replace(".", "-");
 
             // 3. Execute Application Playbook
             executeProcess(new String[] {
@@ -226,9 +228,10 @@ public class DeploymentService {
     }
 
     @Async
-    public void deployApplicationFull(Environment environment, com.monetique.eye.dto.DeployRequestDTO request, Application app) {
-        log.info("Starting full application deployment for environment: {} at Target Node: {}, App: {}", 
-                 environment.getName(), request.getTargetNode(), request.getName());
+    public void deployApplicationFull(Environment environment, com.monetique.eye.dto.DeployRequestDTO request,
+            Application app) {
+        log.info("Starting full application deployment for environment: {} at Target Node: {}, App: {}",
+                environment.getName(), request.getTargetNode(), request.getName());
 
         DeploymentLog deploymentLog = DeploymentLog.builder()
                 .environment(environment)
@@ -240,20 +243,26 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            // Find SSH User from inventory or use a default (like root/ubuntu) for the target IP
-            // In a real scenario, this would look up the target node's sshUser from DB or inventory
-            // We assume deploy-app.yml playbook will handle connection based on existing inventory structure
+            // Find SSH User from inventory or use a default (like root/ubuntu) for the
+            // target IP
+            // In a real scenario, this would look up the target node's sshUser from DB or
+            // inventory
+            // We assume deploy-app.yml playbook will handle connection based on existing
+            // inventory structure
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
-            // Use existing inventory structure for SSH configuration. The node should have been registered 
-            // correctly by `deployAgentAsync` containing its real ssh user and password references.
+            // Use existing inventory structure for SSH configuration. The node should have
+            // been registered
+            // correctly by `deployAgentAsync` containing its real ssh user and password
+            // references.
 
-
-            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
+            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
+                    : "node-" + request.getTargetNode().replace(".", "-");
 
             // Execute Application Playbook
-            // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType, envLabel, nodename
+            // The playbook takes parameters: appName, repoUrl, branch, target_host,
+            // appPort, appType, envLabel, nodename
             List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", inventoryPath,
@@ -266,20 +275,19 @@ public class DeploymentService {
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
-                    "-e", "nodename=" + nodeName
-            ));
-
+                    "-e", "nodename=" + nodeName));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + request.getSshPassword());
-                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600); // 10 minutes timeout for builds
+                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600); // 10 minutes timeout for
+                                                                                              // builds
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
             }
 
             deploymentLog.setStatus("SUCCESS");
-            
+
             // Update application status
             app.setStatus("RUNNING");
             app.setLastDeployedAt(java.time.LocalDateTime.now());
@@ -290,7 +298,7 @@ public class DeploymentService {
             deploymentLog.setStatus("FAILED");
             deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
                     + "\nERROR: " + e.getMessage());
-            
+
             // Update application status
             app.setStatus("FAILED");
             applicationRepository.save(app);
@@ -319,7 +327,7 @@ public class DeploymentService {
             }
             if (childrenIdx == -1) {
                 if (!lines.isEmpty() && lines.get(0).trim().equals("[agents]")) {
-                    lines.set(0, "[agents:children]"); 
+                    lines.set(0, "[agents:children]");
                 } else {
                     lines.add(0, "[agents:children]");
                 }
@@ -331,12 +339,14 @@ public class DeploymentService {
             int lastChildIdx = childrenIdx;
             for (int i = childrenIdx + 1; i < lines.size(); i++) {
                 String l = lines.get(i).trim();
-                if (l.startsWith("[")) break; // Next section
+                if (l.startsWith("["))
+                    break; // Next section
                 if (l.equals(envName)) {
                     envInChildren = true;
                     break;
                 }
-                if (!l.isEmpty()) lastChildIdx = i;
+                if (!l.isEmpty())
+                    lastChildIdx = i;
             }
             if (!envInChildren) {
                 lines.add(lastChildIdx + 1, envName);
@@ -366,18 +376,21 @@ public class DeploymentService {
                     String trimmed = line.trim();
                     if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
                         // Don't remove the header we just ensured exists
-                        return false; 
+                        return false;
                     }
-                    
-                    // Kill lines starting with the SSH User (your preferred alias) to ensure it's fresh
-                    if (trimmed.startsWith(sshUser + " ")) return true;
-                    if (trimmed.equals(sshUser)) return true;
+
+                    // Kill lines starting with the SSH User (your preferred alias) to ensure it's
+                    // fresh
+                    if (trimmed.startsWith(sshUser + " "))
+                        return true;
+                    if (trimmed.equals(sshUser))
+                        return true;
 
                     // Kill lines containing the target IP or mentions of the old alias style
-                    return trimmed.startsWith(targetIp + " ") || 
-                           trimmed.equals(targetIp) || 
-                           trimmed.startsWith("agent-" + targetIp.replace(".", "-")) ||
-                           trimmed.contains("ansible_host=" + targetIp);
+                    return trimmed.startsWith(targetIp + " ") ||
+                            trimmed.equals(targetIp) ||
+                            trimmed.startsWith("agent-" + targetIp.replace(".", "-")) ||
+                            trimmed.contains("ansible_host=" + targetIp);
                 });
 
                 // Find env header again because indices might have changed after removal
@@ -388,7 +401,7 @@ public class DeploymentService {
                         break;
                     }
                 }
-                
+
                 // Add new entries under the correct header
                 lines.add(envIdx + 1, ipLine);
                 lines.add(envIdx + 2, aliasLine);
@@ -405,7 +418,8 @@ public class DeploymentService {
         log.info("Removing environment group from inventory: {}", envName);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
-            if (!inventoryFile.exists()) return;
+            if (!inventoryFile.exists())
+                return;
 
             List<String> lines = Files.readAllLines(inventoryFile.toPath());
             List<String> newLines = new ArrayList<>();
@@ -413,10 +427,10 @@ public class DeploymentService {
 
             for (String line : lines) {
                 String trimmed = line.trim();
-                
+
                 // 1. Skip the group name if it's under [agents:children]
                 if (!inTargetSection && trimmed.equals(envName)) {
-                    continue; 
+                    continue;
                 }
 
                 // 2. Detect start of target section
@@ -452,15 +466,16 @@ public class DeploymentService {
 
             List<String> lines = Files.readAllLines(inventoryFile.toPath());
             String safeAlias = "agent-" + targetIp.replace(".", "-");
-            
+
             lines.removeIf(line -> {
                 String trimmed = line.trim();
-                if (trimmed.startsWith("[") && trimmed.endsWith("]")) return false;
+                if (trimmed.startsWith("[") && trimmed.endsWith("]"))
+                    return false;
                 // Aggressively remove anything pointing to this IP
-                return trimmed.startsWith(targetIp + " ") || 
-                       trimmed.equals(targetIp) || 
-                       trimmed.startsWith(safeAlias + " ") ||
-                       trimmed.contains("ansible_host=" + targetIp);
+                return trimmed.startsWith(targetIp + " ") ||
+                        trimmed.equals(targetIp) ||
+                        trimmed.startsWith(safeAlias + " ") ||
+                        trimmed.contains("ansible_host=" + targetIp);
             });
 
             Files.write(inventoryFile.toPath(), lines);
@@ -507,7 +522,8 @@ public class DeploymentService {
             // Add Node Exporter target
             java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
             nodeExporter.put("targets", java.util.List.of(nodeExporterTarget));
-            nodeExporter.put("labels", java.util.Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName));
+            nodeExporter.put("labels",
+                    java.util.Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName));
 
             // Add cAdvisor target
             java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
@@ -612,7 +628,7 @@ public class DeploymentService {
         log.info("Executing command: {}", cmdStr);
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(new File(gitopsPath));
-        
+
         // Robust environment for bypassing strict host key checking
         pb.environment().put("ANSIBLE_HOST_KEY_CHECKING", "False");
         pb.environment().put("ANSIBLE_CONFIG", gitopsPath + "/ansible/ansible.cfg");
@@ -643,4 +659,3 @@ public class DeploymentService {
         }
     }
 }
-
