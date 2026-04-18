@@ -62,7 +62,8 @@ public class DeploymentService {
             executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            String defaultNodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            String nodeName = resolveNodeNameFromInventory(targetIp, defaultNodeName);
             updateInventory(environment.getName(), targetIp, sshUser, nodeName);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
@@ -173,7 +174,8 @@ public class DeploymentService {
 
         try {
             // 1. Update Inventory
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            String defaultNodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            String nodeName = resolveNodeNameFromInventory(targetIp, defaultNodeName);
             updateInventory(environment.getName(), targetIp, sshUser, nodeName);
 
             // 2. Select Playbook
@@ -186,8 +188,6 @@ public class DeploymentService {
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
-
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
 
             // 3. Execute Application Playbook
             executeProcess(new String[] {
@@ -248,7 +248,8 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
-            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
+            String defaultNodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
+            String nodeName = resolveNodeNameFromInventory(request.getTargetNode(), defaultNodeName);
 
             // Ensure the target node is in the inventory for the environment
             updateInventory(environment.getName(), request.getTargetNode(), "root", nodeName);
@@ -300,8 +301,27 @@ public class DeploymentService {
         }
     }
 
+    private String resolveNodeNameFromInventory(String targetIp, String defaultNodeName) {
+        try {
+            File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
+            if (!inventoryFile.exists()) return defaultNodeName;
+            
+            for (String line : Files.readAllLines(inventoryFile.toPath())) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("[")) continue;
+                if (trimmed.contains(targetIp)) {
+                    String[] parts = trimmed.split("\\s+");
+                    if (parts.length > 0 && !parts[0].equals(targetIp) && !parts[0].contains("=") && !parts[0].equalsIgnoreCase("root")) {
+                        return parts[0];
+                    }
+                }
+            }
+        } catch (Exception e) {}
+        return defaultNodeName;
+    }
+
     public void updateInventory(String envName, String targetIp, String sshUser, String nodeName) {
-        log.info("Updating Ansible inventory for env group: {}, host: {}, Alias: {}, User: {}", envName, targetIp, nodeName, sshUser);
+        log.info("Ensuring node {} is in inventory for env: {}", targetIp, envName);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             inventoryFile.getParentFile().mkdirs();
@@ -310,38 +330,17 @@ public class DeploymentService {
                     ? Files.readAllLines(inventoryFile.toPath())
                     : new ArrayList<>();
 
-            // --- SMART DISCOVERY ---
-            // If the IP is already in the inventory, try to preserve its alias and user
-            String discoveredAlias = nodeName;
-            String discoveredUser = sshUser;
-
-            for (String line : lines) {
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("[")) continue;
-                if (trimmed.contains(targetIp)) {
-                    String[] parts = trimmed.split("\\s+");
-                    // If first part isn't the IP and isn't a common username, it's a good alias
-                    if (parts.length > 0 && !parts[0].equals(targetIp) && !parts[0].contains("=") && !parts[0].equalsIgnoreCase("root")) {
-                        discoveredAlias = parts[0];
-                    }
-                    if (trimmed.contains("ansible_user=")) {
-                        String userPart = trimmed.substring(trimmed.indexOf("ansible_user=") + "ansible_user=".length()).split("\\s+")[0];
-                        // If the found user is more specific than "root", prefer it
-                        if (!userPart.equalsIgnoreCase("root") || discoveredUser.equalsIgnoreCase("root")) {
-                            discoveredUser = userPart;
-                        }
-                    }
-                    log.info("Inspected line for {}: Alias candidate={}, User candidate={}", targetIp, discoveredAlias, discoveredUser);
-                    // NO BREAK: Continue scanning the whole file to find the best possible alias/user mapping
-                }
+            // 1. If IP already exists ANYWHERE in the file, DO NOT TOUCH IT!
+            // We fully respect the user's manual configuration.
+            boolean ipExists = lines.stream().anyMatch(l -> l.contains(targetIp));
+            if (ipExists) {
+                log.info("Target IP {} already exists in inventory. Preserving user configuration.", targetIp);
+                return;
             }
 
+            // From here, we only add a NEW node.
 
-            final String finalAlias = discoveredAlias;
-            final String finalUser = discoveredUser;
-            // -----------------------
-
-            // 1. Ensure [agents:children] group exists at the top
+            // Ensure [agents:children] group exists at the top
             int childrenIdx = -1;
             for (int i = 0; i < lines.size(); i++) {
                 if (lines.get(i).trim().equals("[agents:children]")) {
@@ -358,7 +357,7 @@ public class DeploymentService {
                 childrenIdx = 0;
             }
 
-            // 2. Ensure envName is listed under [agents:children]
+            // Ensure envName is listed under [agents:children]
             boolean envInChildren = false;
             int lastChildIdx = childrenIdx;
             for (int i = childrenIdx + 1; i < lines.size(); i++) {
@@ -374,7 +373,7 @@ public class DeploymentService {
                 lines.add(lastChildIdx + 1, envName);
             }
 
-            // 3. Ensure [envName] header exists
+            // Ensure [envName] header exists
             int envIdx = -1;
             for (int i = 0; i < lines.size(); i++) {
                 if (lines.get(i).trim().equals("[" + envName + "]")) {
@@ -388,50 +387,17 @@ public class DeploymentService {
                 envIdx = lines.size() - 1;
             }
 
-            // 4. Update node entries if IP is provided
-            if (targetIp != null) {
-                String ipLine = targetIp + " ansible_user=" + finalUser;
-                String aliasLine = finalAlias + " ansible_host=" + targetIp + " ansible_user=" + finalUser;
+            // Add new node entries (Only executed if the IP wasn't present)
+            if (targetIp != null && sshUser != null) {
+                String ipLine = targetIp + " ansible_user=" + sshUser;
+                String aliasLine = nodeName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
-                // DEEP CLEAN: Remove ANY line that could cause a collision
-                lines.removeIf(line -> {
-                    String trimmed = line.trim();
-                    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                        // Don't remove the header we just ensured exists
-                        return false; 
-                    }
-                    
-                    // Kill lines starting with the discovered Alias, Node Name or SSH User (your preferred alias) to ensure it's fresh
-                    if (trimmed.startsWith(finalAlias + " ")) return true;
-                    if (trimmed.equals(finalAlias)) return true;
-                    if (trimmed.startsWith(nodeName + " ")) return true;
-                    if (trimmed.equals(nodeName)) return true;
-                    if (trimmed.startsWith(finalUser + " ")) return true;
-                    if (trimmed.equals(finalUser)) return true;
-
-                    // Kill lines containing the target IP or mentions of the old alias style
-                    return trimmed.startsWith(targetIp + " ") || 
-                           trimmed.equals(targetIp) || 
-                           trimmed.startsWith("agent-" + targetIp.replace(".", "-")) ||
-                           trimmed.contains("ansible_host=" + targetIp);
-                });
-
-                // Find env header again because indices might have changed after removal
-                envIdx = -1;
-                for (int i = 0; i < lines.size(); i++) {
-                    if (lines.get(i).trim().equals("[" + envName + "]")) {
-                        envIdx = i;
-                        break;
-                    }
-                }
-                
-                // Add new entries under the correct header
                 lines.add(envIdx + 1, ipLine);
                 lines.add(envIdx + 2, aliasLine);
             }
 
             Files.write(inventoryFile.toPath(), lines);
-            log.info("Inventory successfully updated with discovered naming conventions for env: {}", envName);
+            log.info("Inventory successfully updated to include new node {} for env: {}", targetIp, envName);
         } catch (Exception e) {
             log.error("Failed to update inventory: {}", e.getMessage(), e);
         }
