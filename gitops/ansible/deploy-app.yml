@@ -1,13 +1,13 @@
 ---
 - name: Deploy Custom Application Flow
-  hosts: all
+  hosts: "{{ target_host }}"
   become: yes
+
   vars:
-    app_dir: "/opt/monetique/apps/{{ appName }}"
-    build_dir: "{{ app_dir }}{{ '/' + appType | lower if appType is defined and appType != '' and appType | lower != 'monolith' else '' }}"
+    app_dir: "/opt/monetique/apps/{{ appName }}/backend"
     image_name: "{{ appName | lower }}"
     container_name: "{{ appName | lower }}"
-    
+
   tasks:
     - name: Ensure git is installed (fast)
       package:
@@ -30,8 +30,7 @@
     - name: Build Docker Image
       command: docker build -t {{ image_name }}:latest .
       args:
-        chdir: "{{ build_dir }}"
-      register: build_output
+        chdir: "{{ app_dir }}/backend"
 
     - name: Stop and remove existing container
       docker_container:
@@ -51,10 +50,9 @@
           env: "{{ envLabel }}"
           com.monetique.environment: "{{ envLabel }}"
           node: "{{ nodename }}"
-        # In a real scenario, envVars would be passed dynamically and mapped here
         env:
-          PORT: "{{ appPort }}"
           NODE_ENV: "production"
 
     - name: Clean up dangling images
       command: docker image prune -f
+
