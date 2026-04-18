@@ -16,7 +16,5 @@ public class DeployRequestDTO {
     private Map<String, String> envVars;
     private String sshPassword;
     private String srcPath;
-    private String extraHosts;
-
 
 }

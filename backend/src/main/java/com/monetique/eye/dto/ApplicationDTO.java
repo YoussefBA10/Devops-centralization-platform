@@ -24,8 +24,5 @@ public class ApplicationDTO {
     private LocalDateTime createdAt;
     private Long environmentId;
     private String srcPath;
-    private String extraHosts;
-    private java.util.Map<String, String> envVars;
-
 
 }
