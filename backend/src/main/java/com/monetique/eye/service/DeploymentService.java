@@ -62,7 +62,8 @@ public class DeploymentService {
             executeProcess(new String[] { "chmod", "+x", gitopsPath + "/scripts/ssh-configure.sh" }, deploymentLog, 30);
 
             // 1. Update Inventory
-            updateInventory(environment.getName(), targetIp, sshUser);
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            updateInventory(environment.getName(), targetIp, sshUser, nodeName);
 
             // 2. Execute SSH Configure Script (Accepts USER, IP, PASSWORD)
             executeProcessSecure(
@@ -172,7 +173,8 @@ public class DeploymentService {
 
         try {
             // 1. Update Inventory
-            updateInventory(environment.getName(), targetIp, sshUser);
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + targetIp.replace(".", "-");
+            updateInventory(environment.getName(), targetIp, sshUser, nodeName);
 
             // 2. Select Playbook
             String playbookFile = "deploy-backend.yml";
@@ -246,10 +248,10 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
-            // Ensure the target node is in the inventory for the environment
-            updateInventory(environment.getName(), request.getTargetNode(), "root");
-
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + request.getTargetNode().replace(".", "-");
+
+            // Ensure the target node is in the inventory for the environment
+            updateInventory(environment.getName(), request.getTargetNode(), "root", nodeName);
 
             // Execute Application Playbook
             // The playbook takes parameters: appName, repoUrl, branch, target_host, appPort, appType, envLabel, nodename
@@ -298,8 +300,8 @@ public class DeploymentService {
         }
     }
 
-    public void updateInventory(String envName, String targetIp, String sshUser) {
-        log.info("Updating Ansible inventory for env group: {}, host: {}, User: {}", envName, targetIp, sshUser);
+    public void updateInventory(String envName, String targetIp, String sshUser, String nodeName) {
+        log.info("Updating Ansible inventory for env group: {}, host: {}, Alias: {}, User: {}", envName, targetIp, nodeName, sshUser);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
             inventoryFile.getParentFile().mkdirs();
@@ -358,7 +360,7 @@ public class DeploymentService {
             // 4. Update node entries if IP is provided
             if (targetIp != null && sshUser != null) {
                 String ipLine = targetIp + " ansible_user=" + sshUser;
-                String aliasLine = sshUser + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
+                String aliasLine = nodeName + " ansible_host=" + targetIp + " ansible_user=" + sshUser;
 
                 // DEEP CLEAN: Remove ANY line that could cause a collision
                 lines.removeIf(line -> {
@@ -368,7 +370,9 @@ public class DeploymentService {
                         return false; 
                     }
                     
-                    // Kill lines starting with the SSH User (your preferred alias) to ensure it's fresh
+                    // Kill lines starting with the Node Name or SSH User (your preferred alias) to ensure it's fresh
+                    if (trimmed.startsWith(nodeName + " ")) return true;
+                    if (trimmed.equals(nodeName)) return true;
                     if (trimmed.startsWith(sshUser + " ")) return true;
                     if (trimmed.equals(sshUser)) return true;
 
