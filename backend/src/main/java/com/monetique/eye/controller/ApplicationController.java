@@ -44,6 +44,7 @@ public class ApplicationController {
                 .createdAt(app.getCreatedAt())
                 .environmentId(app.getEnvironment().getId())
                 .srcPath(app.getSrcPath())
+                .containerPort(app.getContainerPort())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -70,6 +71,19 @@ public class ApplicationController {
         app.setBranch(request.getBranch());
         app.setPort(request.getPort());
         app.setSrcPath(request.getSrcPath());
+        
+        // Handle Container Port Defaulting
+        if (request.getContainerPort() != null) {
+            app.setContainerPort(request.getContainerPort());
+        } else {
+            // Default based on type
+            if ("FRONTEND".equalsIgnoreCase(request.getType())) {
+                app.setContainerPort(80);
+            } else {
+                app.setContainerPort(request.getPort() != null ? request.getPort() : 8080);
+            }
+        }
+
         app.setStatus("DEPLOYING");
         app.setLastDeployedAt(LocalDateTime.now());
 

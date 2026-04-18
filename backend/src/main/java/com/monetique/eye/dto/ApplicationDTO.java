@@ -24,5 +24,6 @@ public class ApplicationDTO {
     private LocalDateTime createdAt;
     private Long environmentId;
     private String srcPath;
+    private Integer containerPort;
 
 }

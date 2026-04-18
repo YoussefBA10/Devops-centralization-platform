@@ -29,8 +29,17 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     port: '8080',
     envVars: '',
     sshPassword: '',
-    srcPath: 'backend/'
+    srcPath: 'backend/',
+    containerPort: '8080'
   });
+
+  useEffect(() => {
+    if (formData.type === 'FRONTEND') {
+        setFormData(prev => ({ ...prev, containerPort: '80' }));
+    } else {
+        setFormData(prev => ({ ...prev, containerPort: '8080' }));
+    }
+  }, [formData.type]);
 
   useEffect(() => {
     if (isOpen && selectedEnvironment) {
@@ -85,7 +94,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         port: parseInt(formData.port),
         envVars: envMap,
         sshPassword: formData.sshPassword,
-        srcPath: formData.srcPath
+        srcPath: formData.srcPath,
+        containerPort: parseInt(formData.containerPort)
     };
 
     try {
@@ -208,6 +218,11 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                     <div>
                         <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Port Mapping</label>
                         <Input name="port" type="number" value={formData.port} onChange={handleChange} placeholder="8080" className="bg-black/40 border-white/10" required />
+                    </div>
+                </div>
+                    <div>
+                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Internal Port</label>
+                        <Input name="containerPort" type="number" value={formData.containerPort} onChange={handleChange} placeholder="80" className="bg-black/40 border-white/10" required />
                     </div>
                 </div>
                 <div className="grid grid-cols-1">

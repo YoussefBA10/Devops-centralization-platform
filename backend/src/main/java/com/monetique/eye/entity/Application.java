@@ -44,6 +44,7 @@ public class Application {
     private java.time.LocalDateTime lastDeployedAt;
     
     private String srcPath;
+    private Integer containerPort;
 
 
     private java.time.LocalDateTime createdAt;

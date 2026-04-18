@@ -44,7 +44,7 @@
         state: started
         restart_policy: always
         ports:
-          - "{{ appPort }}:{{ appPort }}"
+          - "{{ appPort }}:{{ containerPort | default(appPort) }}"
         labels:
           app: "{{ appName }}"
           env: "{{ envLabel }}"

@@ -276,7 +276,8 @@ public class DeploymentService {
                     "-e", "appType=" + request.getType(),
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
                     "-e", "nodename=" + nodeName,
-                    "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : ".")
+                    "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
+                    "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort() : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))
             ));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
