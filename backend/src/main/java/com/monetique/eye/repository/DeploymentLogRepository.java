@@ -10,5 +10,7 @@ import java.util.Optional;
 @Repository
 public interface DeploymentLogRepository extends JpaRepository<DeploymentLog, Long> {
     Optional<DeploymentLog> findTopByTargetIpAndActionOrderByExecutedAtDesc(String targetIp, String action);
+    Optional<DeploymentLog> findTopByTargetIpAndActionAndAppNameOrderByExecutedAtDesc(String targetIp, String action, String appName);
     List<DeploymentLog> findByTargetIpAndActionOrderByExecutedAtDesc(String targetIp, String action);
+    List<DeploymentLog> findByTargetIpAndActionAndAppNameOrderByExecutedAtDesc(String targetIp, String action, String appName);
 }

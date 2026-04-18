@@ -80,6 +80,19 @@
           ENTRYPOINT ["java","-jar","/app/app.jar"]
       when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'BACKEND' and appLanguage == 'Java Spring Boot'
 
+    - name: Generate Backend Dockerfile (Generic Node based)
+      copy:
+        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        content: |
+          FROM node:18-alpine
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm install
+          COPY . .
+          EXPOSE {{ containerPort | default(3000) }}
+          CMD ["npm", "start"]
+      when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'BACKEND' and (appLanguage == 'Node.js' or appLanguage == 'Express' or appLanguage == 'NestJS')
+
     - name: Check if nginx.conf exists
       stat:
         path: "{{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"

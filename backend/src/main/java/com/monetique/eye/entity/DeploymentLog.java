@@ -24,6 +24,7 @@ public class DeploymentLog {
 
     private String action;
     private String targetIp;
+    private String appName;
     private String status;
     
     @Column(columnDefinition = "TEXT")

@@ -166,6 +166,7 @@ public class DeploymentService {
                 .environment(environment)
                 .action("DEPLOY_APP")
                 .targetIp(targetIp)
+                .appName(appName)
                 .status("IN_PROGRESS")
                 .logOutput("")
                 .build();
@@ -243,6 +244,7 @@ public class DeploymentService {
                 .environment(environment)
                 .action("DEPLOY_APP_FULL")
                 .targetIp(request.getTargetNode())
+                .appName(request.getName())
                 .status("IN_PROGRESS")
                 .logOutput("Starting deployment of " + request.getName() + " on " + request.getTargetNode() + "...\n")
                 .build();

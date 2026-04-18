@@ -121,7 +121,7 @@ public class ApplicationController {
         }
 
         return deploymentLogRepository
-                .findTopByTargetIpAndActionOrderByExecutedAtDesc(app.getTargetNode(), "DEPLOY_APP_FULL")
+                .findTopByTargetIpAndActionAndAppNameOrderByExecutedAtDesc(app.getTargetNode(), "DEPLOY_APP_FULL", app.getName())
                 .map(log -> ResponseEntity.ok(Map.of(
                         "status", log.getStatus() != null ? log.getStatus() : "UNKNOWN",
                         "log", log.getLogOutput() != null ? log.getLogOutput() : "No output captured.",
