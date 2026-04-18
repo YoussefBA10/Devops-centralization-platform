@@ -5,7 +5,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "applications")
+@Table(name = "applications", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"environment_id", "name"})
+})
 @Getter
 @Setter
 @ToString

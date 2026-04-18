@@ -54,10 +54,7 @@ public class ApplicationController {
         Environment env = environmentRepository.findById(request.getEnvironmentId())
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        Application app = applicationRepository.findAll().stream()
-                .filter(a -> a.getName().equalsIgnoreCase(request.getName())
-                        && a.getEnvironment().getId().equals(request.getEnvironmentId()))
-                .findFirst()
+        Application app = applicationRepository.findByNameIgnoreCaseAndEnvironmentId(request.getName(), request.getEnvironmentId())
                 .orElse(Application.builder()
                         .name(request.getName())
                         .environment(env)
