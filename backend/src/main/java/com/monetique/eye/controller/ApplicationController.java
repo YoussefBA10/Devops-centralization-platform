@@ -89,12 +89,6 @@ public class ApplicationController {
         app.setPort(request.getPort());
         app.setSrcPath(request.getSrcPath());
         
-        // Persist SSH Credentials
-        app.setSshUser(request.getSshUser());
-        if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
-            app.setSshPassword(request.getSshPassword());
-        }
-        
         // Handle Container Port Defaulting
         if (request.getContainerPort() != null) {
             app.setContainerPort(request.getContainerPort());

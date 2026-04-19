@@ -26,19 +26,22 @@ public class EnvironmentController {
     private final com.monetique.eye.service.PrometheusClient prometheusClient;
     private final DeploymentLogRepository deploymentLogRepository;
     private final com.monetique.eye.repository.UserRepository userRepository;
+    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
 
     public EnvironmentController(EnvironmentRepository environmentRepository,
             DeploymentService deploymentService,
             SecurityService securityService,
             com.monetique.eye.service.PrometheusClient prometheusClient,
             DeploymentLogRepository deploymentLogRepository,
-            com.monetique.eye.repository.UserRepository userRepository) {
+            com.monetique.eye.repository.UserRepository userRepository,
+            com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository) {
         this.environmentRepository = environmentRepository;
         this.deploymentService = deploymentService;
         this.securityService = securityService;
         this.prometheusClient = prometheusClient;
         this.deploymentLogRepository = deploymentLogRepository;
         this.userRepository = userRepository;
+        this.managedNodeRepository = managedNodeRepository;
     }
 
     private String resolvePrometheusLabel(Environment env) {
