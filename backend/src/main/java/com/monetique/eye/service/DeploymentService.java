@@ -234,7 +234,8 @@ public class DeploymentService {
     public void undeployApplicationFull(Long applicationId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElse(null);
-        if (app == null) return;
+        if (app == null)
+            return;
 
         Environment environment = app.getEnvironment();
         String appName = app.getName();
@@ -265,15 +266,14 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
-                    "-e", "target_host=" + targetIp
-            ));
+                    "-e", "target_host=" + targetIp));
 
             // Execute Undeploy Playbook
             executeProcess(commandList.toArray(new String[0]), deploymentLog, 300);
 
             deploymentLog.setStatus("SUCCESS");
             log.info("Undeployment successful for App: {}. Removing record from database.", appName);
-            
+
             // Delete the application record after successful undeployment
             applicationRepository.deleteById(applicationId);
 
@@ -282,8 +282,9 @@ public class DeploymentService {
             deploymentLog.setStatus("FAILED");
             deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
                     + "\nERROR: " + e.getMessage());
-            
-            // Even if undeployment failed, we might want to delete the record to keep UI clean,
+
+            // Even if undeployment failed, we might want to delete the record to keep UI
+            // clean,
             // or keep it to let user retry. Given the plan, we'll proceed to delete it
             // but log the failure in the general logs.
             applicationRepository.deleteById(applicationId);
@@ -316,7 +317,7 @@ public class DeploymentService {
 
         try {
             // Ensure inventory is up to date before restarting
-            updateInventory(environment.getName(), targetIp, "root");
+            // updateInventory(environment.getName(), targetIp, "root");
 
             String playbookPath = gitopsPath + "/ansible/restart-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -327,14 +328,14 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
-                    "-e", "target_host=" + targetIp
-            ));
+                    "-e", "target_host=" + targetIp));
 
             // Execute Restart Playbook
-            executeProcess(commandList.toArray(new String[0]), deploymentLog, 120); // 2 minutes timeout for a simple restart
+            executeProcess(commandList.toArray(new String[0]), deploymentLog, 120); // 2 minutes timeout for a simple
+                                                                                    // restart
 
             deploymentLog.setStatus("SUCCESS");
-            
+
             // Update application status back to RUNNING
             app.setStatus("RUNNING");
             applicationRepository.save(app);
@@ -357,7 +358,7 @@ public class DeploymentService {
     @Transactional
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
             Long applicationId) {
-        
+
         Environment environment = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found: " + environmentId));
         Application app = applicationRepository.findById(applicationId)
@@ -419,13 +420,16 @@ public class DeploymentService {
                     "-e", "appPort=" + request.getPort(),
                     "-e", "appType=" + request.getType(),
                     "-e", "appLanguage=" + (request.getAppLanguage() != null ? request.getAppLanguage() : ""),
-                    "-e", "autoGenerateConfig=" + (request.getAutoGenerateConfig() != null && request.getAutoGenerateConfig() ? "true" : "false"),
+                    "-e",
+                    "autoGenerateConfig="
+                            + (request.getAutoGenerateConfig() != null && request.getAutoGenerateConfig() ? "true"
+                                    : "false"),
                     "-e", "dockerBuildArgs='" + buildArgsStr + "'",
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
                     "-e", "nodename=" + nodeName,
                     "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
-                    "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort() : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))
-            ));
+                    "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
+                            : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
 
             if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
                 commandList.add("-e");
