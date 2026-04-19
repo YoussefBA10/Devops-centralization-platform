@@ -6,7 +6,7 @@
   vars:
     app_dir: "/opt/monetique/apps/{{ appName }}"
     image_name: "{{ appName | lower }}"
-    container_name: "{{ appName | lower }}"
+    container_name: "{{ appName }}"
 
   tasks:
     - name: Ensure git is installed (fast)

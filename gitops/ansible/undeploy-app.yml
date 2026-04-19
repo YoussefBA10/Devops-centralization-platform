@@ -6,7 +6,7 @@
     # Defaults in case not passed
     appName: "unknown-app"
     container_name: "{{ appName }}"
-    image_name: "{{ appName }}"
+    image_name: "{{ appName | lower }}"
 
   tasks:
     - name: Stop and remove application container
