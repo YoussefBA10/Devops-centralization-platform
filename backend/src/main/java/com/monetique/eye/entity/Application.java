@@ -51,9 +51,6 @@ public class Application {
     private String srcPath;
     private Integer containerPort;
 
-    private String sshUser;
-    private String sshPassword;
-
     private java.time.LocalDateTime createdAt;
 
     @PrePersist

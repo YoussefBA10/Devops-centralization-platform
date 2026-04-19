@@ -222,15 +222,15 @@ public class EnvironmentController {
     @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#id)")
     public ResponseEntity<Map<String, Object>> undeployAgent(
             @PathVariable Long id,
-            @PathVariable String ip,
-            @RequestBody Map<String, String> request) {
+            @PathVariable String ip) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        String sshUser = request.getOrDefault("sshUser", "root");
-        String sshPassword = request.get("sshPassword");
+        // Fetch credentials from ManagedNode
+        com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findByEnvironmentAndIp(env, ip)
+                .orElseThrow(() -> new RuntimeException("Node credentials not found for IP: " + ip));
 
-        deploymentService.undeployAgentAsync(env, ip, sshUser, sshPassword);
+        deploymentService.undeployAgentAsync(env, ip, node.getSshUser(), node.getSshPassword());
 
         return ResponseEntity.ok(Map.of(
                 "message", "Agent undeployment triggered for " + ip,

@@ -29,8 +29,6 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     branch: 'main',
     port: '8080',
     envVars: '',
-    sshUser: 'root',
-    sshPassword: '',
     srcPath: 'backend/',
     containerPort: '8080',
     autoGenerateConfig: true,
@@ -61,7 +59,6 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
             port: initialData.port?.toString() || '8080',
             containerPort: initialData.containerPort?.toString() || '8080',
             srcPath: initialData.srcPath || (initialData.type === 'BACKEND' ? 'backend/' : 'frontend/'),
-            sshUser: initialData.sshUser || 'root',
             autoGenerateConfig: true
         });
       } else {
@@ -74,8 +71,6 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
             branch: 'main',
             port: '8080',
             envVars: '',
-            sshUser: 'root',
-            sshPassword: '',
             srcPath: 'backend/',
             containerPort: '8080',
             autoGenerateConfig: true,
@@ -139,8 +134,6 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
       targetNode: formData.targetNode,
       branch: formData.branch,
       envVars: envMap,
-      sshUser: formData.sshUser,
-      sshPassword: formData.sshPassword,
       autoGenerateConfig: formData.autoGenerateConfig
     };
 
@@ -382,25 +375,20 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
 
             {/* Infrastructure Target */}
             <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-4">
-                <h3 className="text-sm font-bold flex items-center gap-2"><Server className="w-4 h-4 text-primary" /> Infrastructure Target</h3>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Target Node</label>
-                        <select name="targetNode" value={formData.targetNode} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none" required>
-                            <option value="">Select an active node...</option>
-                            {nodes.map(node => (
-                                <option key={node.ip} value={node.ip}>{node.hostname || node.ip}</option>
-                            ))}
-                        </select>
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold flex items-center gap-2"><Server className="w-4 h-4 text-primary" /> Infrastructure Target</h3>
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-500 font-medium">
+                        <Info className="w-3 h-3" /> Credentials managed by Node
                     </div>
-                    <div>
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH User</label>
-                        <Input name="sshUser" value={formData.sshUser} onChange={handleChange} placeholder="e.g. root" className="bg-black/40 border-white/10" required />
-                    </div>
-                    <div className="col-span-2">
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH Password (Optional if key setup exists)</label>
-                        <Input type="password" name="sshPassword" value={formData.sshPassword} onChange={handleChange} placeholder="••••••••" className="bg-black/40 border-white/10" />
-                    </div>
+                </div>
+                <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Target Node</label>
+                    <select name="targetNode" value={formData.targetNode} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none" required>
+                        <option value="">Select an active node...</option>
+                        {nodes.map(node => (
+                            <option key={node.ip} value={node.ip}>{node.hostname || node.ip}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 

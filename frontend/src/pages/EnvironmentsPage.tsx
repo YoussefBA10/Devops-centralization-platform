@@ -619,26 +619,6 @@ const EnvironmentsPage: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Confirm SSH User</label>
-                      <p className="text-[10px] text-muted-foreground mb-2">We need the SSH username to connect and run the cleanup playbook.</p>
-                      <Input 
-                        value={undeployUser} 
-                        onChange={e => setUndeployUser(e.target.value)} 
-                        placeholder="root" 
-                        required 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SSH Password / Sudo Password</label>
-                      <p className="text-[10px] text-muted-foreground mb-2">Required if public key authentication is not configured on the remote node.</p>
-                      <Input 
-                        type="password"
-                        value={undeployPassword} 
-                        onChange={e => setUndeployPassword(e.target.value)} 
-                        placeholder="••••••••" 
-                      />
-                    </div>
                     <div className="flex gap-4 pt-4">
                       <Button variant="ghost" className="flex-1" onClick={() => setUndeployIp(null)}>Cancel</Button>
                       <Button 

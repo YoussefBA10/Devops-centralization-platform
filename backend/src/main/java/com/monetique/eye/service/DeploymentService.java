@@ -32,16 +32,19 @@ public class DeploymentService {
     private final DeploymentLogRepository deploymentLogRepository;
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
+    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
 
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
 
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
             EnvironmentRepository environmentRepository,
-            ApplicationRepository applicationRepository) {
+            ApplicationRepository applicationRepository,
+            com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
+        this.managedNodeRepository = managedNodeRepository;
     }
 
     @Async
@@ -96,6 +99,19 @@ public class DeploymentService {
 
             deploymentLog.setStatus("SUCCESS");
             registerNodeInPrometheus(environment, targetIp);
+            
+            // Persist Managed Node credentials
+            com.monetique.eye.entity.ManagedNode managedNode = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
+                    .orElse(com.monetique.eye.entity.ManagedNode.builder()
+                            .environment(environment)
+                            .ip(targetIp)
+                            .build());
+            
+            managedNode.setSshUser(sshUser);
+            managedNode.setSshPassword(sshPassword);
+            managedNode.setNodeName(nodeName);
+            managedNodeRepository.save(managedNode);
+
             environment.setLastDeploymentStatus(DeploymentStatus.SUCCESS);
             environment.setLastDeployedAt(java.time.LocalDateTime.now());
             environmentRepository.save(environment);
@@ -150,6 +166,10 @@ public class DeploymentService {
 
             // 3. Remove from main inventory
             removeFromInventory(targetIp);
+
+            // 4. Cleanup DB records
+            managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
+                .ifPresent(managedNodeRepository::delete);
 
             log.info("Successfully undeployed agent {}", targetIp);
         } catch (Exception e) {
@@ -254,8 +274,12 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            String sshUser = app.getSshUser();
-            String sshPass = app.getSshPassword();
+            // Fetch credentials from ManagedNode
+            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
+                    .orElseThrow(() -> new RuntimeException("Node credentials not found for IP: " + targetIp + ". Please register the node first."));
+
+            String sshUser = node.getSshUser();
+            String sshPass = node.getSshPassword();
 
             // Do NOT update global inventory here - rely on existing inventory or Extra Vars
 
@@ -329,8 +353,12 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            String sshUser = app.getSshUser();
-            String sshPass = app.getSshPassword();
+            // Fetch credentials from ManagedNode
+            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
+                    .orElseThrow(() -> new RuntimeException("Node credentials not found for IP: " + targetIp + ". Please register the node first."));
+
+            String sshUser = node.getSshUser();
+            String sshPass = node.getSshPassword();
 
             // Do NOT update global inventory here - rely on existing inventory or Extra Vars
 
@@ -403,8 +431,12 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            String sshUser = request.getSshUser();
-            String sshPass = request.getSshPassword();
+            // Fetch credentials from ManagedNode
+            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findByEnvironmentAndIp(environment, request.getTargetNode())
+                    .orElseThrow(() -> new RuntimeException("Node credentials not found for IP: " + request.getTargetNode() + ". Please register the node first."));
+
+            String sshUser = node.getSshUser();
+            String sshPass = node.getSshPassword();
 
             // Do NOT update global inventory here - rely on existing inventory or Extra Vars
 
@@ -458,6 +490,13 @@ public class DeploymentService {
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
             }
+
+            deploymentLog.setStatus("SUCCESS");
+
+            // Update application status
+            app.setStatus("RUNNING");
+            app.setLastDeployedAt(java.time.LocalDateTime.now());
+            applicationRepository.save(app);
 
             deploymentLog.setStatus("SUCCESS");
 

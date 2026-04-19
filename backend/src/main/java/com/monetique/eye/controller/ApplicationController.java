@@ -45,7 +45,6 @@ public class ApplicationController {
                 .environmentId(app.getEnvironment().getId())
                 .srcPath(app.getSrcPath())
                 .containerPort(app.getContainerPort())
-                .sshUser(app.getSshUser())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }

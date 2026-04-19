@@ -54,6 +54,13 @@ public class Environment {
     @JsonIgnore
     private Set<DeploymentLog> deploymentLogs = new HashSet<>();
 
+    @OneToMany(mappedBy = "environment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    @JsonIgnore
+    private Set<ManagedNode> managedNodes = new HashSet<>();
+
     @ManyToMany(mappedBy = "environments")
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
