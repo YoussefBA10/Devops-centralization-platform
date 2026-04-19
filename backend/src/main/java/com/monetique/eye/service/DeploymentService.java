@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -229,6 +230,7 @@ public class DeploymentService {
     }
 
     @Async
+    @Transactional
     public void undeployApplicationFull(Long applicationId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElse(null);
@@ -291,6 +293,7 @@ public class DeploymentService {
     }
 
     @Async
+    @Transactional
     public void restartApplicationFull(Long applicationId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new RuntimeException("Application not found: " + applicationId));
@@ -351,6 +354,7 @@ public class DeploymentService {
     }
 
     @Async
+    @Transactional
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
             Long applicationId) {
         
