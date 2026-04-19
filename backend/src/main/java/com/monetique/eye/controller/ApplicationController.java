@@ -45,6 +45,7 @@ public class ApplicationController {
                 .environmentId(app.getEnvironment().getId())
                 .srcPath(app.getSrcPath())
                 .containerPort(app.getContainerPort())
+                .sshUser(app.getSshUser())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -88,6 +89,12 @@ public class ApplicationController {
         app.setBranch(request.getBranch());
         app.setPort(request.getPort());
         app.setSrcPath(request.getSrcPath());
+        
+        // Persist SSH Credentials
+        app.setSshUser(request.getSshUser());
+        if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
+            app.setSshPassword(request.getSshPassword());
+        }
         
         // Handle Container Port Defaulting
         if (request.getContainerPort() != null) {

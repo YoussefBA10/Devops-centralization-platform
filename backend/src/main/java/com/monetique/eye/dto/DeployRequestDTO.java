@@ -15,6 +15,7 @@ public class DeployRequestDTO {
     private String branch;
     private Integer port;
     private Map<String, String> envVars;
+    private String sshUser;
     private String sshPassword;
     private String srcPath;
     private Integer containerPort;

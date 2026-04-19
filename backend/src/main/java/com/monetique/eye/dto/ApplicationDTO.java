@@ -25,5 +25,7 @@ public class ApplicationDTO {
     private Long environmentId;
     private String srcPath;
     private Integer containerPort;
+    private String sshUser;
+
 
 }

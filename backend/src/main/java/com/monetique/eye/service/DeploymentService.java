@@ -254,8 +254,11 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
+            String sshUser = app.getSshUser() != null ? app.getSshUser() : "root";
+            String sshPass = app.getSshPassword();
+
             // Ensure inventory is up to date before undeploying
-            updateInventory(environment.getName(), targetIp, "root"); // Default to root for cleanup if unknown
+            updateInventory(environment.getName(), targetIp, sshUser);
 
             String playbookPath = gitopsPath + "/ansible/undeploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -266,10 +269,17 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
-                    "-e", "target_host=" + targetIp));
+                    "-e", "target_host=" + targetIp,
+                    "-e", "ansible_user=" + sshUser));
 
-            // Execute Undeploy Playbook
-            executeProcess(commandList.toArray(new String[0]), deploymentLog, 300);
+            // Add SSH Password if available
+            if (sshPass != null && !sshPass.isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_ssh_pass=" + sshPass);
+                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 300);
+            } else {
+                executeProcess(commandList.toArray(new String[0]), deploymentLog, 300);
+            }
 
             deploymentLog.setStatus("SUCCESS");
             log.info("Undeployment successful for App: {}. Removing record from database.", appName);
@@ -316,8 +326,11 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
+            String sshUser = app.getSshUser() != null ? app.getSshUser() : "root";
+            String sshPass = app.getSshPassword();
+
             // Ensure inventory is up to date before restarting
-            // updateInventory(environment.getName(), targetIp, "root");
+            updateInventory(environment.getName(), targetIp, sshUser);
 
             String playbookPath = gitopsPath + "/ansible/restart-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -328,11 +341,17 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
-                    "-e", "target_host=" + targetIp));
+                    "-e", "target_host=" + targetIp,
+                    "-e", "ansible_user=" + sshUser));
 
-            // Execute Restart Playbook
-            executeProcess(commandList.toArray(new String[0]), deploymentLog, 120); // 2 minutes timeout for a simple
-                                                                                    // restart
+            // Add SSH Password if available
+            if (sshPass != null && !sshPass.isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_ssh_pass=" + sshPass);
+                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 120);
+            } else {
+                executeProcess(commandList.toArray(new String[0]), deploymentLog, 120);
+            }
 
             deploymentLog.setStatus("SUCCESS");
 
@@ -378,22 +397,14 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            // Ensure inventory is up to date before deploying
-            updateInventory(environment.getName(), request.getTargetNode(), "root");
+            String sshUser = request.getSshUser() != null ? request.getSshUser() : "root";
+            String sshPass = request.getSshPassword();
 
-            // Find SSH User from inventory or use a default (like root/ubuntu) for the
-            // target IP
-            // In a real scenario, this would look up the target node's sshUser from DB or
-            // inventory
-            // We assume deploy-app.yml playbook will handle connection based on existing
-            // inventory structure
+            // Ensure inventory is up to date before deploying
+            updateInventory(environment.getName(), request.getTargetNode(), sshUser);
+
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-
-            // Use existing inventory structure for SSH configuration. The node should have
-            // been registered
-            // correctly by `deployAgentAsync` containing its real ssh user and password
-            // references.
 
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
                     : "node-" + request.getTargetNode().replace(".", "-");
@@ -406,8 +417,6 @@ public class DeploymentService {
             }
 
             // Execute Application Playbook
-            // The playbook takes parameters: appName, repoUrl, branch, target_host,
-            // appPort, appType, envLabel, nodename
             List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", inventoryPath,
@@ -415,6 +424,7 @@ public class DeploymentService {
                     "--limit", request.getTargetNode(),
                     "-e", "appName=" + request.getName(),
                     "-e", "target_host=" + request.getTargetNode(),
+                    "-e", "ansible_user=" + sshUser,
                     "-e", "repoUrl=" + request.getRepoUrl(),
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + request.getPort(),
@@ -431,11 +441,10 @@ public class DeploymentService {
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
 
-            if (request.getSshPassword() != null && !request.getSshPassword().isEmpty()) {
+            if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
-                commandList.add("ansible_ssh_pass=" + request.getSshPassword());
-                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600); // 10 minutes timeout for
-                                                                                              // builds
+                commandList.add("ansible_ssh_pass=" + sshPass);
+                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
             }

@@ -29,6 +29,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     branch: 'main',
     port: '8080',
     envVars: '',
+    sshUser: 'root',
     sshPassword: '',
     srcPath: 'backend/',
     containerPort: '8080',
@@ -60,6 +61,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
             port: initialData.port?.toString() || '8080',
             containerPort: initialData.containerPort?.toString() || '8080',
             srcPath: initialData.srcPath || (initialData.type === 'BACKEND' ? 'backend/' : 'frontend/'),
+            sshUser: initialData.sshUser || 'root',
             autoGenerateConfig: true
         });
       } else {
@@ -72,6 +74,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
             branch: 'main',
             port: '8080',
             envVars: '',
+            sshUser: 'root',
             sshPassword: '',
             srcPath: 'backend/',
             containerPort: '8080',
@@ -136,6 +139,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
       targetNode: formData.targetNode,
       branch: formData.branch,
       envVars: envMap,
+      sshUser: formData.sshUser,
       sshPassword: formData.sshPassword,
       autoGenerateConfig: formData.autoGenerateConfig
     };
@@ -390,7 +394,11 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                         </select>
                     </div>
                     <div>
-                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH Password (Optional)</label>
+                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH User</label>
+                        <Input name="sshUser" value={formData.sshUser} onChange={handleChange} placeholder="e.g. root" className="bg-black/40 border-white/10" required />
+                    </div>
+                    <div className="col-span-2">
+                        <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">SSH Password (Optional if key setup exists)</label>
                         <Input type="password" name="sshPassword" value={formData.sshPassword} onChange={handleChange} placeholder="••••••••" className="bg-black/40 border-white/10" />
                     </div>
                 </div>
