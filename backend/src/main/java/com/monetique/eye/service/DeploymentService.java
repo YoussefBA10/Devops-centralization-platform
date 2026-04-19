@@ -254,11 +254,10 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            String sshUser = app.getSshUser() != null ? app.getSshUser() : "root";
+            String sshUser = app.getSshUser();
             String sshPass = app.getSshPassword();
 
-            // Ensure inventory is up to date before undeploying
-            updateInventory(environment.getName(), targetIp, sshUser);
+            // Do NOT update global inventory here - rely on existing inventory or Extra Vars
 
             String playbookPath = gitopsPath + "/ansible/undeploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -269,10 +268,14 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
-                    "-e", "target_host=" + targetIp,
-                    "-e", "ansible_user=" + sshUser));
+                    "-e", "target_host=" + targetIp));
 
-            // Add SSH Password if available
+            // Conditionally add Ansible coordinates only if stored
+            if (sshUser != null && !sshUser.isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_user=" + sshUser);
+            }
+
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
@@ -326,11 +329,10 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            String sshUser = app.getSshUser() != null ? app.getSshUser() : "root";
+            String sshUser = app.getSshUser();
             String sshPass = app.getSshPassword();
 
-            // Ensure inventory is up to date before restarting
-            updateInventory(environment.getName(), targetIp, sshUser);
+            // Do NOT update global inventory here - rely on existing inventory or Extra Vars
 
             String playbookPath = gitopsPath + "/ansible/restart-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -341,10 +343,14 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "appName=" + appName,
-                    "-e", "target_host=" + targetIp,
-                    "-e", "ansible_user=" + sshUser));
+                    "-e", "target_host=" + targetIp));
 
-            // Add SSH Password if available
+            // Conditionally add Ansible coordinates only if stored
+            if (sshUser != null && !sshUser.isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_user=" + sshUser);
+            }
+
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
@@ -397,11 +403,10 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
-            String sshUser = request.getSshUser() != null ? request.getSshUser() : "root";
+            String sshUser = request.getSshUser();
             String sshPass = request.getSshPassword();
 
-            // Ensure inventory is up to date before deploying
-            updateInventory(environment.getName(), request.getTargetNode(), sshUser);
+            // Do NOT update global inventory here - rely on existing inventory or Extra Vars
 
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -424,7 +429,6 @@ public class DeploymentService {
                     "--limit", request.getTargetNode(),
                     "-e", "appName=" + request.getName(),
                     "-e", "target_host=" + request.getTargetNode(),
-                    "-e", "ansible_user=" + sshUser,
                     "-e", "repoUrl=" + request.getRepoUrl(),
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + request.getPort(),
@@ -440,6 +444,12 @@ public class DeploymentService {
                     "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
+
+            // Conditionally add Ansible coordinates
+            if (sshUser != null && !sshUser.isEmpty()) {
+                commandList.add("-e");
+                commandList.add("ansible_user=" + sshUser);
+            }
 
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
