@@ -1,0 +1,15 @@
+- name: Restart Custom Application
+  hosts: "{{ target_host }}"
+  become: yes
+
+  vars:
+    # Defaults in case not passed
+    appName: "unknown-app"
+    container_name: "{{ appName }}"
+
+  tasks:
+    - name: Restart application container
+      docker_container:
+        name: "{{ container_name }}"
+        state: started
+        restart: yes

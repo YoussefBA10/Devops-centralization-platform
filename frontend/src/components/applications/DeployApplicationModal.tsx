@@ -7,11 +7,12 @@ import { useEnvironment } from '../../context/EnvironmentContext';
 
 interface DeployApplicationModalProps {
   isOpen: boolean;
+  initialData?: any;
   onClose: () => void;
   onDeploy: (data: any) => Promise<void>;
 }
 
-const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen, onClose, onDeploy }) => {
+const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen, initialData, onClose, onDeploy }) => {
   const { selectedEnvironment } = useEnvironment();
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -46,20 +47,54 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   });
 
   useEffect(() => {
-    if (formData.type === 'FRONTEND') {
-        setFormData(prev => ({ ...prev, containerPort: '80', port: '8080' }));
-    } else if (formData.type === 'BACKEND') {
-        setFormData(prev => ({ ...prev, containerPort: '8080', port: '8080' }));
-    }
-  }, [formData.type]);
+    if (isOpen) {
+      if (initialData) {
+        setFormData({
+            ...formData,
+            name: initialData.name || '',
+            type: initialData.type || 'BACKEND',
+            appLanguage: initialData.appLanguage || 'Java Spring Boot',
+            repoUrl: initialData.repoUrl || '',
+            targetNode: initialData.targetNode || '',
+            branch: initialData.branch || 'main',
+            port: initialData.port?.toString() || '8080',
+            containerPort: initialData.containerPort?.toString() || '8080',
+            srcPath: initialData.srcPath || (initialData.type === 'BACKEND' ? 'backend/' : 'frontend/'),
+            autoGenerateConfig: true
+        });
+      } else {
+        setFormData({
+            name: '',
+            type: 'BACKEND',
+            appLanguage: 'Java Spring Boot',
+            repoUrl: '',
+            targetNode: '',
+            branch: 'main',
+            port: '8080',
+            envVars: '',
+            sshPassword: '',
+            srcPath: 'backend/',
+            containerPort: '8080',
+            autoGenerateConfig: true,
+            frontendSrcPath: 'frontend/',
+            frontendPort: '3000',
+            frontendContainerPort: '80',
+            frontendAppLanguage: 'React',
+            backendSrcPath: 'backend/',
+            backendPort: '8080',
+            backendContainerPort: '8080',
+            backendAppLanguage: 'Java Spring Boot'
+        });
+        setRepoInfo(null);
+      }
 
-  useEffect(() => {
-    if (isOpen && selectedEnvironment) {
-      getEnvironmentNodes(selectedEnvironment.id)
-        .then(res => setNodes(res.data))
-        .catch(err => console.error("Failed to load nodes", err));
+      if (selectedEnvironment) {
+        getEnvironmentNodes(selectedEnvironment.id)
+          .then(res => setNodes(res.data))
+          .catch(err => console.error("Failed to load nodes", err));
+      }
     }
-  }, [isOpen, selectedEnvironment]);
+  }, [isOpen, initialData, selectedEnvironment]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
@@ -94,6 +129,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     }
 
     const basePayload = {
+      id: initialData?.id,
       name: formData.name,
       environmentId: selectedEnvironment?.id,
       repoUrl: formData.repoUrl,
@@ -155,8 +191,12 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
               <Box className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Deploy Application</h2>
-              <p className="text-sm text-muted-foreground">Configure and deploy a new service</p>
+              <h2 className="text-xl font-bold tracking-tight">
+                {initialData ? 'Edit Application' : 'Deploy Application'}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {initialData ? 'Modify existing configuration' : 'Configure and deploy a new service'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-muted-foreground hover:text-white">
@@ -375,7 +415,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         <div className="p-6 border-t border-white/5 flex items-center justify-end gap-3 bg-black/20">
           <Button variant="outline" onClick={onClose} className="border-white/10">Cancel</Button>
           <Button type="submit" form="deploy-form" loading={loading} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-            Deploy Application
+            {initialData ? 'Update & Redeploy' : 'Deploy Application'}
           </Button>
         </div>
       </Card>

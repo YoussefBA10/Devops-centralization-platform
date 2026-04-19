@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { getApplications, deployApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord } from '../services/api';
+import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord } from '../services/api';
 import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -13,6 +13,7 @@ const ApplicationsPage: React.FC = () => {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
+  const [editingApp, setEditingApp] = useState<any>(null);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
 
@@ -108,8 +109,29 @@ const ApplicationsPage: React.FC = () => {
   }, []);
 
   const handleDeploy = async (payload: any) => {
-    await deployApplication(payload);
-    await fetchApps();
+    try {
+      await deployApplication(payload);
+      setEditingApp(null);
+      setIsDeployModalOpen(false);
+      await fetchApps();
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Deployment failed');
+    }
+  };
+
+  const handleRestart = async (appId: number) => {
+    try {
+      await restartApplication(appId);
+      // Status will transition to DEPLOYING/RUNNING via polling
+      fetchApps();
+    } catch (e: any) {
+      alert(e.response?.data?.message || 'Restart failed');
+    }
+  };
+
+  const handleEditApp = (app: any) => {
+    setEditingApp(app);
+    setIsDeployModalOpen(true);
   };
 
   const handleViewLogs = async (app: any) => {
@@ -127,10 +149,12 @@ const ApplicationsPage: React.FC = () => {
   };
 
   const handleDelete = async (appId: number) => {
-    if (!confirm('Remove this application record? This does not stop the running container.')) return;
+    if (!confirm('Undeploy and remove this application? This will stop the running container and remove its data from the remote host.')) return;
     try {
       await deleteApplicationRecord(appId);
-      setApplications((prev) => prev.filter((a) => a.id !== appId));
+      // We don't filter it out immediately from UI, we wait for its status to change to DELETING
+      // fetchApps() will catch the DELETING status
+      fetchApps();
     } catch (e) {
       console.error('Failed to delete', e);
     }
@@ -152,6 +176,7 @@ const ApplicationsPage: React.FC = () => {
     switch (status) {
       case 'RUNNING': return 'emerald';
       case 'DEPLOYING': return 'amber';
+      case 'DELETING': return 'rose';
       case 'FAILED': return 'red';
       default: return 'slate';
     }
@@ -331,16 +356,25 @@ const ApplicationsPage: React.FC = () => {
                           : <><Terminal className="w-3.5 h-3.5 mr-1.5" /> Logs</>
                         }
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20"
-                        disabled={app.status === 'DEPLOYING'}
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' ? 'animate-spin' : ''}`} />
-                        {app.status === 'DEPLOYING' ? 'Deploying...' : 'Restart'}
-                      </Button>
-                    </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20"
+                          onClick={() => handleEditApp(app)}
+                        >
+                          <Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20"
+                          disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'}
+                          onClick={() => handleRestart(app.id)}
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} />
+                          {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}
+                        </Button>
+                      </div>
                   </div>
                 </div>
               </div>
@@ -364,7 +398,11 @@ const ApplicationsPage: React.FC = () => {
 
       <DeployApplicationModal
         isOpen={isDeployModalOpen}
-        onClose={() => setIsDeployModalOpen(false)}
+        initialData={editingApp}
+        onClose={() => {
+          setIsDeployModalOpen(false);
+          setEditingApp(null);
+        }}
         onDeploy={handleDeploy}
       />
 

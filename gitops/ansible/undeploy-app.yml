@@ -1,0 +1,27 @@
+- name: Undeploy Custom Application
+  hosts: "{{ target_host }}"
+  become: yes
+
+  vars:
+    # Defaults in case not passed
+    appName: "unknown-app"
+    container_name: "{{ appName }}"
+    image_name: "{{ appName }}"
+
+  tasks:
+    - name: Stop and remove application container
+      docker_container:
+        name: "{{ container_name }}"
+        state: absent
+
+    - name: Remove application image
+      docker_image:
+        name: "{{ image_name }}:latest"
+        state: absent
+      ignore_errors: yes
+
+    - name: Clean up app directory
+      file:
+        path: "/opt/monetique/apps/{{ appName }}"
+        state: absent
+      ignore_errors: yes

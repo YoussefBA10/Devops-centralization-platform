@@ -50,6 +50,7 @@ export const getDeploymentStatus = (envId: number, targetIp: string) =>
 // Application Endpoints
 export const getApplications = (envId: number) => api.get('/applications', { params: { environmentId: envId } });
 export const deployApplication = (data: any) => api.post('/applications/deploy', data);
+export const restartApplication = (appId: number) => api.post(`/applications/${appId}/restart`);
 export const getApplicationLogs = (appId: number) => api.get(`/applications/${appId}/logs`);
 export const getApplicationStatus = (appId: number) => api.get(`/applications/${appId}/status`);
 export const deleteApplicationRecord = (appId: number) => api.delete(`/applications/${appId}`);

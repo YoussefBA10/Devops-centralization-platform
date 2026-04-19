@@ -5,6 +5,7 @@ import java.util.Map;
 
 @Data
 public class DeployRequestDTO {
+    private Long id;
     private String name;
     private Long environmentId;
     private String type;

@@ -54,12 +54,32 @@ public class ApplicationController {
         Environment env = environmentRepository.findById(request.getEnvironmentId())
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        Application app = applicationRepository.findByNameIgnoreCaseAndEnvironmentId(request.getName(), request.getEnvironmentId())
-                .orElse(Application.builder()
-                        .name(request.getName())
-                        .environment(env)
-                        .serviceNameKeyword(request.getName().toLowerCase())
-                        .build());
+        Application app;
+        if (request.getId() != null) {
+            // Update existing app
+            app = applicationRepository.findById(request.getId())
+                .orElseThrow(() -> new RuntimeException("Application with ID " + request.getId() + " not found"));
+            
+            // Check if name is being changed and if new name conflicts
+            if (!app.getName().equalsIgnoreCase(request.getName())) {
+                if (applicationRepository.findByNameIgnoreCaseAndEnvironmentId(request.getName(), request.getEnvironmentId()).isPresent()) {
+                    return ResponseEntity.status(409).body(Map.of("message", "An application with name '" + request.getName() + "' already exists in this environment."));
+                }
+            }
+        } else {
+            // Create new app
+            if (applicationRepository.findByNameIgnoreCaseAndEnvironmentId(request.getName(), request.getEnvironmentId()).isPresent()) {
+                return ResponseEntity.status(409).body(Map.of("message", "Application with name '" + request.getName() + "' already exists. Choose a different name or edit the existing one."));
+            }
+            app = Application.builder()
+                    .name(request.getName())
+                    .environment(env)
+                    .serviceNameKeyword(request.getName().toLowerCase())
+                    .build();
+        }
+
+        app.setName(request.getName()); // Just in case it was a rename
+        app.setServiceNameKeyword(request.getName().toLowerCase());
 
         app.setType(request.getType());
         app.setAppLanguage(request.getAppLanguage());
@@ -130,10 +150,35 @@ public class ApplicationController {
                 )));
     }
 
+    /** Trigger a remote restart for a specific application. */
+    @PostMapping("/{id}/restart")
+    public ResponseEntity<?> restartApplication(@PathVariable Long id) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+
+        // Transition to DEPLOYING status for visual feedback in UI
+        app.setStatus("DEPLOYING");
+        applicationRepository.save(app);
+
+        // Trigger remote restart
+        deploymentService.restartApplicationFull(id);
+
+        return ResponseEntity.ok(Map.of("message", "Restart process started."));
+    }
+
     /** Remove an application record from the database. */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteApplication(@PathVariable Long id) {
-        applicationRepository.deleteById(id);
-        return ResponseEntity.ok(Map.of("message", "Application removed."));
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+
+        // Transition to DELETING status
+        app.setStatus("DELETING");
+        applicationRepository.save(app);
+
+        // Trigger remote undeployment
+        deploymentService.undeployApplicationFull(id);
+
+        return ResponseEntity.ok(Map.of("message", "Undeployment started. Application will be removed shortly."));
     }
 }

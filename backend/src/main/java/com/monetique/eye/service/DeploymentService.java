@@ -229,6 +229,122 @@ public class DeploymentService {
     }
 
     @Async
+    public void undeployApplicationFull(Long applicationId) {
+        Application app = applicationRepository.findById(applicationId)
+                .orElse(null);
+        if (app == null) return;
+
+        Environment environment = app.getEnvironment();
+        String appName = app.getName();
+        String targetIp = app.getTargetNode();
+
+        log.info("Starting application undeployment for App: {} on Node: {}", appName, targetIp);
+
+        DeploymentLog deploymentLog = DeploymentLog.builder()
+                .environment(environment)
+                .action("UNDEPLOY_APP")
+                .targetIp(targetIp)
+                .appName(appName)
+                .status("IN_PROGRESS")
+                .logOutput("Starting undeployment of " + appName + " from " + targetIp + "...\n")
+                .build();
+        deploymentLog = deploymentLogRepository.save(deploymentLog);
+
+        try {
+            String playbookPath = gitopsPath + "/ansible/undeploy-app.yml";
+            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+
+            List<String> commandList = new ArrayList<>(List.of(
+                    "ansible-playbook",
+                    "-i", inventoryPath,
+                    playbookPath,
+                    "--limit", targetIp,
+                    "-e", "appName=" + appName,
+                    "-e", "target_host=" + targetIp
+            ));
+
+            // Execute Undeploy Playbook
+            executeProcess(commandList.toArray(new String[0]), deploymentLog, 300); // 5 minutes timeout
+
+            deploymentLog.setStatus("SUCCESS");
+            log.info("Undeployment successful for App: {}. Removing record from database.", appName);
+            
+            // Delete the application record after successful undeployment
+            applicationRepository.deleteById(applicationId);
+
+        } catch (Exception e) {
+            log.error("Application undeployment failed: {}", e.getMessage());
+            deploymentLog.setStatus("FAILED");
+            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage());
+            
+            // Even if undeployment failed, we might want to delete the record to keep UI clean,
+            // or keep it to let user retry. Given the plan, we'll proceed to delete it
+            // but log the failure in the general logs.
+            applicationRepository.deleteById(applicationId);
+        } finally {
+            deploymentLogRepository.save(deploymentLog);
+        }
+    }
+
+    @Async
+    public void restartApplicationFull(Long applicationId) {
+        Application app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RuntimeException("Application not found: " + applicationId));
+
+        Environment environment = app.getEnvironment();
+        String appName = app.getName();
+        String targetIp = app.getTargetNode();
+
+        log.info("Starting remote restart for App: {} on Node: {}", appName, targetIp);
+
+        DeploymentLog deploymentLog = DeploymentLog.builder()
+                .environment(environment)
+                .action("RESTART_APP")
+                .targetIp(targetIp)
+                .appName(appName)
+                .status("IN_PROGRESS")
+                .logOutput("Triggering remote restart for " + appName + " on " + targetIp + "...\n")
+                .build();
+        deploymentLog = deploymentLogRepository.save(deploymentLog);
+
+        try {
+            String playbookPath = gitopsPath + "/ansible/restart-app.yml";
+            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+
+            List<String> commandList = new ArrayList<>(List.of(
+                    "ansible-playbook",
+                    "-i", inventoryPath,
+                    playbookPath,
+                    "--limit", targetIp,
+                    "-e", "appName=" + appName,
+                    "-e", "target_host=" + targetIp
+            ));
+
+            // Execute Restart Playbook
+            executeProcess(commandList.toArray(new String[0]), deploymentLog, 120); // 2 minutes timeout for a simple restart
+
+            deploymentLog.setStatus("SUCCESS");
+            
+            // Update application status back to RUNNING
+            app.setStatus("RUNNING");
+            applicationRepository.save(app);
+
+        } catch (Exception e) {
+            log.error("Application restart failed: {}", e.getMessage());
+            deploymentLog.setStatus("FAILED");
+            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage());
+
+            // Update application status to FAILED
+            app.setStatus("FAILED");
+            applicationRepository.save(app);
+        } finally {
+            deploymentLogRepository.save(deploymentLog);
+        }
+    }
+
+    @Async
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
             Long applicationId) {
         
