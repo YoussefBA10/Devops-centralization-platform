@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord } from '../services/api';
-import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
+import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2 } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const ApplicationsPage: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -16,6 +17,22 @@ const ApplicationsPage: React.FC = () => {
   const [editingApp, setEditingApp] = useState<any>(null);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'danger' | 'warning' | 'info';
+    onConfirm: () => void;
+    loading?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'warning',
+    onConfirm: () => {}
+  });
 
   // Log viewer state
   const [logModal, setLogModal] = useState<{ appId: number; appName: string } | null>(null);
@@ -120,13 +137,24 @@ const ApplicationsPage: React.FC = () => {
   };
 
   const handleRestart = async (appId: number) => {
-    try {
-      await restartApplication(appId);
-      // Status will transition to DEPLOYING/RUNNING via polling
-      fetchApps();
-    } catch (e: any) {
-      alert(e.response?.data?.message || 'Restart failed');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Restart Application',
+      message: 'Are you sure you want to trigger a remote restart for this application? The service will be briefly unavailable while the container reboots.',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          setConfirmModal(prev => ({ ...prev, loading: true }));
+          await restartApplication(appId);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          // Status will transition via polling
+          fetchApps();
+        } catch (e: any) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          alert(e.response?.data?.message || 'Restart failed');
+        }
+      }
+    });
   };
 
   const handleEditApp = (app: any) => {
@@ -149,15 +177,28 @@ const ApplicationsPage: React.FC = () => {
   };
 
   const handleDelete = async (appId: number) => {
-    if (!confirm('Undeploy and remove this application? This will stop the running container and remove its data from the remote host.')) return;
-    try {
-      await deleteApplicationRecord(appId);
-      // We don't filter it out immediately from UI, we wait for its status to change to DELETING
-      // fetchApps() will catch the DELETING status
-      fetchApps();
-    } catch (e) {
-      console.error('Failed to delete', e);
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Undeploy & Remove',
+      message: 'This will stop the running container and remove its data from the remote host. The application record will be permanently deleted. This action cannot be undone. Continue?',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          setConfirmModal(prev => ({ ...prev, loading: true }));
+          await deleteApplicationRecord(appId);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          
+          // Set locally as DELETING to show immediate feedback
+          setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'DELETING' } : a));
+          
+          // fetchApps() will catch the actual deletion or DELETING state
+          fetchApps();
+        } catch (e) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          console.error('Failed to delete', e);
+        }
+      }
+    });
   };
 
   const filteredApps = applications.filter((app) => {
@@ -460,6 +501,15 @@ const ApplicationsPage: React.FC = () => {
           </Card>
         </div>
       )}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type as any}
+        loading={confirmModal.loading}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+      />
     </div>
   );
 };

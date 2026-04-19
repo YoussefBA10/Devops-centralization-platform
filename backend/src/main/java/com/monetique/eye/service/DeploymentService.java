@@ -251,6 +251,9 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
+            // Ensure inventory is up to date before undeploying
+            updateInventory(environment.getName(), targetIp, "root"); // Default to root for cleanup if unknown
+
             String playbookPath = gitopsPath + "/ansible/undeploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
@@ -264,7 +267,7 @@ public class DeploymentService {
             ));
 
             // Execute Undeploy Playbook
-            executeProcess(commandList.toArray(new String[0]), deploymentLog, 300); // 5 minutes timeout
+            executeProcess(commandList.toArray(new String[0]), deploymentLog, 300);
 
             deploymentLog.setStatus("SUCCESS");
             log.info("Undeployment successful for App: {}. Removing record from database.", appName);
@@ -309,6 +312,9 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
+            // Ensure inventory is up to date before restarting
+            updateInventory(environment.getName(), targetIp, "root");
+
             String playbookPath = gitopsPath + "/ansible/restart-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
@@ -367,6 +373,9 @@ public class DeploymentService {
         deploymentLog = deploymentLogRepository.save(deploymentLog);
 
         try {
+            // Ensure inventory is up to date before deploying
+            updateInventory(environment.getName(), request.getTargetNode(), "root");
+
             // Find SSH User from inventory or use a default (like root/ubuntu) for the
             // target IP
             // In a real scenario, this would look up the target node's sshUser from DB or
