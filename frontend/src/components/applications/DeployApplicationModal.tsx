@@ -31,6 +31,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     envVars: '',
     srcPath: 'backend/',
     containerPort: '8080',
+    canary: false,
     autoGenerateConfig: true,
     
     // Fullstack distinct fields
@@ -73,6 +74,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
             envVars: '',
             srcPath: 'backend/',
             containerPort: '8080',
+            canary: false,
             autoGenerateConfig: true,
             frontendSrcPath: 'frontend/',
             frontendPort: '3000',
@@ -134,6 +136,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
       targetNode: formData.targetNode,
       branch: formData.branch,
       envVars: envMap,
+      canary: formData.canary,
       autoGenerateConfig: formData.autoGenerateConfig
     };
 
@@ -394,15 +397,64 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
 
             {/* Env Vars */}
             <div className="space-y-2">
-                 <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Environment Variables</label>
-                 <p className="text-[10px] text-muted-foreground italic mb-1">For Frontend apps, these are securely injected as Docker build arguments.</p>
-                 <textarea 
-                    name="envVars" 
-                    value={formData.envVars}
-                    onChange={handleChange}
-                    placeholder="KEY=VALUE&#10;NODE_ENV=production" 
-                    className="w-full h-24 p-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white font-mono resize-none placeholder:text-white/20"
-                 />
+             <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Environment Variables</label>
+                  <p className="text-[10px] text-muted-foreground italic mb-1">For Frontend apps, these are securely injected as Docker build arguments.</p>
+                  <textarea 
+                     name="envVars" 
+                     value={formData.envVars}
+                     onChange={handleChange}
+                     placeholder="KEY=VALUE&#10;NODE_ENV=production" 
+                     className="w-full h-24 p-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white font-mono resize-none placeholder:text-white/20"
+                  />
+             </div>
+
+             {/* Deployment Strategy */}
+             <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-4">
+                 <h3 className="text-sm font-bold flex items-center gap-2"><Zap className="w-4 h-4 text-primary" /> Deployment Strategy</h3>
+                
+                 {/* Canary Toggle */}
+                 <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+                     <div className="flex items-center gap-3">
+                         <div className={`p-2 rounded-lg ${formData.canary ? 'bg-amber-500/20' : 'bg-primary/20'}`}>
+                             {formData.canary ? <Activity className="w-4 h-4 text-amber-500" /> : <Zap className="w-4 h-4 text-primary" />}
+                         </div>
+                         <div>
+                             <p className="text-sm font-bold">{formData.canary ? 'Canary Release' : 'Standard Deployment'}</p>
+                             <p className="text-[10px] text-muted-foreground">
+                                 {formData.canary ? 'Runs side-by-side with stable version on a secondary port.' : 'Replaces the existing version and handles port cleanup.'}
+                             </p>
+                         </div>
+                     </div>
+                     <button
+                         type="button"
+                         onClick={() => setFormData(prev => ({ ...prev, canary: !prev.canary }))}
+                         className={`w-12 h-6 rounded-full transition-colors relative ${formData.canary ? 'bg-amber-500' : 'bg-white/10'}`}
+                     >
+                         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${formData.canary ? 'left-7' : 'left-1'}`}></div>
+                     </button>
+                 </div>
+                 
+                 {/* Auto Gen Toggle */}
+                 <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5">
+                     <div className="flex items-center gap-3">
+                         <div className="p-2 bg-primary/20 rounded-lg">
+                             <Settings className="w-4 h-4 text-primary" />
+                         </div>
+                         <div>
+                             <p className="text-sm font-bold">Auto-generate Configuration</p>
+                             <p className="text-[10px] text-muted-foreground">Automatically create Dockerfile and Nginx configs if missing.</p>
+                         </div>
+                     </div>
+                     <button
+                         type="button"
+                         onClick={() => setFormData(prev => ({ ...prev, autoGenerateConfig: !prev.autoGenerateConfig }))}
+                         className={`w-12 h-6 rounded-full transition-colors relative ${formData.autoGenerateConfig ? 'bg-primary' : 'bg-white/10'}`}
+                     >
+                         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${formData.autoGenerateConfig ? 'left-7' : 'left-1'}`}></div>
+                     </button>
+                 </div>
+             </div>
             </div>
 
           </form>

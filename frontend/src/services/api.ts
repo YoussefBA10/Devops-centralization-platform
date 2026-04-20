@@ -54,6 +54,8 @@ export const restartApplication = (appId: number) => api.post(`/applications/${a
 export const getApplicationLogs = (appId: number) => api.get(`/applications/${appId}/logs`);
 export const getApplicationStatus = (appId: number) => api.get(`/applications/${appId}/status`);
 export const deleteApplicationRecord = (appId: number) => api.delete(`/applications/${appId}`);
+export const promoteApplication = (envId: number, appId: number) => 
+  api.post(`/applications/${appId}/promote`, null, { params: { environmentId: envId } });
 
 export const updateEnvironment = (id: number, data: any) => api.put(`/environments/${id}`, data);
 export const deleteEnvironment = (id: number) => api.delete(`/environments/${id}`);

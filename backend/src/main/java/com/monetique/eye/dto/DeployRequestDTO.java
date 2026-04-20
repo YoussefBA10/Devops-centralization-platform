@@ -17,6 +17,7 @@ public class DeployRequestDTO {
     private Map<String, String> envVars;
     private String srcPath;
     private Integer containerPort;
+    private Boolean canary;
     private Boolean autoGenerateConfig;
 
 }

@@ -23,6 +23,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 public class DeploymentService {
@@ -33,6 +36,7 @@ public class DeploymentService {
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
     private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
+    private final ObjectMapper objectMapper;
 
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
@@ -40,11 +44,13 @@ public class DeploymentService {
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
             EnvironmentRepository environmentRepository,
             ApplicationRepository applicationRepository,
-            com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository) {
+            com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository,
+            ObjectMapper objectMapper) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.managedNodeRepository = managedNodeRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Async
@@ -443,6 +449,11 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/deploy-app.yml";
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
+            // Task 2: Rename & Canary Detection
+            String oldAppName = app.getName().equals(request.getName()) ? "" : app.getName();
+            boolean isCanary = request.getCanary() != null && request.getCanary();
+            int deploymentPort = isCanary ? request.getPort() + 1000 : request.getPort();
+
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
                     : "node-" + request.getTargetNode().replace(".", "-");
 
@@ -474,8 +485,11 @@ public class DeploymentService {
                     "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
                     "-e", "nodename=" + nodeName,
                     "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
+                    "-e", "oldAppName=" + oldAppName,
+                    "-e", "isCanary=" + (isCanary ? "true" : "false"),
+                    "-e", "envVarsJson='" + (request.getEnvVars() != null ? objectMapper.writeValueAsString(request.getEnvVars()) : "{}") + "'",
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
-                            : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
+                            : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : deploymentPort))));
 
             // Conditionally add Ansible coordinates
             if (sshUser != null && !sshUser.isEmpty()) {
@@ -493,15 +507,10 @@ public class DeploymentService {
 
             deploymentLog.setStatus("SUCCESS");
 
-            // Update application status
+            // Task 2: Update application status and canary tracking
             app.setStatus("RUNNING");
-            app.setLastDeployedAt(java.time.LocalDateTime.now());
-            applicationRepository.save(app);
-
-            deploymentLog.setStatus("SUCCESS");
-
-            // Update application status
-            app.setStatus("RUNNING");
+            app.setIsCanary(isCanary);
+            app.setCanaryPort(isCanary ? deploymentPort : null);
             app.setLastDeployedAt(java.time.LocalDateTime.now());
             applicationRepository.save(app);
 
@@ -869,5 +878,31 @@ public class DeploymentService {
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
         }
+    }
+
+    @Async
+    @Transactional
+    public void promoteApplication(Long environmentId, Long applicationId) {
+        Application app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RuntimeException("Application not found: " + applicationId));
+
+        // Create a fake DeployRequestDTO from existing app data
+        com.monetique.eye.dto.DeployRequestDTO request = new com.monetique.eye.dto.DeployRequestDTO();
+        request.setName(app.getName());
+        request.setType(app.getType());
+        request.setAppLanguage(app.getAppLanguage());
+        request.setRepoUrl(app.getRepoUrl());
+        request.setBranch(app.getBranch());
+        request.setTargetNode(app.getTargetNode());
+        request.setPort(app.getPort());
+        request.setSrcPath(app.getSrcPath());
+        request.setContainerPort(app.getContainerPort());
+        request.setCanary(false); // Promotion!
+        request.setAutoGenerateConfig(true);
+
+        // Map env vars if possible (currently not persistent in DB, but we could add them if needed)
+        // For now, we assume promotion uses the last configuration.
+
+        deployApplicationFull(environmentId, request, applicationId);
     }
 }

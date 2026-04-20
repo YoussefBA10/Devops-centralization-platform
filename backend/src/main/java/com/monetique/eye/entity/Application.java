@@ -51,6 +51,9 @@ public class Application {
     private String srcPath;
     private Integer containerPort;
 
+    private Boolean isCanary;
+    private Integer canaryPort;
+
     private java.time.LocalDateTime createdAt;
 
     @PrePersist

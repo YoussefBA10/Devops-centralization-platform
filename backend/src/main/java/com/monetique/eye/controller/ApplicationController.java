@@ -45,6 +45,8 @@ public class ApplicationController {
                 .environmentId(app.getEnvironment().getId())
                 .srcPath(app.getSrcPath())
                 .containerPort(app.getContainerPort())
+                .isCanary(app.getIsCanary())
+                .canaryPort(app.getCanaryPort())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -180,5 +182,11 @@ public class ApplicationController {
         deploymentService.undeployApplicationFull(id);
 
         return ResponseEntity.ok(Map.of("message", "Undeployment started. Application will be removed shortly."));
+    }
+    /** Transitions a Canary deployment to Stable. */
+    @PostMapping("/{applicationId}/promote")
+    public ResponseEntity<?> promote(@PathVariable Long applicationId, @RequestParam Long environmentId) {
+        deploymentService.promoteApplication(environmentId, applicationId);
+        return ResponseEntity.ok(Map.of("message", "Application promotion triggered."));
     }
 }

@@ -211,6 +211,14 @@ public class EnvironmentController {
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
 
+        // Task 1: Check if node already exists
+        if (managedNodeRepository.findByEnvironmentAndIp(env, targetIp).isPresent()) {
+            return ResponseEntity.status(400).body(Map.of(
+                "message", "Node with IP " + targetIp + " is already registered in environment '" + env.getName() + "'.",
+                "status", "ERROR"
+            ));
+        }
+
         CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser,
                 sshPassword);
 
