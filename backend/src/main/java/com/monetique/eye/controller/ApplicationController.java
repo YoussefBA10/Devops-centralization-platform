@@ -57,13 +57,16 @@ public class ApplicationController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         Application app;
+        String previousName = "";
         if (request.getId() != null) {
             // Update existing app
             app = applicationRepository.findById(request.getId())
                 .orElseThrow(() -> new RuntimeException("Application with ID " + request.getId() + " not found"));
             
+            previousName = app.getName();
+            
             // Check if name is being changed and if new name conflicts
-            if (!app.getName().equalsIgnoreCase(request.getName())) {
+            if (!previousName.equalsIgnoreCase(request.getName())) {
                 if (applicationRepository.findByNameIgnoreCaseAndEnvironmentId(request.getName(), request.getEnvironmentId()).isPresent()) {
                     return ResponseEntity.status(409).body(Map.of("message", "An application with name '" + request.getName() + "' already exists in this environment."));
                 }
@@ -80,7 +83,6 @@ public class ApplicationController {
                     .build();
         }
 
-        String previousName = app.getName();
         app.setName(request.getName()); // Just in case it was a rename
         app.setServiceNameKeyword(request.getName().toLowerCase());
 

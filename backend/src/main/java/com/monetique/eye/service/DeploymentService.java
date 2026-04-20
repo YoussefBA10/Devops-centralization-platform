@@ -450,7 +450,7 @@ public class DeploymentService {
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
             // Task 2: Rename & Canary Detection
-            String oldAppName = (previousName != null && !previousName.equals(request.getName())) ? previousName : "";
+            String oldAppName = (previousName != null && !previousName.isEmpty() && !previousName.equals(request.getName())) ? previousName : "";
             boolean isCanary = request.getCanary() != null && request.getCanary();
             int deploymentPort = isCanary ? request.getPort() + 1000 : request.getPort();
 
