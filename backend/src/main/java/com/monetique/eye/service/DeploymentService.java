@@ -452,7 +452,10 @@ public class DeploymentService {
             // Task 2: Rename & Canary Detection
             String oldAppName = (previousName != null && !previousName.isEmpty() && !previousName.equals(request.getName())) ? previousName : "";
             boolean isCanary = request.getCanary() != null && request.getCanary();
-            int deploymentPort = isCanary ? request.getPort() + 1000 : request.getPort();
+            int hostPort = isCanary ? request.getPort() + 1000 : request.getPort();
+
+            log.info("Deployment Details - Name: {}, Previous: {}, oldAppName: '{}', isCanary: {}, hostPort: {}, targetNode: {}", 
+                    request.getName(), previousName, oldAppName, isCanary, hostPort, request.getTargetNode());
 
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
                     : "node-" + request.getTargetNode().replace(".", "-");
@@ -474,7 +477,7 @@ public class DeploymentService {
                     "-e", "target_host=" + request.getTargetNode(),
                     "-e", "repoUrl=" + request.getRepoUrl(),
                     "-e", "branch=" + request.getBranch(),
-                    "-e", "appPort=" + request.getPort(),
+                    "-e", "appPort=" + hostPort,
                     "-e", "appType=" + request.getType(),
                     "-e", "appLanguage=" + (request.getAppLanguage() != null ? request.getAppLanguage() : ""),
                     "-e",
@@ -489,7 +492,7 @@ public class DeploymentService {
                     "-e", "isCanary=" + (isCanary ? "true" : "false"),
                     "-e", "envVarsJson='" + (request.getEnvVars() != null ? objectMapper.writeValueAsString(request.getEnvVars()) : "{}") + "'",
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
-                            : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : deploymentPort))));
+                            : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
 
             // Conditionally add Ansible coordinates
             if (sshUser != null && !sshUser.isEmpty()) {
