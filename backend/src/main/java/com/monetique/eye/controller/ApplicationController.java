@@ -47,6 +47,7 @@ public class ApplicationController {
                 .containerPort(app.getContainerPort())
                 .isCanary(app.getIsCanary())
                 .canaryPort(app.getCanaryPort())
+                .lastErrorMessage(app.getLastErrorMessage())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -147,6 +148,7 @@ public class ApplicationController {
                 .findTopByTargetIpAndActionAndAppNameOrderByExecutedAtDesc(app.getTargetNode(), "DEPLOY_APP_FULL", app.getName())
                 .map(log -> ResponseEntity.ok(Map.of(
                         "status", log.getStatus() != null ? log.getStatus() : "UNKNOWN",
+                        "shortError", log.getShortError() != null ? log.getShortError() : "",
                         "log", log.getLogOutput() != null ? log.getLogOutput() : "No output captured.",
                         "executedAt", log.getExecutedAt() != null ? log.getExecutedAt().toString() : ""
                 )))

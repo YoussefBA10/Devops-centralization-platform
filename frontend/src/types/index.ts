@@ -20,6 +20,20 @@ export interface Application {
   name: string;
   serviceNameKeyword: string;
   environmentId: number;
+  type: string;
+  appLanguage: string;
+  repoUrl: string;
+  targetNode: string;
+  branch: string;
+  port: number;
+  status: 'RUNNING' | 'DEPLOYING' | 'FAILED' | 'DELETING' | 'STOPPED';
+  lastDeployedAt?: string;
+  createdAt: string;
+  srcPath?: string;
+  containerPort?: number;
+  isCanary?: boolean;
+  canaryPort?: number;
+  lastErrorMessage?: string;
 }
 
 export interface Ticket {

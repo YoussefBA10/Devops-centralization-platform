@@ -54,6 +54,8 @@ public class Application {
     private Boolean isCanary;
     private Integer canaryPort;
 
+    private String lastErrorMessage;
+
     private java.time.LocalDateTime createdAt;
 
     @PrePersist

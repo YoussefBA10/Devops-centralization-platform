@@ -27,4 +27,5 @@ public class ApplicationDTO {
     private Integer containerPort;
     private Boolean isCanary;
     private Integer canaryPort;
+    private String lastErrorMessage;
 }

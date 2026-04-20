@@ -526,11 +526,17 @@ public class DeploymentService {
         } catch (Exception e) {
             log.error("Application full deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
-            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
-                    + "\nERROR: " + e.getMessage());
+            String fullLog = (deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage();
+            deploymentLog.setLogOutput(fullLog);
 
-            // Update application status
+            // Extract concise error for the user
+            String simpleError = extractSimpleErrorMessage(fullLog);
+            deploymentLog.setShortError(simpleError);
+
+            // Update application status and store the error summary
             app.setStatus("FAILED");
+            app.setLastErrorMessage(simpleError);
             applicationRepository.save(app);
         } finally {
             deploymentLogRepository.save(deploymentLog);
@@ -914,5 +920,49 @@ public class DeploymentService {
         // For now, we assume promotion uses the last configuration.
 
         deployApplicationFull(environmentId, request, applicationId, app.getName());
+    }
+
+    /**
+     * Parses the technical Ansible log to extract a concise, user-friendly error message.
+     */
+    private String extractSimpleErrorMessage(String fullLog) {
+        if (fullLog == null || fullLog.isEmpty()) return "Unknown deployment error";
+
+        // 1. Check for unreachable host
+        if (fullLog.contains("UNREACHABLE!")) {
+            return "Host Unreachable: Could not connect to the target node via SSH.";
+        }
+
+        // 2. Check for port allocation conflicts
+        if (fullLog.contains("port is already allocated")) {
+            return "Port Conflict: The requested port is already in use by another service on this node.";
+        }
+
+        // 3. Check for specific Ansible FAILED! messages
+        if (fullLog.contains("FAILED!")) {
+            // Try to find the "msg" field in the JSON output near the failure
+            int idx = fullLog.lastIndexOf("\"msg\": \"");
+            if (idx != -1) {
+                int start = idx + 8;
+                int end = fullLog.indexOf("\"", start);
+                if (end != -1) {
+                    return "Deployment Failed: " + fullLog.substring(start, end);
+                }
+            }
+            return "Deployment Failed: A task in the playbook failed. Check logs for details.";
+        }
+        
+        // 4. Check for Permission denied
+        if (fullLog.contains("Permission denied")) {
+            return "Access Denied: Invalid SSH credentials or insufficient permissions on the node.";
+        }
+
+        // 5. Generic Exception message
+        if (fullLog.contains("ERROR: ")) {
+            int idx = fullLog.lastIndexOf("ERROR: ");
+            return "Internal Error: " + fullLog.substring(idx + 7).split("\n")[0];
+        }
+
+        return "Deployment failed during the execution phase. Surface technical logs for more info.";
     }
 }

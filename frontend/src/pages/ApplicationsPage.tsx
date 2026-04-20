@@ -36,8 +36,9 @@ const ApplicationsPage: React.FC = () => {
 
   // Log viewer state
   const [logModal, setLogModal] = useState<{ appId: number; appName: string } | null>(null);
-  const [logData, setLogData] = useState<{ log: string; status: string; executedAt: string } | null>(null);
+  const [logData, setLogData] = useState<{ log: string; status: string; executedAt: string; shortError?: string } | null>(null);
   const [logLoading, setLogLoading] = useState(false);
+  const [showTechnicalLogs, setShowTechnicalLogs] = useState(false);
 
   // Polling refs for DEPLOYING apps
   const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
@@ -167,6 +168,7 @@ const ApplicationsPage: React.FC = () => {
     setLogModal({ appId: app.id, appName: app.name });
     setLogData(null);
     setLogLoading(true);
+    setShowTechnicalLogs(false);
     try {
       const res = await getApplicationLogs(app.id);
       setLogData(res.data);
@@ -370,18 +372,25 @@ const ApplicationsPage: React.FC = () => {
                   </div>
 
                   <div className="mt-auto border-t border-white/5 pt-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full bg-${statusColor}-500 ${app.status === 'DEPLOYING' ? 'animate-ping' : ''}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-widest text-${statusColor}-500`}>
-                          {app.status}
-                        </span>
-
+                    <div className="flex flex-col gap-2 mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full bg-${statusColor}-500 ${app.status === 'DEPLOYING' ? 'animate-ping' : ''}`} />
+                          <span className={`text-[10px] font-bold uppercase tracking-widest text-${statusColor}-500`}>
+                            {app.status}
+                          </span>
+                        </div>
+                        {app.lastDeployedAt && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(app.lastDeployedAt).toLocaleString()}
+                          </span>
+                        )}
                       </div>
-                      {app.lastDeployedAt && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(app.lastDeployedAt).toLocaleString()}
-                        </span>
+                      {app.status === 'FAILED' && app.lastErrorMessage && (
+                        <div className="flex items-center gap-1.5 text-red-400 font-medium text-[10px] bg-red-500/5 px-2 py-1 rounded border border-red-500/10">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{app.lastErrorMessage}</span>
+                        </div>
                       )}
                     </div>
 
@@ -496,9 +505,53 @@ const ApplicationsPage: React.FC = () => {
                   <span className="text-sm">Fetching deployment log...</span>
                 </div>
               ) : (
-                <pre className="p-5 text-[11px] font-mono text-green-300/80 leading-relaxed overflow-auto max-h-[60vh] bg-black/60 whitespace-pre-wrap break-words">
-                  {logData?.log || 'No output captured.'}
-                </pre>
+                <div className="flex flex-col">
+                  {/* Summary Section for FAILED logs */}
+                  {logData?.status === 'FAILED' && (
+                    <div className="p-5 bg-red-500/5 border-b border-white/5">
+                      <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Failure Summary
+                      </h4>
+                      <p className="text-sm text-red-200/90 font-medium leading-relaxed">
+                        {logData.shortError || 'Deployment failed during execution. See technical logs below for more context.'}
+                      </p>
+                      
+                      <div className="mt-4 flex items-center justify-between">
+                        <p className="text-[10px] text-red-400/60 italic italic font-mono max-w-[70%]">
+                          The system has analyzed the logs and extracted the most likely root cause.
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setShowTechnicalLogs(!showTechnicalLogs)}
+                          className="h-7 text-[10px] bg-red-500/10 border-red-500/20 hover:bg-red-500/20 text-red-400"
+                        >
+                          {showTechnicalLogs ? 'Hide Technical Logs' : 'View Technical Logs'}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(logData?.status !== 'FAILED' || showTechnicalLogs) && (
+                    <pre className="p-5 text-[11px] font-mono text-green-300/80 leading-relaxed overflow-auto max-h-[60vh] bg-black/60 whitespace-pre-wrap break-words">
+                      {logData?.log || 'No output captured.'}
+                    </pre>
+                  )}
+                  
+                  {logData?.status === 'FAILED' && !showTechnicalLogs && (
+                    <div className="py-12 flex flex-col items-center justify-center text-muted-foreground/40 italic">
+                      <Terminal className="w-8 h-8 mb-2 opacity-20" />
+                      <p className="text-xs">Technical logs are hidden by default to prioritize clarity.</p>
+                      <button 
+                        onClick={() => setShowTechnicalLogs(true)}
+                        className="text-[10px] mt-2 underline hover:text-muted-foreground/60"
+                      >
+                        Click here to see all playbook output
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

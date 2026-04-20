@@ -27,6 +27,8 @@ public class DeploymentLog {
     private String appName;
     private String status;
     
+    private String shortError;
+    
     @Column(columnDefinition = "TEXT")
     private String logOutput;
 
