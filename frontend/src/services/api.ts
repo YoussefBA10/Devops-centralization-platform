@@ -57,6 +57,12 @@ export const deleteApplicationRecord = (appId: number) => api.delete(`/applicati
 export const promoteApplication = (envId: number, appId: number) => 
   api.post(`/applications/${appId}/promote`, null, { params: { environmentId: envId } });
 
+// Elasticsearch System Logs
+export const getSystemLogs = (appId: number, params: { q?: string, from?: string, to?: string, size?: number, page?: number }) => 
+  api.get(`/apps/${appId}/logs/search`, { params });
+export const clearSystemLogs = (appId: number) => 
+  api.post(`/apps/${appId}/logs/clear`);
+
 export const updateEnvironment = (id: number, data: any) => api.put(`/environments/${id}`, data);
 export const deleteEnvironment = (id: number) => api.delete(`/environments/${id}`);
 

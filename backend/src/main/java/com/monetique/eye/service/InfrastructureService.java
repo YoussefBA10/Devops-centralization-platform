@@ -115,8 +115,18 @@ public class InfrastructureService {
             if (data.getEdges() != null) allEdges.addAll(data.getEdges());
         }
 
+        // Deduplicate nodes globally, preferring properties from the 'vmpipe' environment
+        java.util.Map<String, TopologyData.TopologyNode> uniqueNodes = new java.util.HashMap<>();
+        for (TopologyData.TopologyNode node : allNodes) {
+            if (!uniqueNodes.containsKey(node.getId())) {
+                uniqueNodes.put(node.getId(), node);
+            } else if ("vmpipe".equalsIgnoreCase(node.getEnvironmentName())) {
+                uniqueNodes.put(node.getId(), node); // Override to retain the vmpipe badge/properties
+            }
+        }
+
         return TopologyData.builder()
-                .nodes(allNodes)
+                .nodes(new ArrayList<>(uniqueNodes.values()))
                 .edges(allEdges)
                 .build();
     }
@@ -128,8 +138,8 @@ public class InfrastructureService {
         List<TopologyData.TopologyNode> nodes = new ArrayList<>();
         List<TopologyData.TopologyEdge> edges = new ArrayList<>();
 
-        // 1. Query only host-level instances (node-exporter) for this environment
-        List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=\"%s\", job=\"node-exporter\"}", label));
+        // 1. Query only host-level instances (node-exporter) for this environment and the central node
+        List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=~\"%s|vmpipe\", job=\"node-exporter\"}", label));
         
         // Group by IP to avoid duplicates (services like cadvisor, node-exporter on same host)
         java.util.Set<String> processedIps = new java.util.HashSet<>();
@@ -175,10 +185,10 @@ public class InfrastructureService {
             }
 
             // If it's a known central node but the IP extracted was a service name, use the real IP
-            String displayIp = isCentralNode ? env.getCentralNodeIp() : ip;
+            String displayIp = isCentralNode && env.getCentralNodeIp() != null ? env.getCentralNodeIp() : ip;
 
             nodes.add(TopologyData.TopologyNode.builder()
-                    .id("node-" + env.getId() + "-" + (isCentralNode ? "central" : ip.replace(".", "-")))
+                    .id(isCentralNode ? "node-global-central" : "node-" + env.getId() + "-" + ip.replace(".", "-"))
                     .label(nodeLabel)
                     .ip(displayIp)
                     .type(isCentralNode ? "db-server" : "server")
@@ -193,7 +203,11 @@ public class InfrastructureService {
         // 4. Generate edges (connect agents to central node)
         String centralId = null;
         for (TopologyData.TopologyNode node : nodes) {
-            if (node.getIp().equals(env.getCentralNodeIp())) {
+            if (env.getCentralNodeIp() != null && env.getCentralNodeIp().equals(node.getIp())) {
+                centralId = node.getId();
+                break;
+            } else if (env.getCentralNodeIp() == null && (node.getIp().equalsIgnoreCase("node-exporter") || node.getIp().equalsIgnoreCase("vmpipe"))) {
+                // heuristic fallback if central node ip is missing
                 centralId = node.getId();
                 break;
             }

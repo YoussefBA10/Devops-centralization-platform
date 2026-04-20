@@ -15,6 +15,7 @@ import api from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
+import { getApplications, getSystemLogs, clearSystemLogs } from '../services/api';
 
 const LogsPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
@@ -23,24 +24,64 @@ const LogsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(50);
 
-  const fetchLogs = async () => {
+  const [applications, setApplications] = useState<any[]>([]);
+  const [selectedApp, setSelectedApp] = useState<any | null>(null);
+  const [isLive, setIsLive] = useState(true);
+  const [metadata, setMetadata] = useState({ total: 0, ingestRate: '0 EPS', retentionDays: 30 });
+
+  useEffect(() => {
     if (!selectedEnvironment) return;
-    setLoading(true);
+    getApplications(selectedEnvironment.id).then(res => {
+      const apps = res.data;
+      setApplications(apps);
+      if (apps.length > 0) setSelectedApp(apps[0]);
+      else {
+        setSelectedApp(null);
+        setLogs([]);
+      }
+    });
+  }, [selectedEnvironment]);
+
+  const fetchLogs = async (silent = false) => {
+    if (!selectedApp) return;
+    if (!silent) setLoading(true);
     try {
-      const response = await api.get('/logs/search', {
-        params: { environmentId: selectedEnvironment.id, query, limit }
+      const response = await getSystemLogs(selectedApp.id, { q: query, size: limit });
+      setLogs(response.data.logs || []);
+      setMetadata({
+        total: response.data.total || 0,
+        ingestRate: response.data.ingestRate || '0 EPS',
+        retentionDays: response.data.retentionDays || 30
       });
-      setLogs(response.data);
     } catch (error) {
       console.error('Failed to fetch logs', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+    }
+  };
+
+  const handleClearBuffer = async () => {
+    if (!selectedApp) return;
+    try {
+      if (!confirm(`Are you sure you want to clear the Logstash buffer for ${selectedApp.name}?`)) return;
+      await clearSystemLogs(selectedApp.id);
+      fetchLogs();
+    } catch (err: any) {
+      alert(`Failed to clear: ${err.response?.data || err.message}`);
     }
   };
 
   useEffect(() => {
     fetchLogs();
-  }, [selectedEnvironment]);
+  }, [selectedApp, limit]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isLive) {
+      interval = setInterval(() => fetchLogs(true), 5000);
+    }
+    return () => clearInterval(interval);
+  }, [selectedApp, query, limit, isLive]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +109,7 @@ const LogsPage: React.FC = () => {
             <Download className="w-4 h-4 mr-2" />
             Export CSV
           </Button>
-          <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10">
+          <Button variant="outline" size="sm" className="text-destructive hover:bg-destructive/10" onClick={handleClearBuffer}>
             <Trash2 className="w-4 h-4 mr-2" />
             Clear Buffer
           </Button>
@@ -87,6 +128,18 @@ const LogsPage: React.FC = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
+            </div>
+            <div className="w-48">
+              <select 
+                className="w-full h-11 px-3 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                value={selectedApp?.id || ''}
+                onChange={(e) => setSelectedApp(applications.find(a => a.id === Number(e.target.value)))}
+              >
+                {applications.length === 0 ? <option value="">No Applications Found</option> : null}
+                {applications.map(app => (
+                  <option key={app.id} value={app.id}>{app.name}</option>
+                ))}
+              </select>
             </div>
             <div className="w-32">
               <select 
@@ -117,10 +170,16 @@ const LogsPage: React.FC = () => {
             </div>
             <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
               <Terminal className="w-3.5 h-3.5" />
-              telemetry_stream.v1
+              {selectedApp ? `app-logs-${selectedApp.id}.v1` : 'telemetry_stream'}
             </span>
             <div className="h-4 w-px bg-border"></div>
-            <span className="text-[10px] font-mono text-primary animate-pulse">LIVE</span>
+            <button 
+              type="button"
+              onClick={() => setIsLive(!isLive)}
+              className={`text-[10px] font-mono transition-colors border px-2 py-0.5 rounded cursor-pointer ${isLive ? 'text-primary border-primary/50 bg-primary/10 animate-pulse' : 'text-muted-foreground border-border hover:bg-white/5'}`}
+            >
+              LIVE
+            </button>
           </div>
           <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
              <div className="flex items-center gap-1.5">
@@ -150,16 +209,17 @@ const LogsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-3 align-top whitespace-nowrap">
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-secondary/50 text-muted-foreground group-hover:text-foreground transition-colors">
-                        {log.app || 'system'}
+                        {log.node || 'system'}
                       </span>
                     </td>
                     <td className="px-6 py-3 align-top">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getSeverityColor(log.message)}`}>
-                        {log.message.split(' ')[0].replace(':', '')}
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getSeverityColor(log.severity || 'INFO')}`}>
+                        {log.severity || 'INFO'}
                       </span>
                     </td>
                     <td className="px-6 py-3 text-foreground/80 break-all pr-12">
-                      {log.message}
+                      <div className="font-semibold text-xs mb-1">{log.errorType || log.category}</div>
+                      {log.normalizedSummary || log.rawMessage}
                     </td>
                   </tr>
                 ))}
@@ -178,11 +238,14 @@ const LogsPage: React.FC = () => {
            <div className="flex items-center gap-6 text-[10px] uppercase font-bold tracking-widest text-muted-foreground">
              <span className="flex items-center gap-1.5">
                <Info className="w-3 h-3 text-primary" />
-               Retention: 30 Days
+               Retention: {metadata.retentionDays} Days
              </span>
              <span className="flex items-center gap-1.5">
                <Activity className="w-3 h-3 text-emerald-500" />
-               Ingest: 14.2k eps
+               Ingest: {metadata.ingestRate}
+             </span>
+             <span className="flex items-center gap-1.5">
+               Total: {metadata.total}
              </span>
            </div>
            <div className="flex items-center gap-2">

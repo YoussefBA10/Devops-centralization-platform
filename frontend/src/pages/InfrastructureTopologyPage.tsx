@@ -153,10 +153,30 @@ const InfrastructureTopologyPage: React.FC = () => {
         const nodesInEnv = data.nodes.filter((n: any) => n.environmentId?.toString() === envIdStr);
         const nodeIndex = nodesInEnv.indexOf(node);
 
-        // Calculate position: Tighter spacing for better visual grouping
-        const offsetX = (envIndex >= 0 ? envIndex : 0) * 550;
-        const posX = offsetX + (nodeIndex % 2) * 350;
-        const posY = Math.floor(nodeIndex / 2) * 220;
+        // Separate central from agents to make a tree layout
+        const centralNode = nodesInEnv.find((n: any) => n.id.includes('central'));
+        const agents = nodesInEnv.filter((n: any) => !n.id.includes('central'));
+        const isCentral = node.id.includes('central');
+        
+        let localIndex = agents.indexOf(node);
+        if (isCentral) localIndex = -1; // Central node gets special treatment
+
+        // Wider spacing per environment (e.g. 700px gap) to prevent bleeding
+        const offsetX = (envIndex >= 0 ? envIndex : 0) * 800;
+        
+        let posX, posY;
+        if (isCentral) {
+           // Place central node bottom center
+           let numAgents = Math.max(1, agents.length);
+           // Calculate width of the agent row to center this node
+           let totalRowWidth = (Math.min(numAgents, 3) - 1) * 350;
+           posX = offsetX + totalRowWidth / 2; 
+           posY = 240 + Math.floor(Math.max(0, agents.length - 1) / 3) * 220; // Ensure it sits below all rows of agents
+        } else {
+           // Place agents in rows above the central node
+           posX = offsetX + (localIndex % 3) * 350; 
+           posY = Math.floor(localIndex / 3) * 220;
+        }
 
         return {
           id: node.id,
@@ -166,6 +186,7 @@ const InfrastructureTopologyPage: React.FC = () => {
             environmentName: node.environmentName || selectedEnvironment?.name
           },
           position: { x: posX, y: posY },
+
         };
       });
 

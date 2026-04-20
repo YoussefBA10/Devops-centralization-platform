@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, getGitHubInstallUrl, disconnectGitHub } from '../services/api';
+import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord /*, getGitHubInstallUrl, disconnectGitHub */ } from '../services/api';
 import { Search, Plus, GitBranch, RefreshCw, Terminal, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -73,7 +73,6 @@ const ApplicationsPage: React.FC = () => {
             if (newStatus !== 'DEPLOYING') {
               clearInterval(pollingRefs.current[app.id]);
               delete pollingRefs.current[app.id];
-              // Refresh the full list to get the updated state
               fetchApps();
             }
           } catch (e) {
@@ -92,7 +91,6 @@ const ApplicationsPage: React.FC = () => {
     };
   }, [applications, fetchApps]);
 
-
   const handleDeploy = async (payload: any) => {
     try {
       await deployApplication(payload);
@@ -104,6 +102,7 @@ const ApplicationsPage: React.FC = () => {
     }
   };
 
+  /*
   const handleGithubConnect = async (appId: number) => {
     try {
       const res = await getGitHubInstallUrl(appId);
@@ -116,24 +115,16 @@ const ApplicationsPage: React.FC = () => {
   };
 
   const handleGithubDisconnect = async (appId: number) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Disconnect GitHub',
-      message: 'Are you sure you want to disconnect this repository? This will remove private repo access for this application.',
-      type: 'danger',
-      onConfirm: async () => {
-        try {
-          setConfirmModal(prev => ({ ...prev, loading: true }));
-          await disconnectGitHub(appId);
-          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          fetchApps();
-        } catch (e) {
-          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          console.error('Failed to disconnect GitHub', e);
-        }
+    try {
+      if (confirm('Are you sure you want to disconnect this repository?')) {
+        await disconnectGitHub(appId);
+        fetchApps();
       }
-    });
+    } catch (e) {
+      console.error('Failed to disconnect GitHub', e);
+    }
   };
+  */
 
   const handleRestart = async (appId: number) => {
     setConfirmModal({
@@ -146,7 +137,6 @@ const ApplicationsPage: React.FC = () => {
           setConfirmModal(prev => ({ ...prev, loading: true }));
           await restartApplication(appId);
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          // Status will transition via polling
           fetchApps();
         } catch (e: any) {
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
@@ -155,7 +145,6 @@ const ApplicationsPage: React.FC = () => {
       }
     });
   };
-
 
   const handleEditApp = (app: any) => {
     setEditingApp(app);
@@ -188,11 +177,7 @@ const ApplicationsPage: React.FC = () => {
           setConfirmModal(prev => ({ ...prev, loading: true }));
           await deleteApplicationRecord(appId);
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          
-          // Set locally as DELETING to show immediate feedback
           setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'DELETING' } : a));
-          
-          // fetchApps() will catch the actual deletion or DELETING state
           fetchApps();
         } catch (e) {
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
@@ -227,8 +212,6 @@ const ApplicationsPage: React.FC = () => {
   return (
     <div className="flex-1 p-8 overflow-y-auto animate-in fade-in duration-500">
       <div className="max-w-7xl mx-auto space-y-8">
-
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Applications</h1>
@@ -247,7 +230,6 @@ const ApplicationsPage: React.FC = () => {
           )}
         </div>
 
-        {/* Filters */}
         <div className="flex items-center justify-between gap-4 p-4 bg-card border border-border shadow-md rounded-xl">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative max-w-sm flex-1">
@@ -278,86 +260,46 @@ const ApplicationsPage: React.FC = () => {
           </Button>
         </div>
 
-        {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredApps.map((app) => {
             const statusColor = getStatusColor(app.status);
-
             return (
               <div key={app.id} className="group relative pt-6">
-                {/* Target Node Badge */}
                 <div className="absolute top-2 right-4 px-3 py-1 bg-primary border border-primary/50 shadow-[0_0_15px_rgba(59,130,246,0.4)] rounded-full z-10 flex items-center gap-1.5">
                   <Server className="w-3 h-3 text-white" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">
-                    {app.targetNode || 'Auto'}
-                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">{app.targetNode || 'Auto'}</span>
                 </div>
 
                 <div className={`p-5 rounded-xl border flex flex-col bg-[#0c0c0e]/80 backdrop-blur-md shadow-2xl transition-all duration-300 hover:-translate-y-1 ${
-                  app.status === 'RUNNING'
-                    ? 'border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]'
-                    : app.status === 'DEPLOYING'
-                    ? 'border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
-                    : 'border-red-500/40 hover:border-red-500/70'
-                  }`}
-                >
+                  app.status === 'RUNNING' ? 'border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]'
+                  : app.status === 'DEPLOYING' ? 'border-amber-500/30 hover:border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+                  : 'border-red-500/40 hover:border-red-500/70'
+                }`}>
                   <div className="flex justify-between items-start mb-4 mt-2">
                     <div className="min-w-0 pr-4">
                       <h3 className="text-lg font-bold text-white truncate">{app.name}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 font-bold uppercase tracking-widest text-muted-foreground">
-                          {app.type}
-                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 font-bold uppercase tracking-widest text-muted-foreground">{app.type}</span>
                         <span className="text-[10px] text-muted-foreground">{app.appLanguage}</span>
                       </div>
                     </div>
-                    {/* Delete button */}
-                    <button
-                      onClick={() => handleDelete(app.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all"
-                      title="Remove record"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <button onClick={() => handleDelete(app.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
 
-                  <a
-                    href={app.repoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-primary transition-colors mb-4 truncate group/repo"
-                  >
+                  <a href={app.repoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-primary transition-colors mb-4 truncate group/repo">
                     <GitBranch className="w-3.5 h-3.5 group-hover/repo:scale-110 transition-transform" />
                     {app.repoUrl?.replace('https://github.com/', '') || 'No Repository'}
                   </a>
 
                   <div className="space-y-4 mb-5">
-                    {/* App URL and Info */}
                     <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
-                        <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
-                          <span>Endpoint</span>
-                          <Globe className="w-3 h-3" />
-                        </div>
-                        <div className="flex items-center justify-between">
-                           <a 
-                             href={`http://${app.targetNode}:${app.port}`} 
-                             target="_blank" 
-                             rel="noreferrer"
-                             className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}
-                           >
-                             http://{app.targetNode}:{app.port}
-                           </a>
-                           {app.status === 'RUNNING' && (
-                             <ExternalLink className="w-3 h-3 text-primary/50" />
-                           )}
-                        </div>
-                    </div>
-                    {app.isCanary && (
-                      <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
-                         <Zap className="w-3 h-3 text-amber-500 animate-pulse" />
-                         <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Canary active on port {app.canaryPort}</span>
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground"><span>Endpoint</span><Globe className="w-3 h-3" /></div>
+                      <div className="flex items-center justify-between">
+                        <a href={`http://${app.targetNode}:${app.port}`} target="_blank" rel="noreferrer" className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}>http://{app.targetNode}:{app.port}</a>
+                        {app.status === 'RUNNING' && <ExternalLink className="w-3 h-3 text-primary/50" />}
                       </div>
-                    )}
+                    </div>
+                    {app.isCanary && <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20"><Zap className="w-3 h-3 text-amber-500 animate-pulse" /><span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Canary active on port {app.canaryPort}</span></div>}
                   </div>
 
                   <div className="mt-auto border-t border-white/5 pt-4">
@@ -365,96 +307,18 @@ const ApplicationsPage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full bg-${statusColor}-500 ${app.status === 'DEPLOYING' ? 'animate-ping' : ''}`} />
-                          <span className={`text-[10px] font-bold uppercase tracking-widest text-${statusColor}-500`}>
-                            {app.status}
-                          </span>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest text-${statusColor}-500`}>{app.status}</span>
                         </div>
-                        {app.lastDeployedAt && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {new Date(app.lastDeployedAt).toLocaleString()}
-                          </span>
-                        )}
+                        {app.lastDeployedAt && <span className="text-[10px] text-muted-foreground">{new Date(app.lastDeployedAt).toLocaleString()}</span>}
                       </div>
-                      {app.status === 'FAILED' && app.lastErrorMessage && (
-                        <div className="flex items-center gap-1.5 text-red-400 font-medium text-[10px] bg-red-500/5 px-2 py-1 rounded border border-red-500/10">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{app.lastErrorMessage}</span>
-                        </div>
-                      )}
+                      {app.status === 'FAILED' && app.lastErrorMessage && <div className="flex items-center gap-1.5 text-red-400 font-medium text-[10px] bg-red-500/5 px-2 py-1 rounded border border-red-500/10"><AlertTriangle className="w-3 h-3 shrink-0" /><span className="truncate">{app.lastErrorMessage}</span></div>}
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={`flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20 ${
-                          app.status === 'FAILED' ? 'border-red-500/30 hover:border-red-500/60 text-red-400' : ''
-                        }`}
-                        onClick={() => handleViewLogs(app)}
-                      >
-                        {app.status === 'FAILED'
-                          ? <><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> View Error</>
-                          : <><Terminal className="w-3.5 h-3.5 mr-1.5" /> Logs</>
-                        }
-                      </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20"
-                          onClick={() => handleEditApp(app)}
-                        >
-                          <Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit
-                        </Button>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20"
-                          disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'}
-                          onClick={() => handleRestart(app.id)}
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} />
-                          {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}
-                        </Button>
-                      </div>
-
-                      {/* GitHub Integration Section - Disabled for now
-                      {isAdmin && (
-                        <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                               <GitBranch className="w-3 h-3 text-white" />
-                               GitHub Integration
-                            </span>
-                            {app.githubInstallationId ? (
-                               <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">Linked</span>
-                            ) : (
-                               <span className="text-[10px] bg-white/5 text-muted-foreground px-2 py-0.5 rounded border border-white/10">Not Linked</span>
-                            )}
-                          </div>
-                          
-                          {app.githubInstallationId ? (
-                            <div className="p-2 rounded bg-black/40 border border-white/10 flex items-center justify-between">
-                              <span className="text-[10px] font-mono text-white truncate max-w-[120px]">{app.githubRepoFullName || 'Private Repo'}</span>
-                              <button 
-                                 onClick={() => handleGithubDisconnect(app.id)}
-                                 className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
-                              >
-                                 Disconnect
-                              </button>
-                            </div>
-                          ) : (
-                            <Button 
-                               onClick={() => handleGithubConnect(app.id)}
-                               size="sm"
-                               className="w-full h-7 text-[10px] bg-white/5 hover:bg-white/10 border-white/10 text-white"
-                            >
-                               <GitBranch className="w-3 h-3 mr-2" />
-                               Connect GitHub App
-                            </Button>
-                          )}
-                        </div>
-                      )} */}
+                      <Button variant="outline" size="sm" className={`flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20 ${app.status === 'FAILED' ? 'border-red-500/30 hover:border-red-500/60 text-red-400' : ''}`} onClick={() => handleViewLogs(app)}>{app.status === 'FAILED' ? <><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> View Error</> : <><Terminal className="w-3.5 h-3.5 mr-1.5" /> Logs</>}</Button>
+                      <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" onClick={() => handleEditApp(app)}><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit</Button>
+                      <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}</Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -466,11 +330,7 @@ const ApplicationsPage: React.FC = () => {
               <Box className="w-12 h-12 text-muted-foreground/30 mb-4" />
               <h3 className="text-lg font-bold text-muted-foreground">No Applications Found</h3>
               <p className="text-sm text-muted-foreground/70 mb-6">Deploy a new application to get started.</p>
-              {isAdmin && (
-                <Button onClick={() => setIsDeployModalOpen(true)}>
-                  <Plus className="w-4 h-4 mr-2" /> Deploy Application
-                </Button>
-              )}
+              {isAdmin && <Button onClick={() => setIsDeployModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Deploy Application</Button>}
             </div>
           )}
         </div>
@@ -486,97 +346,38 @@ const ApplicationsPage: React.FC = () => {
         onDeploy={handleDeploy}
       />
 
-      {/* Deployment Log Viewer Modal */}
       {logModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-3xl bg-[#080809] border-white/10 shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
-            {/* Top accent line */}
             <div className={`h-0.5 w-full ${logData?.status === 'FAILED' ? 'bg-gradient-to-r from-red-500 to-rose-500' : logData?.status === 'SUCCESS' ? 'bg-gradient-to-r from-emerald-500 to-green-400' : 'bg-gradient-to-r from-amber-500 to-yellow-400'}`} />
             <CardHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-5 pt-5">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${logData?.status === 'FAILED' ? 'bg-red-500/10' : 'bg-primary/10'}`}>
-                  <Terminal className={`w-5 h-5 ${logData?.status === 'FAILED' ? 'text-red-400' : 'text-primary'}`} />
-                </div>
+                <div className={`p-2 rounded-lg ${logData?.status === 'FAILED' ? 'bg-red-500/10' : 'bg-primary/10'}`}><Terminal className={`w-5 h-5 ${logData?.status === 'FAILED' ? 'text-red-400' : 'text-primary'}`} /></div>
                 <div>
                   <CardTitle className="text-lg">Deployment Log</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    <span className="font-bold text-white">{logModal.appName}</span>
-                    {logData?.executedAt && ` · ${new Date(logData.executedAt).toLocaleString()}`}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5"><span className="font-bold text-white">{logModal.appName}</span>{logData?.executedAt && ` · ${new Date(logData.executedAt).toLocaleString()}`}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {logData && (
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                    logData.status === 'FAILED' ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                    : logData.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                  }`}>
-                    {logData.status === 'FAILED'
-                      ? <AlertTriangle className="w-3 h-3" />
-                      : logData.status === 'SUCCESS'
-                      ? <CheckCircle2 className="w-3 h-3" />
-                      : <Loader2 className="w-3 h-3 animate-spin" />}
-                    {logData.status}
-                  </div>
-                )}
-                <button onClick={() => setLogModal(null)} className="p-1.5 hover:bg-white/5 rounded-lg text-muted-foreground hover:text-white transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+                {logData && <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${logData.status === 'FAILED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : logData.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>{logData.status === 'FAILED' ? <AlertTriangle className="w-3 h-3" /> : logData.status === 'SUCCESS' ? <CheckCircle2 className="w-3 h-3" /> : <Loader2 className="w-3 h-3 animate-spin" />}{logData.status}</div>}
+                <button onClick={() => setLogModal(null)} className="p-1.5 hover:bg-white/5 rounded-lg text-muted-foreground hover:text-white transition-colors"><X className="w-5 h-5" /></button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               {logLoading ? (
-                <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                  <span className="text-sm">Fetching deployment log...</span>
-                </div>
+                <div className="flex items-center justify-center gap-3 py-16 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin text-primary" /><span className="text-sm">Fetching deployment log...</span></div>
               ) : (
                 <div className="flex flex-col">
-                  {/* Summary Section for FAILED logs */}
                   {logData?.status === 'FAILED' && (
                     <div className="p-5 bg-red-500/5 border-b border-white/5">
-                      <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        Failure Summary
-                      </h4>
-                      <p className="text-sm text-red-200/90 font-medium leading-relaxed">
-                        {logData.shortError || 'Deployment failed during execution. See technical logs below for more context.'}
-                      </p>
-                      
-                      <div className="mt-4 flex items-center justify-between">
-                        <p className="text-[10px] text-red-400/60 italic italic font-mono max-w-[70%]">
-                          The system has analyzed the logs and extracted the most likely root cause.
-                        </p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => setShowTechnicalLogs(!showTechnicalLogs)}
-                          className="h-7 text-[10px] bg-red-500/10 border-red-500/20 hover:bg-red-500/20 text-red-400"
-                        >
-                          {showTechnicalLogs ? 'Hide Technical Logs' : 'View Technical Logs'}
-                        </Button>
-                      </div>
+                      <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-2 flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5" />Failure Summary</h4>
+                      <p className="text-sm text-red-200/90 font-medium leading-relaxed">{logData.shortError || 'Deployment failed. See technical logs below.'}</p>
+                      <div className="mt-4 flex items-center justify-between"><p className="text-[10px] text-red-400/60 italic font-mono max-w-[70%]">Technical logs analyzed for root cause.</p><Button variant="outline" size="sm" onClick={() => setShowTechnicalLogs(!showTechnicalLogs)} className="h-7 text-[10px] bg-red-500/10 border-red-500/20 hover:bg-red-500/20 text-red-400">{showTechnicalLogs ? 'Hide Technical Logs' : 'View Technical Logs'}</Button></div>
                     </div>
                   )}
-
-                  {(logData?.status !== 'FAILED' || showTechnicalLogs) && (
-                    <pre className="p-5 text-[11px] font-mono text-green-300/80 leading-relaxed overflow-auto max-h-[60vh] bg-black/60 whitespace-pre-wrap break-words">
-                      {logData?.log || 'No output captured.'}
-                    </pre>
-                  )}
-                  
+                  {(logData?.status !== 'FAILED' || showTechnicalLogs) && <pre className="p-5 text-[11px] font-mono text-green-300/80 leading-relaxed overflow-auto max-h-[60vh] bg-black/60 whitespace-pre-wrap break-words">{logData?.log || 'No output.'}</pre>}
                   {logData?.status === 'FAILED' && !showTechnicalLogs && (
-                    <div className="py-12 flex flex-col items-center justify-center text-muted-foreground/40 italic">
-                      <Terminal className="w-8 h-8 mb-2 opacity-20" />
-                      <p className="text-xs">Technical logs are hidden by default to prioritize clarity.</p>
-                      <button 
-                        onClick={() => setShowTechnicalLogs(true)}
-                        className="text-[10px] mt-2 underline hover:text-muted-foreground/60"
-                      >
-                        Click here to see all playbook output
-                      </button>
-                    </div>
+                    <div className="py-12 flex flex-col items-center justify-center text-muted-foreground/40 italic"><Terminal className="w-8 h-8 mb-2 opacity-20" /><p className="text-xs">Technical logs hidden.</p><button onClick={() => setShowTechnicalLogs(true)} className="text-[10px] mt-2 underline hover:text-muted-foreground/60">Show logs</button></div>
                   )}
                 </div>
               )}
@@ -584,6 +385,7 @@ const ApplicationsPage: React.FC = () => {
           </Card>
         </div>
       )}
+
       <ConfirmationModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
