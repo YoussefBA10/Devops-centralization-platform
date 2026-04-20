@@ -21,10 +21,11 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Map;
 import java.util.HashMap;
 
 @Service
@@ -973,6 +974,7 @@ public class DeploymentService {
             int idx = fullLog.lastIndexOf("\"msg\": \"");
             if (idx != -1) {
                 int start = idx + 8;
+                int end = fullLog.indexOf("\"", start);
                 if (end != -1) {
                     return "Deployment Failed: " + fullLog.substring(start, end);
                 }
