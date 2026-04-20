@@ -64,10 +64,18 @@ public class GitHubController {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 java.util.List<Map<String, Object>> repos = (java.util.List<Map<String, Object>>) response.getBody().get("repositories");
                 if (repos != null && !repos.isEmpty()) {
-                    // We take the first one for now, as we assume 1 repo per app
-                    Map<String, Object> repo = repos.get(0);
-                    app.setGithubRepoFullName((String) repo.get("full_name"));
-                    app.setGithubRepoUrl((String) repo.get("clone_url"));
+                    // Try to find the exact match for current app repo URL
+                    String targetRepoUrl = app.getRepoUrl().toLowerCase().replace(".git", "");
+                    Map<String, Object> matchingRepo = repos.stream()
+                        .filter(r -> {
+                            String cloneUrl = ((String) r.get("clone_url")).toLowerCase().replace(".git", "");
+                            return cloneUrl.equals(targetRepoUrl);
+                        })
+                        .findFirst()
+                        .orElse(repos.get(0)); // Fallback to first if no perfect match
+
+                    app.setGithubRepoFullName((String) matchingRepo.get("full_name"));
+                    app.setGithubRepoUrl((String) matchingRepo.get("clone_url"));
                     log.info("Linked repository: {}", app.getGithubRepoFullName());
                 }
             }

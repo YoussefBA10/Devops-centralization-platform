@@ -67,7 +67,7 @@ const Header: React.FC = () => {
         <div className="flex items-center gap-3 pl-2 group cursor-pointer relative">
           <div className="text-right">
             <p className="text-sm font-semibold">{user?.username}</p>
-            <p className="text-xs text-muted-foreground capitalize">{user?.role.toLowerCase()}</p>
+            <p className="text-xs text-muted-foreground capitalize">{user?.role?.toLowerCase() || 'User'}</p>
           </div>
           <div className="w-10 h-10 bg-secondary border border-border rounded-full flex items-center justify-center group-hover:border-primary/50 transition-all overflow-hidden">
             <UserIcon className="w-5 h-5 text-muted-foreground" />

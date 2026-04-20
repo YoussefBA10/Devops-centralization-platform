@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Server, Code, Box, GitBranch, Info, Settings2, Zap, Activity, Settings, AlertCircle } from 'lucide-react';
+import { X, Server, Code, Box, GitBranch, Info, Settings2, Settings, AlertCircle } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
-import { getEnvironmentNodes } from '../../services/api';
+import { getEnvironmentNodes, getGitHubInstallUrl } from '../../services/api';
 import { useEnvironment } from '../../context/EnvironmentContext';
 
 interface DeployApplicationModalProps {
@@ -47,6 +47,34 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     backendContainerPort: '8080',
     backendAppLanguage: 'Java Spring Boot'
   });
+
+  const [connectLoading, setConnectLoading] = useState(false);
+
+  const handleConnectGithub = async () => {
+    try {
+      setConnectLoading(true);
+      // We use the first app ID if editing, or a special link for new apps
+      // If new app, we don't have an ID yet, so we have to link on the dashboard later
+      const res = await getGitHubInstallUrl(initialData?.id || 0); 
+      if (res.data.url) {
+        window.open(res.data.url, '_blank', 'width=800,height=600');
+      }
+    } catch (e) {
+      console.error('Failed to initiate GitHub install', e);
+    } finally {
+      setConnectLoading(false);
+    }
+  };
+
+  const isPrivateRepoError = (msg: string) => {
+    const lower = msg.toLowerCase();
+    return lower.includes('authentication failed') || 
+           lower.includes('repository not found') || 
+           lower.includes('permission denied') ||
+           lower.includes('could not read username') ||
+           lower.includes('terminal prompts disabled') ||
+           lower.includes('could not read from remote repository');
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -225,6 +253,21 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-red-500 uppercase tracking-widest text-[10px]">Deployment Error</p>
                   <p className="text-sm text-red-200/80 leading-relaxed">{localError}</p>
+                  
+                  {isPrivateRepoError(localError) && (
+                    <div className="pt-2">
+                       <Button 
+                          onClick={handleConnectGithub}
+                          loading={connectLoading}
+                          variant="secondary"
+                          size="sm"
+                          className="h-8 text-[10px] bg-red-500/20 hover:bg-red-500/30 border-red-500/30 text-white"
+                       >
+                          <GitBranch className="w-3.5 h-3.5 mr-2" />
+                          Link Private Repository (GitHub App)
+                       </Button>
+                    </div>
+                  )}
                 </div>
                 <button 
                   onClick={() => setLocalError(null)}

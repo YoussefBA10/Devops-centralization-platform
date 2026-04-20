@@ -39,7 +39,12 @@
 
     - name: Clone repository
       git:
-        repo: "{{ (github_token is defined) | ternary('https://x-access-token:' + github_token + '@github.com/' + githubRepoFullName + '.git', repoUrl) }}"
+        repo: >-
+          {% if github_token is defined and github_token != "" -%}
+          https://x-access-token:{{ github_token }}@github.com/{{ githubRepoFullName }}.git
+          {%- else -%}
+          {{ repoUrl }}
+          {%- endif %}
         dest: "{{ app_dir }}"
         version: "{{ branch | default('main') }}"
         force: yes

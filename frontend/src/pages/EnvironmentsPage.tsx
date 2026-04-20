@@ -21,11 +21,7 @@ import EnvironmentCard from '../components/environment/EnvironmentCard';
 import DeployNodeModal from '../components/environment/DeployNodeModal';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
-interface EnvStats {
-  totalEnvironments: number;
-  totalActiveNodes: number;
-  avgStability: number;
-}
+
 
 interface StabilityInfo {
   avgStability: number;

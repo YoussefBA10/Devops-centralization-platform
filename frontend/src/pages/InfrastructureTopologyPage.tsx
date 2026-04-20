@@ -20,18 +20,14 @@ import {
   Search,
   Activity
 } from 'lucide-react';
-import { getGlobalInfrastructureStats, getInfrastructureTopology, getAllInfrastructureTopology } from '../services/api';
+import { getInfrastructureTopology, getAllInfrastructureTopology } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { useAuth } from '../context/AuthContext';
 import type { Node as TopologyNode } from '../types/index';
 import { Card } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 
-interface GlobalStats {
-  totalEnvironments: number;
-  activeAgents: number;
-  avgStability: number;
-}
+
 
 // Custom Node Component
 const ServerNode = ({ data }: { data: TopologyNode }) => {
@@ -133,7 +129,6 @@ const InfrastructureTopologyPage: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState<GlobalStats | null>(null);
 
   const fetchTopology = useCallback(async () => {
     if (!selectedEnvironment && !viewAllEnvs) return;
@@ -143,13 +138,11 @@ const InfrastructureTopologyPage: React.FC = () => {
         ? getAllInfrastructureTopology()
         : getInfrastructureTopology(selectedEnvironment!.id);
 
-      const [topoRes, statsRes] = await Promise.all([
-        fetchCall,
-        getGlobalInfrastructureStats()
+      const [topoRes] = await Promise.all([
+        fetchCall
       ]);
 
       const data = topoRes.data;
-      setStats(statsRes.data);
 
       // Transform backend nodes with spatial grouping by environment
       const envIds = Array.from(new Set(data.nodes.map((n: any) => n.environmentId?.toString())));

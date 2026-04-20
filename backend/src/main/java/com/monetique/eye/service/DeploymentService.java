@@ -494,12 +494,31 @@ public class DeploymentService {
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
 
-            // GitHub Integration Vars
-            if (app.getGithubInstallationId() != null && !app.getGithubInstallationId().isEmpty()) {
+            // GitHub Integration Vars (Smart Auto-Link)
+            String githubInstallationId = app.getGithubInstallationId();
+            String githubRepoFullName = app.getGithubRepoFullName();
+
+            if (githubInstallationId == null || githubInstallationId.isEmpty()) {
+                String owner = extractGithubOwner(app.getRepoUrl());
+                if (owner != null) {
+                    log.info("Attempting to auto-discover GitHub installation for owner: {}", owner);
+                    Optional<Application> sibling = applicationRepository.findFirstByGithubInstallationIdIsNotNullAndRepoUrlContaining("github.com/" + owner + "/");
+                    if (sibling.isPresent()) {
+                        githubInstallationId = sibling.get().getGithubInstallationId();
+                        log.info("Auto-discovered installation ID: {} from sibling application: {}", githubInstallationId, sibling.get().getName());
+                        // If we don't have a repo full name yet, use the current repo info but the shared installation
+                        if (githubRepoFullName == null || githubRepoFullName.isEmpty()) {
+                            githubRepoFullName = extractGithubRepoFullName(app.getRepoUrl());
+                        }
+                    }
+                }
+            }
+
+            if (githubInstallationId != null && !githubInstallationId.isEmpty()) {
                 commandList.add("-e");
-                commandList.add("githubInstallationId=" + app.getGithubInstallationId());
+                commandList.add("githubInstallationId=" + githubInstallationId);
                 commandList.add("-e");
-                commandList.add("githubRepoFullName=" + app.getGithubRepoFullName());
+                commandList.add("githubRepoFullName=" + (githubRepoFullName != null ? githubRepoFullName : ""));
                 commandList.add("-e");
                 commandList.add("applicationId=" + app.getId());
             }
@@ -954,7 +973,6 @@ public class DeploymentService {
             int idx = fullLog.lastIndexOf("\"msg\": \"");
             if (idx != -1) {
                 int start = idx + 8;
-                int end = fullLog.indexOf("\"", start);
                 if (end != -1) {
                     return "Deployment Failed: " + fullLog.substring(start, end);
                 }
@@ -974,5 +992,29 @@ public class DeploymentService {
         }
 
         return "Deployment failed during the execution phase. Surface technical logs for more info.";
+    }
+
+    private String extractGithubOwner(String url) {
+        if (url == null || !url.contains("github.com/")) return null;
+        try {
+            String path = url.split("github.com/")[1];
+            return path.split("/")[0];
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String extractGithubRepoFullName(String url) {
+        if (url == null || !url.contains("github.com/")) return null;
+        try {
+            String path = url.split("github.com/")[1].replace(".git", "");
+            String[] parts = path.split("/");
+            if (parts.length >= 2) {
+                return parts[0] + "/" + parts[1];
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

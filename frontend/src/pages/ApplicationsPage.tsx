@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, getGitHubInstallUrl, disconnectGitHub } from '../services/api';
-import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink, Github } from 'lucide-react';
+import { Search, Plus, GitBranch, RefreshCw, Terminal, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
@@ -42,8 +42,6 @@ const ApplicationsPage: React.FC = () => {
 
   // Polling refs for DEPLOYING apps
   const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
-
-  const [pageError, setPageError] = useState<string | null>(null);
 
   const fetchApps = useCallback(async () => {
     if (!selectedEnvironment) return;
@@ -425,7 +423,7 @@ const ApplicationsPage: React.FC = () => {
                         <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                               <Github className="w-3 h-3 text-white" />
+                               <GitBranch className="w-3 h-3 text-white" />
                                GitHub Integration
                             </span>
                             {app.githubInstallationId ? (
