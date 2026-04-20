@@ -43,13 +43,16 @@
           COPY package*.json ./
           RUN npm install
           COPY . .
-          # Task 3: Inject Build-time ARGs
+          # Task 3: Inject Build-time ARGs and map to ENV for bundlers (Vite/CRA)
           {% for key in env_map.keys() %}
           ARG {{ key }}
+          ENV {{ key }}=${{ key }}
           {% endfor %}
           RUN npm run build
+          # Normalize build output directory (Vite uses dist, CRA uses build)
+          RUN if [ -d "dist" ]; then mv dist output; elif [ -d "build" ]; then mv build output; else mkdir output; fi
           FROM nginx:stable-alpine
-          COPY --from=build /app/dist /usr/share/nginx/html
+          COPY --from=build /app/output /usr/share/nginx/html
           COPY nginx.conf /etc/nginx/conf.d/default.conf
           EXPOSE {{ containerPort | default(80) }}
           CMD ["nginx", "-g", "daemon off;"]
@@ -64,6 +67,11 @@
           COPY package*.json ./
           RUN npm install
           COPY . .
+          # Inject ARGs as ENVs
+          {% for key in env_map.keys() %}
+          ARG {{ key }}
+          ENV {{ key }}=${{ key }}
+          {% endfor %}
           EXPOSE {{ containerPort | default(3000) }}
           CMD ["npm", "start"]
       when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'FRONTEND' and appLanguage != 'React'
@@ -95,6 +103,11 @@
           COPY package*.json ./
           RUN npm install
           COPY . .
+          # Inject ARGs as ENVs
+          {% for key in env_map.keys() %}
+          ARG {{ key }}
+          ENV {{ key }}=${{ key }}
+          {% endfor %}
           EXPOSE {{ containerPort | default(3000) }}
           CMD ["npm", "start"]
       when: not dockerfile_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'BACKEND' and (appLanguage == 'Node.js' or appLanguage == 'Express' or appLanguage == 'NestJS')
