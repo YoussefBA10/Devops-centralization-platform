@@ -36,19 +36,22 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
         this.esClient = esClient;
     }
 
-    private String getIndexName(Long appId) {
-        return INDEX_PREFIX + appId + "-*";
+    private String getIndexName() {
+        return "app-logs-*";
     }
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(Long appId, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(appId, queryStr, from, to, pageable)).join();
+    public Page<LogEventDTO> searchLogs(String appName, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, from, to, pageable)).join();
     }
 
-    private Page<LogEventDTO> executeSearch(Long appId, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    private Page<LogEventDTO> executeSearch(String appName, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
+
+            // Filter explicitly to match the Logstash "service" property
+            boolQuery.filter(f -> f.term(t -> t.field("service.keyword").value(appName)));
 
             if (queryStr != null && !queryStr.isBlank()) {
                 boolQuery.must(m -> m.multiMatch(mm -> mm
@@ -69,7 +72,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             Query query = Query.of(q -> q.bool(boolQuery.build()));
 
             SearchRequest request = new SearchRequest.Builder()
-                    .index(getIndexName(appId))
+                    .index(getIndexName())
                     .query(query)
                     .from((int) pageable.getOffset())
                     .size(pageable.getPageSize() > 200 ? 200 : pageable.getPageSize())
@@ -90,43 +93,44 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             return new PageImpl<>(logs, pageable, total);
 
         } catch (Exception e) {
-            log.error("Failed to query ES for application {}: {}", appId, e.getMessage());
+            log.error("Failed to query ES for application {}: {}", appName, e.getMessage());
             throw new RuntimeException("Elasticsearch query failed", e);
         }
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(Long appId, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable, Throwable t) {
-        log.warn("Elasticsearch circuit breaker tripped for appId: {}. Returning empty list. Reason: {}", appId, t.getMessage());
+    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable, Throwable t) {
+        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", appName, t.getMessage());
         return new PageImpl<>(new ArrayList<>(), pageable, 0);
     }
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient")
-    public void clearBuffer(Long appId) {
+    public void clearBuffer(String appName) {
         try {
             DeleteByQueryRequest request = new DeleteByQueryRequest.Builder()
-                    .index(getIndexName(appId))
-                    .query(q -> q.matchAll(m -> m))
+                    .index(getIndexName())
+                    .query(q -> q.term(t -> t.field("service.keyword").value(appName)))
                     .build();
             esClient.deleteByQuery(request);
-            log.info("Cleared buffer for application {}", appId);
+            log.info("Cleared buffer for application {}", appName);
         } catch (Exception e) {
-            log.error("Failed to clear ES buffer for application {}: {}", appId, e.getMessage());
+            log.error("Failed to clear ES buffer for application {}: {}", appName, e.getMessage());
             throw new RuntimeException("Failed to clear ES buffer", e);
         }
     }
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient")
-    public long getDocumentCount(Long appId) {
+    public long getDocumentCount(String appName) {
         try {
             CountRequest request = new CountRequest.Builder()
-                    .index(getIndexName(appId))
+                    .index(getIndexName())
+                    .query(q -> q.term(t -> t.field("service.keyword").value(appName)))
                     .build();
             return esClient.count(request).count();
         } catch (Exception e) {
-            log.error("Failed to get document count for application {}: {}", appId, e.getMessage());
+            log.error("Failed to get document count for application {}: {}", appName, e.getMessage());
             return 0; // Return 0 gracefully on error or index miss
         }
     }

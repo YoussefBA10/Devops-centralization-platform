@@ -7,21 +7,31 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.monetique.eye.repository.ApplicationRepository;
+import com.monetique.eye.entity.Application;
+
 import java.time.LocalDateTime;
 
 @Service
 public class LogService {
 
     private final ElasticsearchLogClient elasticsearchLogClient;
+    private final ApplicationRepository applicationRepository;
 
-    public LogService(ElasticsearchLogClient elasticsearchLogClient) {
+    public LogService(ElasticsearchLogClient elasticsearchLogClient, ApplicationRepository applicationRepository) {
         this.elasticsearchLogClient = elasticsearchLogClient;
+        this.applicationRepository = applicationRepository;
     }
 
     public LogResponseDTO searchLogs(Long appId, String query, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appId, query, from, to, pageable);
+        Application app = applicationRepository.findById(appId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        long totalDocs = elasticsearchLogClient.getDocumentCount(appId);
+        String appName = app.getName(); // Logstash sets 'service' to docker container name, which strictly matches appName.
+
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, from, to, pageable);
+        
+        long totalDocs = elasticsearchLogClient.getDocumentCount(appName);
         
         // Simple heuristic for ingest rate for enterprise feel (e.g. docs per hour over retention)
         // If retention is strictly 30 days (720 hours)
@@ -39,6 +49,8 @@ public class LogService {
     }
 
     public void clearBuffer(Long appId) {
-        elasticsearchLogClient.clearBuffer(appId);
+        Application app = applicationRepository.findById(appId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found"));
+        elasticsearchLogClient.clearBuffer(app.getName());
     }
 }
