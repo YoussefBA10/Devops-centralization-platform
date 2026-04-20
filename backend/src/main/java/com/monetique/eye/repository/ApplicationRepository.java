@@ -11,4 +11,5 @@ import java.util.Optional;
 public interface ApplicationRepository extends JpaRepository<Application, Long> {
     List<Application> findByEnvironmentId(Long environmentId);
     Optional<Application> findByNameIgnoreCaseAndEnvironmentId(String name, Long environmentId);
+    List<Application> findByEnvironmentIdAndTargetNodeAndPort(Long environmentId, String targetNode, Integer port);
 }

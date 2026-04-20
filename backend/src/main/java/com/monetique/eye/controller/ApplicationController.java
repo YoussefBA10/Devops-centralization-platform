@@ -95,6 +95,19 @@ public class ApplicationController {
         app.setBranch(request.getBranch());
         app.setPort(request.getPort());
         app.setSrcPath(request.getSrcPath());
+
+        // Port conflict validation: Check if another application uses the same port on the same node
+        List<Application> conflictingApps = applicationRepository.findByEnvironmentIdAndTargetNodeAndPort(
+                request.getEnvironmentId(), request.getTargetNode(), request.getPort());
+        
+        java.util.Optional<Application> realConflict = conflictingApps.stream()
+                .filter(a -> request.getId() == null || !a.getId().equals(request.getId()))
+                .findFirst();
+        
+        if (realConflict.isPresent()) {
+            return ResponseEntity.status(409).body(Map.of("message", 
+                "Port " + request.getPort() + " is already occupied by application '" + realConflict.get().getName() + "' on this node."));
+        }
         
         // Handle Container Port Defaulting
         if (request.getContainerPort() != null) {

@@ -154,17 +154,37 @@
         state: absent
       when: not (isCanary | default(false) | bool)
 
-    - name: Identify and remove any container using the target port
+    - name: Identify conflicting container on target port
       shell: |
-        CONTAINER_ID=$(docker ps -q --filter "publish={{ appPort }}")
-        if [ ! -z "$CONTAINER_ID" ]; then
-          echo "Found conflicting container $CONTAINER_ID using port {{ appPort }}. Removing it..."
-          docker stop $CONTAINER_ID
-          docker rm $CONTAINER_ID
-        fi
-      register: port_cleanup
-      changed_when: "'Removing it' in port_cleanup.stdout"
-      ignore_errors: yes
+        docker ps --filter "publish={{ appPort }}" --format "{{ '{{.Names}}' }}"
+      register: conflicting_container_query
+      changed_when: false
+
+    - name: Validate port conflict safety
+      set_fact:
+        conflicting_container_name: "{{ conflicting_container_query.stdout | trim }}"
+
+    - name: Handle port conflict
+      block:
+        - name: Allow cleanup for same application family
+          shell: |
+            CONTAINER_ID=$(docker ps -q --filter "publish={{ appPort }}")
+            echo "Removing existing application container $CONTAINER_ID ({{ conflicting_container_name }}) to allow update."
+            docker stop $CONTAINER_ID
+            docker rm $CONTAINER_ID
+          when: 
+            - conflicting_container_name != ""
+            - conflicting_container_name == appName or conflicting_container_name == appName + "-canary" or conflicting_container_name == oldAppName
+
+        - name: Block deployment for unrelated conflicts
+          fail:
+            msg: "Port {{ appPort }} is already occupied by an unrelated container: '{{ conflicting_container_name }}'. Please change the port or stop the conflicting service manually."
+          when: 
+            - conflicting_container_name != ""
+            - conflicting_container_name != appName
+            - conflicting_container_name != appName + "-canary"
+            - conflicting_container_name != oldAppName
+      when: conflicting_container_name != ""
 
     - name: Build Docker Image
       command: docker build -t {{ image_name }}:latest {{ dockerBuildArgs | default('') }} .
