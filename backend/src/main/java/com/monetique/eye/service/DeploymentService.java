@@ -513,7 +513,7 @@ public class DeploymentService {
             // Task 2: Update application status and canary tracking
             app.setStatus("RUNNING");
             app.setIsCanary(isCanary);
-            app.setCanaryPort(isCanary ? deploymentPort : null);
+            app.setCanaryPort(isCanary ? hostPort : null);
             app.setLastDeployedAt(java.time.LocalDateTime.now());
             applicationRepository.save(app);
 
