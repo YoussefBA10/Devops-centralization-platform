@@ -141,6 +141,18 @@
         state: absent
       when: not (isCanary | default(false) | bool)
 
+    - name: Identify and remove any container using the target port
+      shell: |
+        CONTAINER_ID=$(docker ps -q --filter "publish={{ appPort }}")
+        if [ ! -z "$CONTAINER_ID" ]; then
+          echo "Found conflicting container $CONTAINER_ID using port {{ appPort }}. Removing it..."
+          docker stop $CONTAINER_ID
+          docker rm $CONTAINER_ID
+        fi
+      register: port_cleanup
+      changed_when: "'Removing it' in port_cleanup.stdout"
+      ignore_errors: yes
+
     - name: Build Docker Image
       command: docker build -t {{ image_name }}:latest {{ dockerBuildArgs | default('') }} .
       args:

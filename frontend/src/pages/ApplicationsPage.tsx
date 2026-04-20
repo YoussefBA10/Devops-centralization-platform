@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, promoteApplication } from '../services/api';
-import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, ArrowUpCircle } from 'lucide-react';
+import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord } from '../services/api';
+import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
@@ -157,29 +157,6 @@ const ApplicationsPage: React.FC = () => {
     });
   };
 
-  const handlePromote = async (app: any) => {
-    if (!selectedEnvironment) return;
-    
-    setConfirmModal({
-      isOpen: true,
-      title: 'Promote Canary to Stable',
-      message: `You are about to promote the canary version of ${app.name} to Stable. This will stop the old stable version, move the canary to port ${app.port}, and remove the canary instance. Continue?`,
-      type: 'warning',
-      onConfirm: async () => {
-        try {
-          setConfirmModal(prev => ({ ...prev, loading: true }));
-          await promoteApplication(selectedEnvironment.id, app.id);
-          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          
-          setApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'DEPLOYING', isCanary: false } : a));
-          fetchApps();
-        } catch (e: any) {
-          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          alert(e.response?.data?.message || 'Promotion failed');
-        }
-      }
-    });
-  };
 
   const handleEditApp = (app: any) => {
     setEditingApp(app);
@@ -399,12 +376,7 @@ const ApplicationsPage: React.FC = () => {
                         <span className={`text-[10px] font-bold uppercase tracking-widest text-${statusColor}-500`}>
                           {app.status}
                         </span>
-                        {app.isCanary && (
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-tighter bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1">
-                            <Zap className="w-2.5 h-2.5 fill-current" />
-                            Canary
-                          </span>
-                        )}
+
                       </div>
                       {app.lastDeployedAt && (
                         <span className="text-[10px] text-muted-foreground">
@@ -435,16 +407,7 @@ const ApplicationsPage: React.FC = () => {
                         >
                           <Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit
                         </Button>
-                        {app.isCanary && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="flex-1 h-8 text-[11px] bg-amber-500/10 border-amber-500/20 text-amber-500 hover:bg-amber-500/20"
-                            onClick={() => handlePromote(app)}
-                          >
-                            <ArrowUpCircle className="w-3.5 h-3.5 mr-1.5" /> Promote
-                          </Button>
-                        )}
+
                         <Button
                           variant="outline"
                           size="sm"

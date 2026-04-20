@@ -451,11 +451,11 @@ public class DeploymentService {
 
             // Task 2: Rename & Canary Detection
             String oldAppName = (previousName != null && !previousName.isEmpty() && !previousName.equals(request.getName())) ? previousName : "";
-            boolean isCanary = request.getCanary() != null && request.getCanary();
+            boolean isCanary = (request.getCanary() != null && request.getCanary()) || (request.getAutoPromote() != null && request.getAutoPromote());
             int hostPort = isCanary ? request.getPort() + 1000 : request.getPort();
 
-            log.info("Deployment Details - Name: {}, Previous: {}, oldAppName: '{}', isCanary: {}, hostPort: {}, targetNode: {}", 
-                    request.getName(), previousName, oldAppName, isCanary, hostPort, request.getTargetNode());
+            log.info("Deployment Details - Name: {}, Previous: {}, oldAppName: '{}', isCanary: {}, hostPort: {}, autoPromote: {}, targetNode: {}", 
+                    request.getName(), previousName, oldAppName, isCanary, hostPort, request.getAutoPromote(), request.getTargetNode());
 
             String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
                     : "node-" + request.getTargetNode().replace(".", "-");
@@ -516,6 +516,12 @@ public class DeploymentService {
             app.setCanaryPort(isCanary ? hostPort : null);
             app.setLastDeployedAt(java.time.LocalDateTime.now());
             applicationRepository.save(app);
+
+            // Auto-Promotion Stage 2
+            if (request.getAutoPromote() != null && request.getAutoPromote()) {
+                log.info("Auto-Promotion Stage 1 (Canary) successful for {}. Triggering Stage 2 (Promotion) to Stable...", request.getName());
+                this.promoteApplication(environmentId, applicationId);
+            }
 
         } catch (Exception e) {
             log.error("Application full deployment failed: {}", e.getMessage());
@@ -901,6 +907,7 @@ public class DeploymentService {
         request.setSrcPath(app.getSrcPath());
         request.setContainerPort(app.getContainerPort());
         request.setCanary(false); // Promotion!
+        request.setAutoPromote(false); // Ensure no loops
         request.setAutoGenerateConfig(true);
 
         // Map env vars if possible (currently not persistent in DB, but we could add them if needed)

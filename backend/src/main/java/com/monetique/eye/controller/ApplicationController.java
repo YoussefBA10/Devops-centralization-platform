@@ -64,6 +64,7 @@ public class ApplicationController {
                 .orElseThrow(() -> new RuntimeException("Application with ID " + request.getId() + " not found"));
             
             previousName = app.getName();
+            request.setAutoPromote(true);
             
             // Check if name is being changed and if new name conflicts
             if (!previousName.equalsIgnoreCase(request.getName())) {

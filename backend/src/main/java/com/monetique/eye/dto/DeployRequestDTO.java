@@ -20,4 +20,5 @@ public class DeployRequestDTO {
     private Boolean canary;
     private Boolean autoGenerateConfig;
 
+    private Boolean autoPromote;
 }
