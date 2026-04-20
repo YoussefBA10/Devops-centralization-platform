@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Server, Code, Box, GitBranch, Info, Settings2 } from 'lucide-react';
+import { X, Server, Code, Box, GitBranch, Info, Settings2, Zap, Activity, Settings } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';

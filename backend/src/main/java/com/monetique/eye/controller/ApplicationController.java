@@ -80,6 +80,7 @@ public class ApplicationController {
                     .build();
         }
 
+        String previousName = app.getName();
         app.setName(request.getName()); // Just in case it was a rename
         app.setServiceNameKeyword(request.getName().toLowerCase());
 
@@ -109,7 +110,7 @@ public class ApplicationController {
         applicationRepository.save(app);
 
         // Async deployment
-        deploymentService.deployApplicationFull(env.getId(), request, app.getId());
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName);
 
         return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
     }

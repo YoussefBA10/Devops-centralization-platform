@@ -416,7 +416,7 @@ public class DeploymentService {
     @Async
     @Transactional
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
-            Long applicationId) {
+            Long applicationId, String previousName) {
 
         Environment environment = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found: " + environmentId));
@@ -450,7 +450,7 @@ public class DeploymentService {
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
             // Task 2: Rename & Canary Detection
-            String oldAppName = app.getName().equals(request.getName()) ? "" : app.getName();
+            String oldAppName = (previousName != null && !previousName.equals(request.getName())) ? previousName : "";
             boolean isCanary = request.getCanary() != null && request.getCanary();
             int deploymentPort = isCanary ? request.getPort() + 1000 : request.getPort();
 

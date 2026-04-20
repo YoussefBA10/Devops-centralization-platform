@@ -238,10 +238,10 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
             </div>
             <div className="space-y-1.5">
               <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest opacity-60">Node Count</p>
-              <p className="text-xs font-bold flex items-center gap-2">
+              <div className="text-xs font-bold flex items-center gap-2">
                 <div className={`w-1.5 h-1.5 rounded-full ${resources.nodeCount > 0 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-muted'}`}></div>
                 {resources.nodeCount} / 255
-              </p>
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
