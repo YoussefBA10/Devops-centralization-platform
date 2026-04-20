@@ -903,6 +903,6 @@ public class DeploymentService {
         // Map env vars if possible (currently not persistent in DB, but we could add them if needed)
         // For now, we assume promotion uses the last configuration.
 
-        deployApplicationFull(environmentId, request, applicationId);
+        deployApplicationFull(environmentId, request, applicationId, app.getName());
     }
 }
