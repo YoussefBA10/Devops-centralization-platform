@@ -28,4 +28,7 @@ public class ApplicationDTO {
     private Boolean isCanary;
     private Integer canaryPort;
     private String lastErrorMessage;
+    private String githubInstallationId;
+    private String githubRepoFullName;
+    private String githubRepoUrl;
 }

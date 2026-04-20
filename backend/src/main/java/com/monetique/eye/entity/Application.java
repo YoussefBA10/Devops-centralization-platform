@@ -56,6 +56,10 @@ public class Application {
 
     private String lastErrorMessage;
 
+    private String githubInstallationId;
+    private String githubRepoFullName;
+    private String githubRepoUrl;
+
     private java.time.LocalDateTime createdAt;
 
     @PrePersist

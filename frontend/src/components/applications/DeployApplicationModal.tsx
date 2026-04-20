@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Server, Code, Box, GitBranch, Info, Settings2, Zap, Activity, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Server, Code, Box, GitBranch, Info, Settings2, Zap, Activity, Settings, AlertCircle } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';
@@ -16,7 +16,9 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   const { selectedEnvironment } = useEnvironment();
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [repoInfo, setRepoInfo] = useState<any>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const [nodes, setNodes] = useState<any[]>([]);
 
@@ -100,6 +102,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
     setFormData({ ...formData, [e.target.name]: value });
+    if (localError) setLocalError(null);
   };
 
   const validateGithub = async () => {
@@ -142,6 +145,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     };
 
     try {
+      setLocalError(null);
       if (formData.type === 'FULLSTACK') {
         // Backend
         await onDeploy({
@@ -174,8 +178,14 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         });
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      const msg = error.response?.data?.message || 'Deployment failed. Please check your configuration.';
+      setLocalError(msg);
+      // Ensure the user sees the error
+      setTimeout(() => {
+        scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 50);
     } finally {
       setLoading(false);
     }
@@ -205,8 +215,25 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div ref={scrollContainerRef} className="p-6 overflow-y-auto">
           <form id="deploy-form" onSubmit={handleSubmit} className="space-y-6">
+
+            {/* Error Display */}
+            {localError && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
+                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-red-500 uppercase tracking-widest text-[10px]">Deployment Error</p>
+                  <p className="text-sm text-red-200/80 leading-relaxed">{localError}</p>
+                </div>
+                <button 
+                  onClick={() => setLocalError(null)}
+                  className="ml-auto text-red-500/50 hover:text-red-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* Informational Banner */}
             <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg text-primary/90 text-sm">

@@ -60,5 +60,8 @@ export const promoteApplication = (envId: number, appId: number) =>
 export const updateEnvironment = (id: number, data: any) => api.put(`/environments/${id}`, data);
 export const deleteEnvironment = (id: number) => api.delete(`/environments/${id}`);
 
+// GitHub Integration
+export const getGitHubInstallUrl = (appId: number) => api.get('/github/install', { params: { appId } });
+export const disconnectGitHub = (appId: number) => api.post(`/github/apps/${appId}/disconnect`);
 
 export default api;

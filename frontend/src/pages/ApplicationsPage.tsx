@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord } from '../services/api';
-import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap } from 'lucide-react';
+import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, getGitHubInstallUrl, disconnectGitHub } from '../services/api';
+import { Search, Plus, GitBranch, RefreshCw, Terminal, Activity, Cpu, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink, Github } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
@@ -43,8 +43,7 @@ const ApplicationsPage: React.FC = () => {
   // Polling refs for DEPLOYING apps
   const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
 
-  // Simulation state for resource bars
-  const [resourceSim, setResourceSim] = useState<Record<number, { cpu: number; ram: number }>>({});
+  const [pageError, setPageError] = useState<string | null>(null);
 
   const fetchApps = useCallback(async () => {
     if (!selectedEnvironment) return;
@@ -52,17 +51,6 @@ const ApplicationsPage: React.FC = () => {
     try {
       const res = await getApplications(selectedEnvironment.id);
       setApplications(res.data);
-
-      // Initialize resource sim
-      const sim: Record<number, { cpu: number; ram: number }> = {};
-      res.data.forEach((app: any) => {
-        if (app.status === 'RUNNING') {
-          sim[app.id] = { cpu: Math.floor(Math.random() * 30) + 5, ram: Math.floor(Math.random() * 40) + 20 };
-        } else {
-          sim[app.id] = { cpu: 0, ram: 0 };
-        }
-      });
-      setResourceSim(sim);
     } catch (e) {
       console.error(e);
     } finally {
@@ -106,25 +94,6 @@ const ApplicationsPage: React.FC = () => {
     };
   }, [applications, fetchApps]);
 
-  // Live resource fluctuation simulation
-  useEffect(() => {
-    const simInterval = setInterval(() => {
-      setResourceSim((prev) => {
-        const next = { ...prev };
-        Object.keys(next).forEach((key) => {
-          const id = parseInt(key);
-          if (next[id].cpu > 0) {
-            next[id] = {
-              cpu: Math.max(1, Math.min(100, next[id].cpu + (Math.random() * 10 - 5))),
-              ram: Math.max(1, Math.min(100, next[id].ram + (Math.random() * 4 - 2))),
-            };
-          }
-        });
-        return next;
-      });
-    }, 3000);
-    return () => clearInterval(simInterval);
-  }, []);
 
   const handleDeploy = async (payload: any) => {
     try {
@@ -133,8 +102,39 @@ const ApplicationsPage: React.FC = () => {
       setIsDeployModalOpen(false);
       await fetchApps();
     } catch (e: any) {
-      alert(e.response?.data?.message || 'Deployment failed');
+      throw e;
     }
+  };
+
+  const handleGithubConnect = async (appId: number) => {
+    try {
+      const res = await getGitHubInstallUrl(appId);
+      if (res.data.url) {
+        window.open(res.data.url, '_blank', 'width=800,height=600');
+      }
+    } catch (e) {
+      console.error('Failed to initiate GitHub install', e);
+    }
+  };
+
+  const handleGithubDisconnect = async (appId: number) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Disconnect GitHub',
+      message: 'Are you sure you want to disconnect this repository? This will remove private repo access for this application.',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          setConfirmModal(prev => ({ ...prev, loading: true }));
+          await disconnectGitHub(appId);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          fetchApps();
+        } catch (e) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          console.error('Failed to disconnect GitHub', e);
+        }
+      }
+    });
   };
 
   const handleRestart = async (appId: number) => {
@@ -152,7 +152,7 @@ const ApplicationsPage: React.FC = () => {
           fetchApps();
         } catch (e: any) {
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          alert(e.response?.data?.message || 'Restart failed');
+          throw e;
         }
       }
     });
@@ -198,7 +198,7 @@ const ApplicationsPage: React.FC = () => {
           fetchApps();
         } catch (e) {
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          console.error('Failed to delete', e);
+          throw e;
         }
       }
     });
@@ -224,12 +224,6 @@ const ApplicationsPage: React.FC = () => {
       case 'FAILED': return 'red';
       default: return 'slate';
     }
-  };
-
-  const getProgressColor = (val: number) => {
-    if (val < 70) return 'bg-blue-500';
-    if (val < 85) return 'bg-amber-500';
-    return 'bg-red-500';
   };
 
   return (
@@ -290,8 +284,6 @@ const ApplicationsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredApps.map((app) => {
             const statusColor = getStatusColor(app.status);
-            const cpu = resourceSim[app.id]?.cpu || 0;
-            const ram = resourceSim[app.id]?.ram || 0;
 
             return (
               <div key={app.id} className="group relative pt-6">
@@ -342,33 +334,32 @@ const ApplicationsPage: React.FC = () => {
                   </a>
 
                   <div className="space-y-4 mb-5">
-                    {/* CPU Bar */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest">
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <Cpu className="w-3 h-3" />
-                          CPU Load
-                        </span>
-                        <span className={`font-bold ${cpu > 85 ? 'text-red-500' : 'text-foreground'}`}>{cpu.toFixed(1)}%</span>
-                      </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(cpu)}`} style={{ width: `${cpu}%` }} />
-                      </div>
+                    {/* App URL and Info */}
+                    <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground">
+                          <span>Endpoint</span>
+                          <Globe className="w-3 h-3" />
+                        </div>
+                        <div className="flex items-center justify-between">
+                           <a 
+                             href={`http://${app.targetNode}:${app.port}`} 
+                             target="_blank" 
+                             rel="noreferrer"
+                             className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}
+                           >
+                             http://{app.targetNode}:{app.port}
+                           </a>
+                           {app.status === 'RUNNING' && (
+                             <ExternalLink className="w-3 h-3 text-primary/50" />
+                           )}
+                        </div>
                     </div>
-
-                    {/* RAM Bar */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest">
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <Activity className="w-3 h-3" />
-                          Memory
-                        </span>
-                        <span className={`font-bold ${ram > 85 ? 'text-red-500' : 'text-foreground'}`}>{ram.toFixed(1)}%</span>
+                    {app.isCanary && (
+                      <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
+                         <Zap className="w-3 h-3 text-amber-500 animate-pulse" />
+                         <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Canary active on port {app.canaryPort}</span>
                       </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(ram)}`} style={{ width: `${ram}%` }} />
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="mt-auto border-t border-white/5 pt-4">
@@ -428,6 +419,43 @@ const ApplicationsPage: React.FC = () => {
                           {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}
                         </Button>
                       </div>
+
+                      {/* GitHub Integration Section */}
+                      {isAdmin && (
+                        <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                               <Github className="w-3 h-3 text-white" />
+                               GitHub Integration
+                            </span>
+                            {app.githubInstallationId ? (
+                               <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">Linked</span>
+                            ) : (
+                               <span className="text-[10px] bg-white/5 text-muted-foreground px-2 py-0.5 rounded border border-white/10">Not Linked</span>
+                            )}
+                          </div>
+                          
+                          {app.githubInstallationId ? (
+                            <div className="p-2 rounded bg-black/40 border border-white/10 flex items-center justify-between">
+                              <span className="text-[10px] font-mono text-white truncate max-w-[120px]">{app.githubRepoFullName || 'Private Repo'}</span>
+                              <button 
+                                 onClick={() => handleGithubDisconnect(app.id)}
+                                 className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
+                              >
+                                 Disconnect
+                              </button>
+                            </div>
+                          ) : (
+                            <Button 
+                               onClick={() => handleGithubConnect(app.id)}
+                               size="sm"
+                               className="w-full h-7 text-[10px] bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                            >
+                               Connect GitHub App
+                            </Button>
+                          )}
+                        </div>
+                      )}
                   </div>
                 </div>
               </div>

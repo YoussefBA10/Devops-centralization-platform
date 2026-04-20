@@ -494,6 +494,16 @@ public class DeploymentService {
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
 
+            // GitHub Integration Vars
+            if (app.getGithubInstallationId() != null && !app.getGithubInstallationId().isEmpty()) {
+                commandList.add("-e");
+                commandList.add("githubInstallationId=" + app.getGithubInstallationId());
+                commandList.add("-e");
+                commandList.add("githubRepoFullName=" + app.getGithubRepoFullName());
+                commandList.add("-e");
+                commandList.add("applicationId=" + app.getId());
+            }
+
             // Conditionally add Ansible coordinates
             if (sshUser != null && !sshUser.isEmpty()) {
                 commandList.add("-e");
