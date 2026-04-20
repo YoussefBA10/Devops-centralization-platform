@@ -495,34 +495,34 @@ public class DeploymentService {
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
 
-            // GitHub Integration Vars (Smart Auto-Link)
-            String githubInstallationId = app.getGithubInstallationId();
-            String githubRepoFullName = app.getGithubRepoFullName();
-
-            if (githubInstallationId == null || githubInstallationId.isEmpty()) {
-                String owner = extractGithubOwner(app.getRepoUrl());
-                if (owner != null) {
-                    log.info("Attempting to auto-discover GitHub installation for owner: {}", owner);
-                    Optional<Application> sibling = applicationRepository.findFirstByGithubInstallationIdIsNotNullAndRepoUrlContaining("github.com/" + owner + "/");
-                    if (sibling.isPresent()) {
-                        githubInstallationId = sibling.get().getGithubInstallationId();
-                        log.info("Auto-discovered installation ID: {} from sibling application: {}", githubInstallationId, sibling.get().getName());
-                        // If we don't have a repo full name yet, use the current repo info but the shared installation
-                        if (githubRepoFullName == null || githubRepoFullName.isEmpty()) {
-                            githubRepoFullName = extractGithubRepoFullName(app.getRepoUrl());
-                        }
-                    }
-                }
-            }
-
-            if (githubInstallationId != null && !githubInstallationId.isEmpty()) {
-                commandList.add("-e");
-                commandList.add("githubInstallationId=" + githubInstallationId);
-                commandList.add("-e");
-                commandList.add("githubRepoFullName=" + (githubRepoFullName != null ? githubRepoFullName : ""));
-                commandList.add("-e");
-                commandList.add("applicationId=" + app.getId());
-            }
+//            // GitHub Integration Vars (Smart Auto-Link)
+//            String githubInstallationId = app.getGithubInstallationId();
+//            String githubRepoFullName = app.getGithubRepoFullName();
+//
+//            if (githubInstallationId == null || githubInstallationId.isEmpty()) {
+//                String owner = extractGithubOwner(app.getRepoUrl());
+//                if (owner != null) {
+//                    log.info("Attempting to auto-discover GitHub installation for owner: {}", owner);
+//                    Optional<Application> sibling = applicationRepository.findFirstByGithubInstallationIdIsNotNullAndRepoUrlContaining("github.com/" + owner + "/");
+//                    if (sibling.isPresent()) {
+//                        githubInstallationId = sibling.get().getGithubInstallationId();
+//                        log.info("Auto-discovered installation ID: {} from sibling application: {}", githubInstallationId, sibling.get().getName());
+//                        // If we don't have a repo full name yet, use the current repo info but the shared installation
+//                        if (githubRepoFullName == null || githubRepoFullName.isEmpty()) {
+//                            githubRepoFullName = extractGithubRepoFullName(app.getRepoUrl());
+//                        }
+//                    }
+//                }
+//            }
+//
+//            if (githubInstallationId != null && !githubInstallationId.isEmpty()) {
+//                commandList.add("-e");
+//                commandList.add("githubInstallationId=" + githubInstallationId);
+//                commandList.add("-e");
+//                commandList.add("githubRepoFullName=" + (githubRepoFullName != null ? githubRepoFullName : ""));
+//                commandList.add("-e");
+//                commandList.add("applicationId=" + app.getId());
+//            }
 
             // Conditionally add Ansible coordinates
             if (sshUser != null && !sshUser.isEmpty()) {

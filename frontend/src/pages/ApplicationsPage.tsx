@@ -418,7 +418,7 @@ const ApplicationsPage: React.FC = () => {
                         </Button>
                       </div>
 
-                      {/* GitHub Integration Section */}
+                      {/* GitHub Integration Section - Disabled for now
                       {isAdmin && (
                         <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
                           <div className="flex items-center justify-between">
@@ -449,11 +449,12 @@ const ApplicationsPage: React.FC = () => {
                                size="sm"
                                className="w-full h-7 text-[10px] bg-white/5 hover:bg-white/10 border-white/10 text-white"
                             >
+                               <GitBranch className="w-3 h-3 mr-2" />
                                Connect GitHub App
                             </Button>
                           )}
                         </div>
-                      )}
+                      )} */}
                   </div>
                 </div>
               </div>

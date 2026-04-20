@@ -22,29 +22,24 @@
         state: directory
         mode: '0755'
 
-    - name: Fetch GitHub Installation Token
-      uri:
-        url: "http://127.0.0.1:8880/api/github/apps/{{ applicationId }}/token"
-        method: GET
-        return_content: yes
-      register: github_token_response
-      when: githubInstallationId is defined and githubInstallationId != ""
-      delegate_to: localhost
-
-    - name: Set GitHub Token fact
-      set_fact:
-        github_token: "{{ github_token_response.json.token }}"
-      when: githubInstallationId is defined and githubInstallationId != ""
-      no_log: true
+#    - name: Fetch GitHub Installation Token
+#      uri:
+#        url: "http://127.0.0.1:8880/api/github/apps/{{ applicationId }}/token"
+#        method: GET
+#        return_content: yes
+#      register: github_token_response
+#      when: githubInstallationId is defined and githubInstallationId != ""
+#      delegate_to: localhost
+#
+#    - name: Set GitHub Token fact
+#      set_fact:
+#        github_token: "{{ github_token_response.json.token }}"
+#      when: githubInstallationId is defined and githubInstallationId != ""
+#      no_log: true
 
     - name: Clone repository
       git:
-        repo: >-
-          {% if github_token is defined and github_token != "" -%}
-          https://x-access-token:{{ github_token }}@github.com/{{ githubRepoFullName }}.git
-          {%- else -%}
-          {{ repoUrl }}
-          {%- endif %}
+        repo: "{{ repoUrl }}"
         dest: "{{ app_dir }}"
         version: "{{ branch | default('main') }}"
         force: yes

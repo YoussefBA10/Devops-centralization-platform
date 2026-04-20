@@ -254,7 +254,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                   <p className="text-sm font-bold text-red-500 uppercase tracking-widest text-[10px]">Deployment Error</p>
                   <p className="text-sm text-red-200/80 leading-relaxed">{localError}</p>
                   
-                  {isPrivateRepoError(localError) && (
+                  {/* {isPrivateRepoError(localError) && (
                     <div className="pt-2">
                        <Button 
                           onClick={handleConnectGithub}
@@ -267,7 +267,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                           Link Private Repository (GitHub App)
                        </Button>
                     </div>
-                  )}
+                  )} */}
                 </div>
                 <button 
                   onClick={() => setLocalError(null)}
