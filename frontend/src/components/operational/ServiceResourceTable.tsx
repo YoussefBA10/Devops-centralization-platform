@@ -10,9 +10,10 @@ import {
   Server,
   Clock,
   Search,
-  Filter
+  Filter,
+  Zap
 } from 'lucide-react';
-import { ServiceResource } from '../../types';
+import type { ServiceResource } from '../../types/index';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Input } from '../ui/Input';
 

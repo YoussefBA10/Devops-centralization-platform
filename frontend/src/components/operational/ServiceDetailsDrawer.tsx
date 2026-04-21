@@ -13,7 +13,7 @@ import {
   BarChart3,
   History
 } from 'lucide-react';
-import { ServiceResource } from '../../types';
+import type { ServiceResource } from '../../types/index';
 
 interface Props {
   service: ServiceResource | null;

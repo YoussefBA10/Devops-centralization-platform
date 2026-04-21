@@ -215,6 +215,19 @@ public class InfrastructureService {
         List<Map<String, Object>> hostCpuData = prometheusClient.getHostTotalCpu(label);
         List<Map<String, Object>> hostMemData = prometheusClient.getHostTotalMemory(label);
 
+        // Fetch Node Name mapping (using node-exporter metrics)
+        List<Map<String, Object>> nodeMetadata = prometheusClient.queryList(String.format("up{environment=~\"%s|central-node\", job=\"node-exporter\"}", label));
+        Map<String, String> nodeNameMap = new java.util.HashMap<>();
+        for (Map<String, Object> m : nodeMetadata) {
+            Map<String, String> metric = (Map<String, String>) m.get("metric");
+            String inst = metric.get("instance").split(":")[0];
+            String nodename = metric.get("nodename");
+            if (nodename != null && !nodename.isEmpty()) {
+                nodeNameMap.put(inst, nodename);
+            }
+        }
+
+        // Helper maps for host capacity
         Map<String, Double> hostCpuMap = new java.util.HashMap<>();
         for (Map<String, Object> m : hostCpuData) {
             String inst = ((Map<String, String>) m.get("metric")).get("instance");
@@ -239,9 +252,11 @@ public class InfrastructureService {
             double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
             double cpuPercent = (cpuAbs / hostTotal) * 100.0;
 
+            String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+
             builders.computeIfAbsent(key, k -> ServiceResourceDTO.builder()
                     .serviceName(service)
-                    .nodeName(inst.split(":")[0])
+                    .nodeName(displayNode)
                     .status("HEALTHY"))
                     .cpuUsageCores(cpuAbs)
                     .cpuUsagePercent(cpuPercent);

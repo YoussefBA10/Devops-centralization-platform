@@ -1,3 +1,21 @@
+export interface ServiceResource {
+  serviceName: string;
+  nodeName: string;
+  containerId: string;
+  cpuUsageCores: number;
+  cpuUsagePercent: number;
+  memoryUsageBytes: number;
+  memoryUsagePercent: number;
+  diskReadBytesPerSec: number;
+  diskWriteBytesPerSec: number;
+  networkRxBytesPerSec: number;
+  networkTxBytesPerSec: number;
+  restartCount: number;
+  uptimeSeconds: number;
+  status: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+  healthReason?: string;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -75,24 +93,6 @@ export interface Node {
   environmentName?: string;
 }
 
-export interface ServiceResource {
-  serviceName: string;
-  nodeName: string;
-  containerId: string;
-  cpuUsageCores: number;
-  cpuUsagePercent: number;
-  memoryUsageBytes: number;
-  memoryUsagePercent: number;
-  diskReadBytesPerSec: number;
-  diskWriteBytesPerSec: number;
-  networkRxBytesPerSec: number;
-  networkTxBytesPerSec: number;
-  restartCount: number;
-  uptimeSeconds: number;
-  status: 'HEALTHY' | 'WARNING' | 'CRITICAL';
-  healthReason?: string;
-}
-
 export interface Edge {
   source: string;
   target: string;
@@ -104,5 +104,4 @@ export interface TopologyData {
   edges: Edge[];
 }
 
-// Ensure this file is always treated as a module by providing a runtime export
 export const _MOD_TYPES = true;

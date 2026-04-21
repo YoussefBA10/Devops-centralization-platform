@@ -112,32 +112,32 @@ public class PrometheusClient {
     }
 
     public List<Map<String, Object>> getContainerCpuUsage(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=\"\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerMemoryUsage(String envLabel) {
-        String query = String.format("max by (container_label_com_docker_compose_service, instance) (container_memory_usage_bytes{container_label_com_docker_compose_service!=\"\", environment=~\"%s|central-node\"})", envLabel);
+        String query = String.format("max by (container_label_com_docker_compose_service, instance) (container_memory_usage_bytes{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"})", envLabel);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerNetworkRx(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_receive_bytes_total{container_label_com_docker_compose_service!=\"\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_receive_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerNetworkTx(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_transmit_bytes_total{container_label_com_docker_compose_service!=\"\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_transmit_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerDiskRead(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_reads_bytes_total{container_label_com_docker_compose_service!=\"\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_reads_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerDiskWrite(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_writes_bytes_total{container_label_com_docker_compose_service!=\"\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_writes_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
         return queryList(query);
     }
 

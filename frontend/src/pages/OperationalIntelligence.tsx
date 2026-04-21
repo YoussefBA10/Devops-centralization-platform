@@ -15,13 +15,12 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
-import type { StabilityRecord, OperationalDigest, Node } from '../types/index';
+import type { StabilityRecord, OperationalDigest, Node, ServiceResource } from '../types/index';
 import StabilityGauge from '../components/operational/StabilityGauge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
 import ServiceResourceTable from '../components/operational/ServiceResourceTable';
 import ServiceDetailsDrawer from '../components/operational/ServiceDetailsDrawer';
-import type { ServiceResource } from '../types';
 
 const OperationalIntelligence: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
