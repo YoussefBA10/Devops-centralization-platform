@@ -3,10 +3,12 @@ package com.monetique.eye.config;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.User;
+import com.monetique.eye.entity.ManagedNode;
 import com.monetique.eye.entity.enums.Role;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.UserRepository;
+import com.monetique.eye.repository.ManagedNodeRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
@@ -24,15 +26,18 @@ public class DataInitializer {
     private final UserRepository userRepository;
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
+    private final ManagedNodeRepository managedNodeRepository;
     private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(UserRepository userRepository, 
                            EnvironmentRepository environmentRepository, 
                            ApplicationRepository applicationRepository,
+                           ManagedNodeRepository managedNodeRepository,
                            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
+        this.managedNodeRepository = managedNodeRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -48,7 +53,7 @@ public class DataInitializer {
         env = environmentRepository.save(env);
 
         // 1.1 Create ManagedNode entry for the central node
-        com.monetique.eye.entity.ManagedNode centralNode = com.monetique.eye.entity.ManagedNode.builder()
+        ManagedNode centralNode = ManagedNode.builder()
                 .ip(centralIp)
                 .nodeName("central-node")
                 .sshUser(sshUser)
