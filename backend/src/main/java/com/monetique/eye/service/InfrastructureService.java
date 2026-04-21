@@ -205,25 +205,35 @@ public class InfrastructureService {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
         String label = env.getPrometheusLabel();
 
-        List<Map<String, Object>> cpuData = prometheusClient.getContainerCpuUsage(label);
-        List<Map<String, Object>> memData = prometheusClient.getContainerMemoryUsage(label);
-        List<Map<String, Object>> netRxData = prometheusClient.getContainerNetworkRx(label);
-        List<Map<String, Object>> netTxData = prometheusClient.getContainerNetworkTx(label);
-        List<Map<String, Object>> ioReadData = prometheusClient.getContainerDiskRead(label);
-        List<Map<String, Object>> ioWriteData = prometheusClient.getContainerDiskWrite(label);
-        
-        List<Map<String, Object>> hostCpuData = prometheusClient.getHostTotalCpu(label);
-        List<Map<String, Object>> hostMemData = prometheusClient.getHostTotalMemory(label);
+        // Construct a smart environment filter
+        // If it's a central node, include synonyms. Otherwise, strict match to avoid leakage.
+        String envFilter;
+        if (label.equalsIgnoreCase("central-node") || label.equalsIgnoreCase("vmpipe")) {
+            envFilter = "central-node|vmpipe|localhost";
+        } else {
+            envFilter = label;
+        }
 
-        // Fetch Node Name mapping (using node-exporter metrics)
-        List<Map<String, Object>> nodeMetadata = prometheusClient.queryList(String.format("up{environment=~\"%s|central-node\", job=\"node-exporter\"}", label));
+        List<Map<String, Object>> cpuData = prometheusClient.getContainerCpuUsage(envFilter);
+        List<Map<String, Object>> memData = prometheusClient.getContainerMemoryUsage(envFilter);
+        List<Map<String, Object>> netRxData = prometheusClient.getContainerNetworkRx(envFilter);
+        List<Map<String, Object>> netTxData = prometheusClient.getContainerNetworkTx(envFilter);
+        List<Map<String, Object>> ioReadData = prometheusClient.getContainerDiskRead(envFilter);
+        List<Map<String, Object>> ioWriteData = prometheusClient.getContainerDiskWrite(envFilter);
+        
+        List<Map<String, Object>> hostCpuData = prometheusClient.getHostTotalCpu(envFilter);
+        List<Map<String, Object>> hostMemData = prometheusClient.getHostTotalMemory(envFilter);
+
+        // Fetch Node Name mapping globally (using all 'up' metrics that have a nodename)
+        List<Map<String, Object>> nodeMetadata = prometheusClient.queryList("up{nodename!=\"\"}");
         Map<String, String> nodeNameMap = new java.util.HashMap<>();
         for (Map<String, Object> m : nodeMetadata) {
             Map<String, String> metric = (Map<String, String>) m.get("metric");
-            String inst = metric.get("instance").split(":")[0];
+            String inst = metric.get("instance");
             String nodename = metric.get("nodename");
             if (nodename != null && !nodename.isEmpty()) {
                 nodeNameMap.put(inst, nodename);
+                nodeNameMap.put(inst.split(":")[0], nodename); // Also map IP/Hostname without port
             }
         }
 

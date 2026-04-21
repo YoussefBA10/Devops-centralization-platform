@@ -111,43 +111,43 @@ public class PrometheusClient {
         return queryMetric("avg(avg_over_time(up{job=\"node-exporter\"}[1h])) * 100");
     }
 
-    public List<Map<String, Object>> getContainerCpuUsage(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+    public List<Map<String, Object>> getContainerCpuUsage(String envFilter) {
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s\"}[5m]))", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getContainerMemoryUsage(String envLabel) {
-        String query = String.format("max by (container_label_com_docker_compose_service, instance) (container_memory_usage_bytes{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"})", envLabel);
+    public List<Map<String, Object>> getContainerMemoryUsage(String envFilter) {
+        String query = String.format("max by (container_label_com_docker_compose_service, instance) (container_memory_usage_bytes{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s\"})", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getContainerNetworkRx(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_receive_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+    public List<Map<String, Object>> getContainerNetworkRx(String envFilter) {
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_receive_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s\"}[5m]))", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getContainerNetworkTx(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_transmit_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+    public List<Map<String, Object>> getContainerNetworkTx(String envFilter) {
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_network_transmit_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s\"}[5m]))", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getContainerDiskRead(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_reads_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+    public List<Map<String, Object>> getContainerDiskRead(String envFilter) {
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_reads_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s\"}[5m]))", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getContainerDiskWrite(String envLabel) {
-        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_writes_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s|central-node\"}[5m]))", envLabel);
+    public List<Map<String, Object>> getContainerDiskWrite(String envFilter) {
+        String query = String.format("sum by (container_label_com_docker_compose_service, instance) (rate(container_fs_writes_bytes_total{container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\", environment=~\"%s\"}[5m]))", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getHostTotalCpu(String envLabel) {
-        String query = String.format("count by (instance) (node_cpu_seconds_total{mode=\"idle\", environment=~\"%s|central-node\"})", envLabel);
+    public List<Map<String, Object>> getHostTotalCpu(String envFilter) {
+        String query = String.format("count by (instance) (node_cpu_seconds_total{mode=\"idle\", environment=~\"%s\"})", envFilter);
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getHostTotalMemory(String envLabel) {
-        String query = String.format("node_memory_MemTotal_bytes{environment=~\"%s|central-node\"}", envLabel);
+    public List<Map<String, Object>> getHostTotalMemory(String envFilter) {
+        String query = String.format("node_memory_MemTotal_bytes{environment=~\"%s\"}", envFilter);
         return queryList(query);
     }
 }
