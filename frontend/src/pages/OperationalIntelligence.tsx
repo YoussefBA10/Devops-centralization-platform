@@ -19,6 +19,9 @@ import type { StabilityRecord, OperationalDigest, Node } from '../types/index';
 import StabilityGauge from '../components/operational/StabilityGauge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
+import ServiceResourceTable from '../components/operational/ServiceResourceTable';
+import ServiceDetailsDrawer from '../components/operational/ServiceDetailsDrawer';
+import type { ServiceResource } from '../types';
 
 const OperationalIntelligence: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
@@ -26,6 +29,10 @@ const OperationalIntelligence: React.FC = () => {
   const [digest, setDigest] = useState<OperationalDigest | null>(null);
   const [heatmap, setHeatmap] = useState<Node[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pulseData, setPulseData] = useState<ServiceResource[]>([]);
+  const [pulseLoading, setPulseLoading] = useState(false);
+  const [selectedPulseService, setSelectedPulseService] = useState<ServiceResource | null>(null);
+  const [lastPulseUpdate, setLastPulseUpdate] = useState<string>('Never');
 
   const fetchData = async () => {
     if (!selectedEnvironment) return;
@@ -47,9 +54,29 @@ const OperationalIntelligence: React.FC = () => {
     }
   };
 
+  const fetchPulseData = async (silent = false) => {
+    if (!selectedEnvironment) return;
+    if (!silent) setPulseLoading(true);
+    try {
+      const resp = await api.get(`/infrastructure/services/resources?environmentId=${selectedEnvironment.id}`);
+      setPulseData(resp.data);
+      setLastPulseUpdate(new Date().toLocaleTimeString());
+    } catch (error) {
+      console.error('Failed to fetch pulse data', error);
+    } finally {
+      if (!silent) setPulseLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000); // 30s auto-refresh
+    return () => clearInterval(interval);
+  }, [selectedEnvironment]);
+
+  useEffect(() => {
+    fetchPulseData();
+    const interval = setInterval(() => fetchPulseData(true), 10000); // 10s auto-refresh pulse
     return () => clearInterval(interval);
   }, [selectedEnvironment]);
 
@@ -251,6 +278,22 @@ const OperationalIntelligence: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Live Service Resource Pulse Section */}
+      <div className="pt-4">
+         <ServiceResourceTable 
+            data={pulseData} 
+            loading={pulseLoading}
+            lastUpdated={lastPulseUpdate}
+            onRefresh={() => fetchPulseData()}
+            onRowClick={(s) => setSelectedPulseService(s)}
+         />
+      </div>
+
+      <ServiceDetailsDrawer 
+        service={selectedPulseService}
+        onClose={() => setSelectedPulseService(null)}
+      />
     </div>
   );
 };

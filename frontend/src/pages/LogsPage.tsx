@@ -15,7 +15,7 @@ import api from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
-import { getApplications, getSystemLogs, clearSystemLogs } from '../services/api';
+import { getApplications, getSystemLogs, clearSystemLogs, exportSystemLogs } from '../services/api';
 
 const LogsPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
@@ -23,6 +23,7 @@ const LogsPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(50);
+  const [severity, setSeverity] = useState('ALL');
 
   const [applications, setApplications] = useState<any[]>([]);
   const [selectedApp, setSelectedApp] = useState<any | null>(null);
@@ -46,7 +47,7 @@ const LogsPage: React.FC = () => {
     if (!selectedApp) return;
     if (!silent) setLoading(true);
     try {
-      const response = await getSystemLogs(selectedApp.id, { q: query, size: limit });
+      const response = await getSystemLogs(selectedApp.id, { q: query, severity: severity === 'ALL' ? undefined : severity, size: limit });
       setLogs(response.data.logs || []);
       setMetadata({
         total: response.data.total || 0,
@@ -71,9 +72,29 @@ const LogsPage: React.FC = () => {
     }
   };
 
+  const handleExportCSV = async () => {
+    if (!selectedApp) return;
+    try {
+      const response = await exportSystemLogs(selectedApp.id, { 
+        q: query, 
+        severity: severity === 'ALL' ? undefined : severity 
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `logs_${selectedApp.name}_${new Date().getTime()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Failed to export logs', error);
+      alert('Failed to export logs. Please try again.');
+    }
+  };
+
   useEffect(() => {
     fetchLogs();
-  }, [selectedApp, limit]);
+  }, [selectedApp, limit, severity]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -97,7 +118,7 @@ const LogsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8 h-full flex flex-col space-y-6 animate-in fade-in duration-500">
+    <div className="p-6 h-full flex flex-col space-y-4 animate-in fade-in duration-500 w-full">
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
@@ -105,7 +126,7 @@ const LogsPage: React.FC = () => {
           <p className="text-muted-foreground mt-2 text-lg">Centralized telemetry stream across all environment nodes.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
             <Download className="w-4 h-4 mr-2" />
             Export CSV
           </Button>
@@ -150,6 +171,21 @@ const LogsPage: React.FC = () => {
                 <option value={50}>50 Lines</option>
                 <option value={100}>100 Lines</option>
                 <option value={200}>200 Lines</option>
+                <option value={500}>500 Lines</option>
+              </select>
+            </div>
+            <div className="w-32">
+              <select 
+                className="w-full h-11 px-3 rounded-lg bg-background border border-border text-xs font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-primary/50"
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+              >
+                <option value="ALL">All Levels</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="INFO">INFO</option>
+                <option value="WARN">WARN</option>
+                <option value="ERROR">ERROR</option>
+                <option value="FATAL">FATAL</option>
               </select>
             </div>
             <Button type="submit" loading={loading} className="px-8 h-11">
@@ -160,7 +196,7 @@ const LogsPage: React.FC = () => {
       </Card>
 
       {/* Terminal View */}
-      <Card className="flex-1 overflow-hidden flex flex-col border-white/5 bg-[#050505]">
+      <Card className="flex-1 min-h-[650px] overflow-hidden flex flex-col border-white/5 bg-[#050505] shadow-2xl">
         <div className="bg-card border-b border-border px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="flex gap-1.5 border-r border-border pr-4 mr-1">
@@ -204,22 +240,24 @@ const LogsPage: React.FC = () => {
               <tbody className="divide-y divide-white/5">
                 {logs.map((log, i) => (
                   <tr key={i} className="group hover:bg-white/[0.02] transition-colors leading-tight">
-                    <td className="px-6 py-3 text-muted-foreground whitespace-nowrap align-top">
+                    <td className="px-4 py-4 text-muted-foreground whitespace-nowrap align-top text-xs">
                       {new Date(log.timestamp || Date.now()).toLocaleTimeString()}
                     </td>
-                    <td className="px-6 py-3 align-top whitespace-nowrap">
+                    <td className="px-4 py-4 align-top whitespace-nowrap">
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-secondary/50 text-muted-foreground group-hover:text-foreground transition-colors">
                         {log.node || 'system'}
                       </span>
                     </td>
-                    <td className="px-6 py-3 align-top">
+                    <td className="px-4 py-4 align-top">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${getSeverityColor(log.severity || 'INFO')}`}>
                         {log.severity || 'INFO'}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-foreground/80 break-all pr-12">
-                      <div className="font-semibold text-xs mb-1">{log.errorType || log.category}</div>
-                      {log.normalizedSummary || log.rawMessage}
+                    <td className="px-6 py-4 text-foreground/80 break-words">
+                      <div className="flex flex-col gap-1.5 max-w-[800px]">
+                        <span className="font-bold text-[10px] text-primary/60 uppercase tracking-wider">[{log.errorType || log.category}]</span>
+                        <div className="text-[13px] font-medium leading-[1.6]">{log.normalizedSummary || log.rawMessage}</div>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -42,11 +42,11 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String appName, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, from, to, pageable)).join();
+    public Page<LogEventDTO> searchLogs(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, severity, from, to, pageable)).join();
     }
 
-    private Page<LogEventDTO> executeSearch(String appName, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    private Page<LogEventDTO> executeSearch(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
@@ -59,10 +59,18 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             ));
 
             if (queryStr != null && !queryStr.isBlank()) {
-                boolQuery.must(m -> m.multiMatch(mm -> mm
-                        .query(queryStr)
-                        .fields("rawMessage", "normalizedSummary", "errorType", "category")
+                // Ensure wildcards for partial matches if not provided
+                String finalQuery = queryStr.contains("*") ? queryStr : "*" + queryStr + "*";
+                boolQuery.must(m -> m.queryString(qs -> qs
+                        .query(finalQuery)
+                        .fields("raw_message", "message", "normalized_summary", "error_type", "category")
+                        .analyzeWildcard(true)
+                        .defaultOperator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
                 ));
+            }
+
+            if (severity != null && !severity.isBlank() && !"ALL".equalsIgnoreCase(severity)) {
+                boolQuery.filter(f -> f.term(t -> t.field("severity.keyword").value(severity.toUpperCase())));
             }
 
             if (from != null || to != null) {
@@ -104,7 +112,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, LocalDateTime from, LocalDateTime to, Pageable pageable, Throwable t) {
+    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable, Throwable t) {
         log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", appName, t.getMessage());
         return new PageImpl<>(new ArrayList<>(), pageable, 0);
     }

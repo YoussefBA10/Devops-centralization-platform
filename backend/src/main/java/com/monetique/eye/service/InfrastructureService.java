@@ -1,5 +1,6 @@
 package com.monetique.eye.service;
 
+import com.monetique.eye.dto.ServiceResourceDTO;
 import com.monetique.eye.dto.StabilityResponse;
 import com.monetique.eye.dto.TopologyData;
 import com.monetique.eye.entity.Environment;
@@ -16,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,11 +29,10 @@ public class InfrastructureService {
     private final ApplicationRepository applicationRepository;
     private final LogAggregationWindowRepository aggregationRepository;
 
-    // Cache last stability for trend calculation
     private final AtomicReference<Double> lastStabilityScore = new AtomicReference<>(99.6);
 
     public StabilityResponse getGlobalStats() {
-        return getGlobalStability(); // Reusing the calculation but naming it properly for the stats card
+        return getGlobalStability();
     }
 
     public StabilityResponse getGlobalStability() {
@@ -39,7 +40,6 @@ public class InfrastructureService {
             int totalEnvs = (int) environmentRepository.count();
             int activeNodes = prometheusClient.getTotalActiveNodes().intValue();
 
-            // 1. Error Penalty (60% weight)
             double avgZScoreErrors = applicationRepository.findAll().stream()
                     .map(app -> aggregationRepository.findTop24ByApplicationOrderByWindowEndDesc(app))
                     .filter(list -> !list.isEmpty())
@@ -55,7 +55,6 @@ public class InfrastructureService {
 
             double errorPenalty = Math.max(0, avgZScoreErrors * 15);
 
-            // 2. Resource Penalty (30% weight)
             Double avgCpu = prometheusClient.queryMetric("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100");
             Double avgRam = prometheusClient.queryMetric("avg((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)");
             Double avgDisk = prometheusClient.queryMetric("avg(max(1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) by (instance) * 100)");
@@ -65,11 +64,7 @@ public class InfrastructureService {
             double diskOver = Math.max(0, (avgDisk != null ? avgDisk : 0.0) - 90);
             double resourcePenalty = (cpuOver + ramOver + diskOver) * 8;
 
-            // 3. Drift Penalty (10% weight)
-            double avgLogDrift = 0.0; 
-            double driftPenalty = avgLogDrift * 10;
-
-            double stability = 100 - (errorPenalty * 0.6 + resourcePenalty * 0.3 + driftPenalty * 0.1);
+            double stability = 100 - (errorPenalty * 0.6 + resourcePenalty * 0.3 + 0.0);
             stability = Math.max(0.0, Math.min(100.0, stability));
 
             double previous = lastStabilityScore.getAndSet(stability);
@@ -102,26 +97,22 @@ public class InfrastructureService {
     }
 
     public TopologyData getAllEnvironmentsTopology() {
-        log.info("Generating global topology for all environments");
         List<Environment> environments = environmentRepository.findAll();
-        log.info("Found {} environments", environments.size());
         List<TopologyData.TopologyNode> allNodes = new ArrayList<>();
         List<TopologyData.TopologyEdge> allEdges = new ArrayList<>();
 
         for (Environment env : environments) {
-            log.info("Processing topology for environment: {}", env.getName());
             TopologyData data = getTopologyForEnvironment(env);
             if (data.getNodes() != null) allNodes.addAll(data.getNodes());
             if (data.getEdges() != null) allEdges.addAll(data.getEdges());
         }
 
-        // Deduplicate nodes globally, preferring properties from the 'vmpipe' environment
-        java.util.Map<String, TopologyData.TopologyNode> uniqueNodes = new java.util.HashMap<>();
+        Map<String, TopologyData.TopologyNode> uniqueNodes = new java.util.HashMap<>();
         for (TopologyData.TopologyNode node : allNodes) {
             if (!uniqueNodes.containsKey(node.getId())) {
                 uniqueNodes.put(node.getId(), node);
             } else if ("central-node".equalsIgnoreCase(node.getEnvironmentName())) {
-                uniqueNodes.put(node.getId(), node); // Override to retain the central-node badge/properties
+                uniqueNodes.put(node.getId(), node);
             }
         }
 
@@ -132,39 +123,32 @@ public class InfrastructureService {
     }
 
     private TopologyData getTopologyForEnvironment(Environment env) {
-        log.info("Starting topology fetch for environment: {}", env.getName());
         String label = env.getPrometheusLabel();
-        log.info("Prometheus label: {}", label);
         List<TopologyData.TopologyNode> nodes = new ArrayList<>();
         List<TopologyData.TopologyEdge> edges = new ArrayList<>();
 
-        // 1. Query only host-level instances (node-exporter) for this environment and the central node
         List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=~\"%s|central-node\", job=\"node-exporter\"}", label));
         
-        // Group by IP to avoid duplicates (services like cadvisor, node-exporter on same host)
         java.util.Set<String> processedIps = new java.util.HashSet<>();
         int agentCount = 1;
 
         for (Map<String, Object> nodeMap : instances) {
             Map<String, String> metric = (Map<String, String>) nodeMap.get("metric");
-            String instance = metric.get("instance"); // e.g. "192.168.126.131:9100"
+            String instance = metric.get("instance");
             String ip = instance.split(":")[0];
 
             if (processedIps.contains(ip)) continue;
             processedIps.add(ip);
 
-            // 2. Query Metrics for this specific host (using its main exporter port 9100)
             String nodeInstance = ip + ":9100";
             Double cpu = prometheusClient.getCpuUsageForInstance(nodeInstance);
             Double ram = prometheusClient.getMemoryUsagePercentForInstance(nodeInstance);
 
             if (cpu == 0.0 || ram == 0.0) {
-                // Fallback to any instance on this IP if 9100 is not found or returns 0
                 cpu = prometheusClient.queryMetric(String.format("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\", instance=~\"%s.*\"}[5m])) * 100", ip));
                 ram = prometheusClient.queryMetric(String.format("(1 - (node_memory_MemAvailable_bytes{instance=~\"%s.*\"} / node_memory_MemTotal_bytes{instance=~\"%s.*\"})) * 100", ip, ip));
             }
 
-            // 3. Status logic
             String status = "HEALTHY";
             if (cpu > 90 || ram > 90) status = "CRITICAL";
             else if (cpu > 80 || ram > 85) status = "WARNING";
@@ -177,20 +161,14 @@ public class InfrastructureService {
                                    ip.equalsIgnoreCase("central-node");
 
             if (nodeLabel == null || nodeLabel.isEmpty()) {
-                if (isCentralNode) {
-                    nodeLabel = "central-node";
-                } else {
-                    nodeLabel = "node-" + (agentCount++);
-                }
+                if (isCentralNode) nodeLabel = "central-node";
+                else nodeLabel = "node-" + (agentCount++);
             }
-
-            // If it's a known central node but the IP extracted was a service name, use the real IP
-            String displayIp = isCentralNode && env.getCentralNodeIp() != null ? env.getCentralNodeIp() : ip;
 
             nodes.add(TopologyData.TopologyNode.builder()
                     .id(isCentralNode ? "node-global-central" : "node-" + env.getId() + "-" + ip.replace(".", "-"))
                     .label(nodeLabel)
-                    .ip(displayIp)
+                    .ip(isCentralNode && env.getCentralNodeIp() != null ? env.getCentralNodeIp() : ip)
                     .type(isCentralNode ? "db-server" : "server")
                     .cpu(cpu.intValue())
                     .ram(ram.intValue())
@@ -200,14 +178,12 @@ public class InfrastructureService {
                     .build());
         }
 
-        // 4. Generate edges (connect agents to central node)
         String centralId = null;
         for (TopologyData.TopologyNode node : nodes) {
             if (env.getCentralNodeIp() != null && env.getCentralNodeIp().equals(node.getIp())) {
                 centralId = node.getId();
                 break;
             } else if (env.getCentralNodeIp() == null && (node.getIp().equalsIgnoreCase("node-exporter") || node.getIp().equalsIgnoreCase("central-node"))) {
-                // heuristic fallback if central node ip is missing
                 centralId = node.getId();
                 break;
             }
@@ -216,25 +192,89 @@ public class InfrastructureService {
         if (centralId != null) {
             for (TopologyData.TopologyNode node : nodes) {
                 if (!node.getId().equals(centralId)) {
-                    edges.add(TopologyData.TopologyEdge.builder()
-                            .source(node.getId())
-                            .target(centralId)
-                            .build());
+                    edges.add(TopologyData.TopologyEdge.builder().source(node.getId()).target(centralId).build());
                 }
-            }
-        } else if (!nodes.isEmpty()) {
-            // If no central node, connect sequentially just for visual links
-            for (int i = 0; i < nodes.size() - 1; i++) {
-                edges.add(TopologyData.TopologyEdge.builder()
-                        .source(nodes.get(i).getId())
-                        .target(nodes.get(i+1).getId())
-                        .build());
             }
         }
 
-        return TopologyData.builder()
-                .nodes(nodes)
-                .edges(edges)
-                .build();
+        return TopologyData.builder().nodes(nodes).edges(edges).build();
+    }
+
+    public List<ServiceResourceDTO> getEnvironmentServiceResources(Long environmentId) {
+        Environment env = environmentRepository.findById(environmentId)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+        String label = env.getPrometheusLabel();
+
+        List<Map<String, Object>> cpuData = prometheusClient.getContainerCpuUsage(label);
+        List<Map<String, Object>> memData = prometheusClient.getContainerMemoryUsage(label);
+        List<Map<String, Object>> netRxData = prometheusClient.getContainerNetworkRx(label);
+        List<Map<String, Object>> netTxData = prometheusClient.getContainerNetworkTx(label);
+        List<Map<String, Object>> ioReadData = prometheusClient.getContainerDiskRead(label);
+        List<Map<String, Object>> ioWriteData = prometheusClient.getContainerDiskWrite(label);
+        
+        List<Map<String, Object>> hostCpuData = prometheusClient.getHostTotalCpu(label);
+        List<Map<String, Object>> hostMemData = prometheusClient.getHostTotalMemory(label);
+
+        Map<String, Double> hostCpuMap = new java.util.HashMap<>();
+        for (Map<String, Object> m : hostCpuData) {
+            String inst = ((Map<String, String>) m.get("metric")).get("instance");
+            hostCpuMap.put(inst.split(":")[0], Double.parseDouble(m.get("value").toString()));
+        }
+
+        Map<String, Double> hostMemMap = new java.util.HashMap<>();
+        for (Map<String, Object> m : hostMemData) {
+            String inst = ((Map<String, String>) m.get("metric")).get("instance");
+            hostMemMap.put(inst.split(":")[0], Double.parseDouble(m.get("value").toString()));
+        }
+
+        Map<String, ServiceResourceDTO.ServiceResourceDTOBuilder> builders = new java.util.HashMap<>();
+
+        for (Map<String, Object> m : cpuData) {
+            Map<String, String> metric = (Map<String, String>) m.get("metric");
+            String service = metric.get("container_label_com_docker_compose_service");
+            String inst = metric.get("instance");
+            String key = service + "@" + inst;
+
+            double cpuAbs = Double.parseDouble(m.get("value").toString());
+            double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
+            double cpuPercent = (cpuAbs / hostTotal) * 100.0;
+
+            builders.computeIfAbsent(key, k -> ServiceResourceDTO.builder()
+                    .serviceName(service)
+                    .nodeName(inst.split(":")[0])
+                    .status("HEALTHY"))
+                    .cpuUsageCores(cpuAbs)
+                    .cpuUsagePercent(cpuPercent);
+        }
+
+        for (Map<String, Object> m : memData) {
+            Map<String, String> metric = (Map<String, String>) m.get("metric");
+            String service = metric.get("container_label_com_docker_compose_service");
+            String inst = metric.get("instance");
+            String key = service + "@" + inst;
+
+            long memAbs = (long) Double.parseDouble(m.get("value").toString());
+            double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
+            double memPercent = ((double) memAbs / hostTotal) * 100.0;
+
+            builders.computeIfPresent(key, (k, b) -> b.memoryUsageBytes(memAbs).memoryUsagePercent(memPercent));
+        }
+
+        for (Map<String, Object> m : ioReadData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.diskReadBytesPerSec(Double.parseDouble(m.get("value").toString())));
+        for (Map<String, Object> m : ioWriteData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.diskWriteBytesPerSec(Double.parseDouble(m.get("value").toString())));
+        for (Map<String, Object> m : netRxData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.networkRxBytesPerSec(Double.parseDouble(m.get("value").toString())));
+        for (Map<String, Object> m : netTxData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.networkTxBytesPerSec(Double.parseDouble(m.get("value").toString())));
+
+        return builders.values().stream().map(b -> {
+            ServiceResourceDTO dto = b.build();
+            if (dto.getCpuUsagePercent() > 80 || dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
+            else if (dto.getCpuUsagePercent() > 60 || dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    private String metricToKey(Map<String, Object> m) {
+        Map<String, String> metric = (Map<String, String>) m.get("metric");
+        return metric.get("container_label_com_docker_compose_service") + "@" + metric.get("instance");
     }
 }

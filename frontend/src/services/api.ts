@@ -58,8 +58,10 @@ export const promoteApplication = (envId: number, appId: number) =>
   api.post(`/applications/${appId}/promote`, null, { params: { environmentId: envId } });
 
 // Elasticsearch System Logs
-export const getSystemLogs = (appId: number, params: { q?: string, from?: string, to?: string, size?: number, page?: number }) => 
+export const getSystemLogs = (appId: number, params: { q?: string, severity?: string, from?: string, to?: string, size?: number, page?: number }) => 
   api.get(`/apps/${appId}/logs/search`, { params });
+export const exportSystemLogs = (appId: number, params: { q?: string, severity?: string, from?: string, to?: string }) => 
+  api.get(`/apps/${appId}/logs/export`, { params, responseType: 'blob' });
 export const clearSystemLogs = (appId: number) => 
   api.post(`/apps/${appId}/logs/clear`);
 

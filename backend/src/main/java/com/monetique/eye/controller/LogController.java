@@ -33,6 +33,7 @@ public class LogController {
     public ResponseEntity<?> searchLogs(
             @PathVariable Long appId,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) String severity,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
             @RequestParam(defaultValue = "50") int size,
@@ -46,8 +47,34 @@ public class LogController {
         int resolvedSize = Math.min(size, 200);
         Pageable pageable = PageRequest.of(page, resolvedSize);
 
-        LogResponseDTO response = logService.searchLogs(appId, q, from, to, pageable);
+        LogResponseDTO response = logService.searchLogs(appId, q, severity, from, to, pageable);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Export application logs as CSV.
+     */
+    @GetMapping("/export")
+    public ResponseEntity<?> exportLogs(
+            @PathVariable Long appId,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String severity,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
+        
+        if (!securityService.canAccessApplication(appId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access Denied.");
+        }
+
+        String csvData = logService.exportLogsAsCsv(appId, q, severity, from, to);
+        byte[] bytes = csvData.getBytes();
+        org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(bytes);
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=logs_export_" + appId + ".csv")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
+                .contentLength(bytes.length)
+                .body(resource);
     }
 
     /**

@@ -23,7 +23,7 @@ public class LogService {
         this.applicationRepository = applicationRepository;
     }
 
-    public LogResponseDTO searchLogs(Long appId, String query, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    public LogResponseDTO searchLogs(Long appId, String query, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
@@ -32,13 +32,12 @@ public class LogService {
                 ? app.getServiceNameKeyword() 
                 : app.getName();
 
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, from, to, pageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, pageable);
         
         long totalDocs = elasticsearchLogClient.getDocumentCount(appName);
         
-        // Simple heuristic for ingest rate for enterprise feel (e.g. docs per hour over retention)
-        // If retention is strictly 30 days (720 hours)
-        long eps = totalDocs / (30 * 24 * 60 * 60) + 1; // dummy EPS calc ensuring no Div/0 or logic error
+        // Simple heuristic for ingest rate for enterprise feel
+        long eps = totalDocs / (30 * 24 * 60 * 60) + 1;
         String ingestRate = (eps > 1000 ? String.format("%.1fk EPS", eps / 1000.0) : eps + " EPS");
 
         return LogResponseDTO.builder()
@@ -49,6 +48,34 @@ public class LogService {
                 .ingestRate(ingestRate)
                 .retentionDays(30)
                 .build();
+    }
+
+    public String exportLogsAsCsv(Long appId, String query, String severity, LocalDateTime from, LocalDateTime to) {
+        Application app = applicationRepository.findById(appId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found"));
+        
+        String appName = (app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()) 
+                ? app.getServiceNameKeyword() 
+                : app.getName();
+
+        // Fetch top 1000 logs for export
+        org.springframework.data.domain.Pageable exportPageable = org.springframework.data.domain.PageRequest.of(0, 1000);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, exportPageable);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Timestamp,Source,Level,Category,Message\n");
+
+        for (LogEventDTO log : page.getContent()) {
+            csv.append(String.format("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                log.getTimestamp(),
+                log.getNode(),
+                log.getSeverity(),
+                log.getCategory(),
+                (log.getRawMessage() != null ? log.getRawMessage().replace("\"", "\"\"") : "")
+            ));
+        }
+
+        return csv.toString();
     }
 
     public void clearBuffer(Long appId) {

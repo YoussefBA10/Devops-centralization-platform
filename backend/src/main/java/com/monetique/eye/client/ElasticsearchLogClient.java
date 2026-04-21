@@ -7,7 +7,7 @@ import org.springframework.data.domain.Pageable;
 import java.time.LocalDateTime;
 
 public interface ElasticsearchLogClient {
-    Page<LogEventDTO> searchLogs(String appName, String query, LocalDateTime from, LocalDateTime to, Pageable pageable);
+    Page<LogEventDTO> searchLogs(String appName, String query, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable);
     void clearBuffer(String appName);
     long getDocumentCount(String appName);
 }

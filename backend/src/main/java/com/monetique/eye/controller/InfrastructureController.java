@@ -1,5 +1,6 @@
 package com.monetique.eye.controller;
 
+import com.monetique.eye.dto.ServiceResourceDTO;
 import com.monetique.eye.dto.StabilityResponse;
 import com.monetique.eye.dto.TopologyData;
 import com.monetique.eye.service.InfrastructureService;
@@ -47,5 +48,10 @@ public class InfrastructureController {
                         Map.of("id", "node-02", "riskScore", 85, "status", "CRITICAL")
                 )
         );
+    }
+
+    @GetMapping("/services/resources")
+    public List<ServiceResourceDTO> getServiceResources(@RequestParam Long environmentId) {
+        return infrastructureService.getEnvironmentServiceResources(environmentId);
     }
 }

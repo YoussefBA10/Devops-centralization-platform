@@ -75,6 +75,24 @@ export interface Node {
   environmentName?: string;
 }
 
+export interface ServiceResource {
+  serviceName: string;
+  nodeName: string;
+  containerId: string;
+  cpuUsageCores: number;
+  cpuUsagePercent: number;
+  memoryUsageBytes: number;
+  memoryUsagePercent: number;
+  diskReadBytesPerSec: number;
+  diskWriteBytesPerSec: number;
+  networkRxBytesPerSec: number;
+  networkTxBytesPerSec: number;
+  restartCount: number;
+  uptimeSeconds: number;
+  status: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+  healthReason?: string;
+}
+
 export interface Edge {
   source: string;
   target: string;
