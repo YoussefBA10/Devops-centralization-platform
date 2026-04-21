@@ -50,8 +50,13 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
-            // Filter explicitly to match the Logstash "service" property
-            boolQuery.filter(f -> f.term(t -> t.field("service.keyword").value(appName)));
+            // Filter to match any of the common service identifier fields
+            boolQuery.must(m -> m.bool(b -> b.should(s -> s
+                    .term(t -> t.field("service.keyword").value(appName)))
+                    .should(s -> s.term(t -> t.field("service_name.keyword").value(appName)))
+                    .should(s -> s.term(t -> t.field("app.keyword").value(appName)))
+                    .minimumShouldMatch("1")
+            ));
 
             if (queryStr != null && !queryStr.isBlank()) {
                 boolQuery.must(m -> m.multiMatch(mm -> mm
@@ -140,13 +145,22 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 .id(id)
                 .timestamp(source.has("@timestamp") ? LocalDateTime.parse(source.get("@timestamp").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME) : LocalDateTime.now())
                 .node(source.has("node") ? source.get("node").asText() : "unknown")
-                .service(source.has("service") ? source.get("service").asText() : "unknown")
+                .service(getField(source, "service", "service_name", "app"))
                 .severity(source.has("severity") ? source.get("severity").asText() : "INFO")
                 .category(source.has("category") ? source.get("category").asText() : "APPLICATION")
-                .errorType(source.has("errorType") ? source.get("errorType").asText() : null)
-                .normalizedSummary(source.has("normalizedSummary") ? source.get("normalizedSummary").asText() : null)
-                .rawMessage(source.has("message") ? source.get("message").asText() : "")
+                .errorType(getField(source, "errorType", "error_type"))
+                .normalizedSummary(getField(source, "normalizedSummary", "normalized_summary"))
+                .rawMessage(getField(source, "raw_message", "message"))
                 .traceId(source.has("traceId") ? source.get("traceId").asText() : null)
                 .build();
+    }
+
+    private String getField(ObjectNode source, String... fieldNames) {
+        for (String field : fieldNames) {
+            if (source.has(field) && !source.get(field).isNull()) {
+                return source.get(field).asText();
+            }
+        }
+        return null;
     }
 }
