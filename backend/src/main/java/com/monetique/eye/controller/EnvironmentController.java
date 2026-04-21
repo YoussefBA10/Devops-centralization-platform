@@ -113,16 +113,16 @@ public class EnvironmentController {
             String nodeKey = rawIp;
             String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", ""); // e.g., node-131
 
-            // Only collapse into "vmpipe" if it's an internal service name or the central
+            // Only collapse into "central-node" if it's an internal service name or the central
             // node IP
-            if ("vmpipe".equals(label) && ("node-exporter".equals(rawIp) ||
+            if ("central-node".equals(label) && ("node-exporter".equals(rawIp) ||
                     "cadvisor".equals(rawIp) ||
                     "filebeat".equals(rawIp) ||
                     "localhost".equals(rawIp) ||
                     rawIp.equals(env.getCentralNodeIp()))) {
-                nodeKey = "vmpipe";
+                nodeKey = "central-node";
                 rawIp = env.getCentralNodeIp() != null ? env.getCentralNodeIp() : "127.0.0.1";
-                nodeDisplayName = "vmpipe";
+                nodeDisplayName = "central-node";
             }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(
@@ -167,12 +167,12 @@ public class EnvironmentController {
             String nodeKey = rawIp;
             String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", "");
 
-            if ("vmpipe".equals(label) && ("cadvisor".equals(rawIp) ||
+            if ("central-node".equals(label) && ("cadvisor".equals(rawIp) ||
                     "localhost".equals(rawIp) ||
                     rawIp.equals(env.getCentralNodeIp()))) {
-                nodeKey = "vmpipe";
+                nodeKey = "central-node";
                 rawIp = env.getCentralNodeIp() != null ? env.getCentralNodeIp() : "127.0.0.1";
-                nodeDisplayName = "vmpipe";
+                nodeDisplayName = "central-node";
             }
 
             nodeMap.putIfAbsent(nodeKey, new HashMap<>(Map.of(

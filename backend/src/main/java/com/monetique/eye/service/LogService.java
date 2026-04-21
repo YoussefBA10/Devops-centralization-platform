@@ -27,7 +27,10 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String appName = app.getName(); // Logstash sets 'service' to docker container name, which strictly matches appName.
+        // Use serviceNameKeyword (container name) for ES queries, falling back to app name
+        String appName = (app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()) 
+                ? app.getServiceNameKeyword() 
+                : app.getName();
 
         Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, from, to, pageable);
         

@@ -120,8 +120,8 @@ public class InfrastructureService {
         for (TopologyData.TopologyNode node : allNodes) {
             if (!uniqueNodes.containsKey(node.getId())) {
                 uniqueNodes.put(node.getId(), node);
-            } else if ("vmpipe".equalsIgnoreCase(node.getEnvironmentName())) {
-                uniqueNodes.put(node.getId(), node); // Override to retain the vmpipe badge/properties
+            } else if ("central-node".equalsIgnoreCase(node.getEnvironmentName())) {
+                uniqueNodes.put(node.getId(), node); // Override to retain the central-node badge/properties
             }
         }
 
@@ -139,7 +139,7 @@ public class InfrastructureService {
         List<TopologyData.TopologyEdge> edges = new ArrayList<>();
 
         // 1. Query only host-level instances (node-exporter) for this environment and the central node
-        List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=~\"%s|vmpipe\", job=\"node-exporter\"}", label));
+        List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=~\"%s|central-node\", job=\"node-exporter\"}", label));
         
         // Group by IP to avoid duplicates (services like cadvisor, node-exporter on same host)
         java.util.Set<String> processedIps = new java.util.HashSet<>();
@@ -174,11 +174,11 @@ public class InfrastructureService {
                                    ip.equalsIgnoreCase("node-exporter") || 
                                    ip.equalsIgnoreCase("localhost") ||
                                    ip.equalsIgnoreCase("backend") ||
-                                   ip.equalsIgnoreCase("vmpipe");
+                                   ip.equalsIgnoreCase("central-node");
 
             if (nodeLabel == null || nodeLabel.isEmpty()) {
                 if (isCentralNode) {
-                    nodeLabel = "vmpipe";
+                    nodeLabel = "central-node";
                 } else {
                     nodeLabel = "node-" + (agentCount++);
                 }
@@ -206,7 +206,7 @@ public class InfrastructureService {
             if (env.getCentralNodeIp() != null && env.getCentralNodeIp().equals(node.getIp())) {
                 centralId = node.getId();
                 break;
-            } else if (env.getCentralNodeIp() == null && (node.getIp().equalsIgnoreCase("node-exporter") || node.getIp().equalsIgnoreCase("vmpipe"))) {
+            } else if (env.getCentralNodeIp() == null && (node.getIp().equalsIgnoreCase("node-exporter") || node.getIp().equalsIgnoreCase("central-node"))) {
                 // heuristic fallback if central node ip is missing
                 centralId = node.getId();
                 break;

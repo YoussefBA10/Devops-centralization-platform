@@ -88,7 +88,7 @@ public class DeploymentService {
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe"
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
             executeProcess(new String[] {
@@ -215,7 +215,7 @@ public class DeploymentService {
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "vmpipe"
+            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
             // 3. Execute Application Playbook
@@ -458,7 +458,7 @@ public class DeploymentService {
             log.info("Deployment Details - Name: {}, Previous: {}, oldAppName: '{}', isCanary: {}, hostPort: {}, autoPromote: {}, targetNode: {}", 
                     request.getName(), previousName, oldAppName, isCanary, hostPort, request.getAutoPromote(), request.getTargetNode());
 
-            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "vmpipe"
+            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "central-node"
                     : "node-" + request.getTargetNode().replace(".", "-");
 
             String buildArgsStr = "";
@@ -771,7 +771,7 @@ public class DeploymentService {
             }
 
             String envLabel = environment.getName().toLowerCase().replace(" ", "-");
-            String nodeName = ip.equals(environment.getCentralNodeIp()) ? "vmpipe" : "node-" + ip.replace(".", "-");
+            String nodeName = ip.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
 
             // Determine targets based on whether the IP matches the central node
             String nodeExporterTarget = ip + ":9100";

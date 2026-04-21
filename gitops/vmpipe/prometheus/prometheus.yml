@@ -19,11 +19,11 @@ scrape_configs:
     static_configs:
       - targets: ['backend:9001']
         labels:
-          environment: "vmpipe"
-          nodename: "vmpipe"
+          environment: "central-node"
+          nodename: "central-node"
 
-  # 2. Central Node (vmpipe) - Self monitoring
-  - job_name: 'vmpipe'
+  # 2. Central Node (central-node) - Self monitoring
+  - job_name: 'central-node'
     static_configs:
       - targets: ['localhost:9090']
         labels:
@@ -86,24 +86,24 @@ scrape_configs:
     static_configs:
       - targets: ['elasticsearch-exporter:9114']
         labels:
-          environment: "vmpipe"
-          nodename: "vmpipe"
+          environment: "central-node"
+          nodename: "central-node"
 
   # 8. Alertmanager (Self monitoring)
   - job_name: 'alertmanager'
     static_configs:
       - targets: ['alertmanager:9093']
         labels:
-          environment: "vmpipe"
-          nodename: "vmpipe"
+          environment: "central-node"
+          nodename: "central-node"
 
   # 9. Grafana (Self monitoring)
   - job_name: 'grafana'
     static_configs:
       - targets: ['grafana:3000']
         labels:
-          environment: "vmpipe"
-          nodename: "vmpipe"
+          environment: "central-node"
+          nodename: "central-node"
 
   # 10. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'

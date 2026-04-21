@@ -17,7 +17,7 @@ processors:
   - add_fields:
       target: ''
       fields:
-        node: "vmpipe"
+        node: "central-node"
 
 output.logstash:
   hosts: ["logstash:5045"]

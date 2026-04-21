@@ -8,8 +8,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -34,8 +34,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
@@ -109,8 +109,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     volumes:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
@@ -130,8 +130,8 @@ services:
     # ... (other blackbox config)
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     ports:
       - "9115:9115"
     volumes:
@@ -147,8 +147,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     ports:
       - "9093:9093"
     volumes:
@@ -163,8 +163,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     ports:
@@ -183,8 +183,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     environment:
       - discovery.type=single-node
       - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
@@ -201,8 +201,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     volumes:
       - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
     ports:
@@ -241,13 +241,13 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     volumes:
       - ../:/app/gitops
     environment:
       SERVER_PORT: ${SERVER_PORT}
-      NODE_NAME: "vmpipe"
+      NODE_NAME: "central-node"
       SPRING_DATASOURCE_URL: ${DB_URL}
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
@@ -289,8 +289,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
-      node: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     ports:
       - "80:80"
     depends_on:

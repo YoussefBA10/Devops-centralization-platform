@@ -36,28 +36,60 @@ public class DataInitializer {
         this.passwordEncoder = passwordEncoder;
     }
 
-    public Environment manualInitialize(String environmentName, String centralIp) {
-        log.info("Performing manual initialization for environment: {}", environmentName);
+    public Environment manualInitialize(String environmentName, String centralIp, String sshUser) {
+        String finalName = (environmentName == null || environmentName.isEmpty()) ? "central-node" : environmentName;
+        log.info("Performing manual initialization for environment: {}", finalName);
         
         // 1. Create Environment
         Environment env = new Environment();
-        env.setName(environmentName);
+        env.setName(finalName);
         env.setCentralNodeIp(centralIp);
         env.setCreatedAt(java.time.LocalDateTime.now());
         env = environmentRepository.save(env);
 
-        // 2. Create Core Applications
-        Application backend = new Application();
-        backend.setName("Backend Service");
-        backend.setEnvironment(env);
+        // 1.1 Create ManagedNode entry for the central node
+        com.monetique.eye.entity.ManagedNode centralNode = com.monetique.eye.entity.ManagedNode.builder()
+                .ip(centralIp)
+                .nodeName("central-node")
+                .sshUser(sshUser)
+                .sshPassword("auto-provisioned") // Placeholder, should be handled via SSH keys or user input in production
+                .environment(env)
+                .build();
+        managedNodeRepository.save(centralNode);
+
+        // 2. Create Core Applications matching docker-compose container names
+        //    These names MUST match the container_name in docker-compose.yml
+        Application backend = Application.builder()
+                .name("backend")
+                .environment(env)
+                .serviceNameKeyword("backend")
+                .type("BACKEND")
+                .appLanguage("Java Spring Boot")
+                .targetNode(centralIp)
+                .port(8880)
+                .containerPort(8880)
+                .status("RUNNING")
+                .repoUrl("local")
+                .branch("main")
+                .build();
         applicationRepository.save(backend);
 
-        Application frontend = new Application();
-        frontend.setName("Frontend Dashboard");
-        frontend.setEnvironment(env);
+        Application frontend = Application.builder()
+                .name("frontend")
+                .environment(env)
+                .serviceNameKeyword("frontend")
+                .type("FRONTEND")
+                .appLanguage("React")
+                .targetNode(centralIp)
+                .port(80)
+                .containerPort(80)
+                .status("RUNNING")
+                .repoUrl("local")
+                .branch("main")
+                .build();
         applicationRepository.save(frontend);
 
-        log.info("Manual initialization completed for environment {}", env.getId());
+        log.info("Manual initialization completed for environment {} with apps [backend, frontend]", env.getId());
         return env;
     }
 

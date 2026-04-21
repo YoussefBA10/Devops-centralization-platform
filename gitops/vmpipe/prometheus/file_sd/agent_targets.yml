@@ -2,18 +2,18 @@
 - targets:
   - "node-exporter:9100"
   labels:
-    nodename: "vmpipe"
-    environment: "vmpipe"
+    nodename: "central-node"
+    environment: "central-node"
     job: "node-exporter"
 - targets:
   - "cadvisor:8080"
   labels:
-    nodename: "vmpipe"
-    environment: "vmpipe"
+    nodename: "central-node"
+    environment: "central-node"
     job: "cadvisor"
 - targets:
   - "filebeat:5066"
   labels:
-    nodename: "vmpipe"
-    environment: "vmpipe"
+    nodename: "central-node"
+    environment: "central-node"
     job: "filebeat"

@@ -34,18 +34,19 @@ public class SetupController {
         }
 
         String vmpipeIp = request.get("vmpipeIp");
-        String environmentName = request.getOrDefault("environmentName", "vmpipe");
+        String environmentName = request.getOrDefault("environmentName", "central-node");
+        String sshUser = request.getOrDefault("sshUser", "root");
         
         if (vmpipeIp == null || vmpipeIp.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "vmpipe IP is required"));
         }
 
         try {
-            // 1. Trigger Data Initialization
-            Environment env = dataInitializer.manualInitialize(environmentName, vmpipeIp);
+            // 1. Trigger Data Initialization (creates env + backend/frontend apps)
+            Environment env = dataInitializer.manualInitialize(environmentName, vmpipeIp, sshUser);
             
             // 2. Register the central node itself in Prometheus and Ansible Inventory
-            deploymentService.updateInventory(environmentName, vmpipeIp, "root");
+            deploymentService.updateInventory(environmentName, vmpipeIp, sshUser);
             deploymentService.registerNodeInPrometheus(env, vmpipeIp);
             
             return ResponseEntity.ok(Map.of("message", "System initialized successfully"));

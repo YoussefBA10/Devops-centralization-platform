@@ -8,7 +8,8 @@ import {
   ChevronRight, 
   CheckCircle2, 
   AlertCircle,
-  Loader2
+  Loader2,
+  User
 } from 'lucide-react';
 import { initializeSetup } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
@@ -22,8 +23,9 @@ const SetupWizard: React.FC = () => {
 
   const [formData, setFormData] = useState({
     vmpipeIp: '',
-    vmpipeHostname: 'vmpipe',
-    environmentName: 'vmpipe'
+    vmpipeHostname: 'central-node',
+    environmentName: 'central-node',
+    sshUser: 'root'
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,7 +91,7 @@ const SetupWizard: React.FC = () => {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-2">
                 <h2 className="text-2xl font-semibold text-white">System Architecture</h2>
-                <p className="text-slate-400">Welcome to Monetique-Eye. To monitor your infrastructure, we need to locate your central <b>vmpipe</b> node.</p>
+                <p className="text-slate-400">Welcome to Monetique-Eye. To monitor your infrastructure, we need to locate your central <b>central-node</b>.</p>
               </div>
               
               <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex gap-4">
@@ -129,15 +131,15 @@ const SetupWizard: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-400 ml-1">Hostname</label>
+                    <label className="text-sm font-medium text-slate-400 ml-1">SSH User</label>
                     <div className="relative group">
-                      <Terminal className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
                       <input 
                         type="text"
-                        placeholder="vmpipe"
+                        placeholder="root"
                         className="w-full h-12 bg-[#0a0a0c] border border-white/5 rounded-xl pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white"
-                        value={formData.vmpipeHostname}
-                        onChange={e => setFormData({...formData, vmpipeHostname: e.target.value})}
+                        value={formData.sshUser}
+                        onChange={e => setFormData({...formData, sshUser: e.target.value})}
                       />
                     </div>
                   </div>
@@ -147,7 +149,7 @@ const SetupWizard: React.FC = () => {
                       <Settings className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-blue-500 transition-colors" />
                       <input 
                         type="text"
-                        placeholder="vmpipe"
+                        placeholder="central-node"
                         className="w-full h-12 bg-[#0a0a0c] border border-white/5 rounded-xl pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white"
                         value={formData.environmentName}
                         onChange={e => setFormData({...formData, environmentName: e.target.value})}
