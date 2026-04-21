@@ -15,6 +15,9 @@ spring:
     properties:
       hibernate:
         dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.MySQL8Dialect}
+  
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URL:http://192.168.126.130:9200}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -27,6 +30,7 @@ logstash:
 
 elasticsearch:
   url: ${ELASTICSEARCH_URL:http://192.168.126.130:9200}
+
 
 prometheus:
   url: ${PROMETHEUS_URL:http://192.168.126.130:9090}

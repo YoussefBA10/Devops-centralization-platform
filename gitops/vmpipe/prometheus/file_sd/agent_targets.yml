@@ -1,18 +1,19 @@
+---
 - targets:
   - "node-exporter:9100"
   labels:
-    job: "node-exporter"
-    environment: "vmpipe"
     nodename: "vmpipe"
+    environment: "vmpipe"
+    job: "node-exporter"
 - targets:
   - "cadvisor:8080"
   labels:
-    job: "cadvisor"
-    environment: "vmpipe"
     nodename: "vmpipe"
+    environment: "vmpipe"
+    job: "cadvisor"
 - targets:
   - "filebeat:5066"
   labels:
-    job: "filebeat"
-    environment: "vmpipe"
     nodename: "vmpipe"
+    environment: "vmpipe"
+    job: "filebeat"
