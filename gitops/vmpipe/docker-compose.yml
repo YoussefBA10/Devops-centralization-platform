@@ -68,7 +68,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -90,7 +91,8 @@ services:
     restart: always
     labels:
       app: "monetique-eye"
-      env: "vmpipe"
+      env: "central-node"
+      node: "central-node"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw

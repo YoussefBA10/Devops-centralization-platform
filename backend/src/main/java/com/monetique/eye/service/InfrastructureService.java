@@ -207,12 +207,8 @@ public class InfrastructureService {
 
         // Construct a smart environment filter
         // If it's a central node, include synonyms. Otherwise, strict match to avoid leakage.
-        String envFilter;
-        if (label.equalsIgnoreCase("central-node") || label.equalsIgnoreCase("vmpipe")) {
-            envFilter = "central-node|vmpipe|localhost";
-        } else {
-            envFilter = label;
-        }
+        String envFilter = (label.equalsIgnoreCase("central-node") || label.equalsIgnoreCase("vmpipe")) 
+                           ? "central-node|vmpipe|localhost" : label;
 
         List<Map<String, Object>> cpuData = prometheusClient.getContainerCpuUsage(envFilter);
         List<Map<String, Object>> memData = prometheusClient.getContainerMemoryUsage(envFilter);
@@ -224,7 +220,6 @@ public class InfrastructureService {
         List<Map<String, Object>> hostCpuData = prometheusClient.getHostTotalCpu(envFilter);
         List<Map<String, Object>> hostMemData = prometheusClient.getHostTotalMemory(envFilter);
 
-        // Fetch Node Name mapping globally (using all 'up' metrics that have a nodename)
         List<Map<String, Object>> nodeMetadata = prometheusClient.queryList("up{nodename!=\"\"}");
         Map<String, String> nodeNameMap = new java.util.HashMap<>();
         for (Map<String, Object> m : nodeMetadata) {
@@ -233,11 +228,10 @@ public class InfrastructureService {
             String nodename = metric.get("nodename");
             if (nodename != null && !nodename.isEmpty()) {
                 nodeNameMap.put(inst, nodename);
-                nodeNameMap.put(inst.split(":")[0], nodename); // Also map IP/Hostname without port
+                nodeNameMap.put(inst.split(":")[0], nodename);
             }
         }
 
-        // Helper maps for host capacity
         Map<String, Double> hostCpuMap = new java.util.HashMap<>();
         for (Map<String, Object> m : hostCpuData) {
             String inst = ((Map<String, String>) m.get("metric")).get("instance");
@@ -254,9 +248,9 @@ public class InfrastructureService {
 
         for (Map<String, Object> m : cpuData) {
             Map<String, String> metric = (Map<String, String>) m.get("metric");
-            String service = metric.get("container_label_com_docker_compose_service");
+            String serviceName = resolveServiceName(metric);
             String inst = metric.get("instance");
-            String key = service + "@" + inst;
+            String key = serviceName + "@" + inst;
 
             double cpuAbs = Double.parseDouble(m.get("value").toString());
             double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
@@ -265,7 +259,7 @@ public class InfrastructureService {
             String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
 
             builders.computeIfAbsent(key, k -> ServiceResourceDTO.builder()
-                    .serviceName(service)
+                    .serviceName(serviceName)
                     .nodeName(displayNode)
                     .status("HEALTHY"))
                     .cpuUsageCores(cpuAbs)
@@ -274,9 +268,9 @@ public class InfrastructureService {
 
         for (Map<String, Object> m : memData) {
             Map<String, String> metric = (Map<String, String>) m.get("metric");
-            String service = metric.get("container_label_com_docker_compose_service");
+            String serviceName = resolveServiceName(metric);
             String inst = metric.get("instance");
-            String key = service + "@" + inst;
+            String key = serviceName + "@" + inst;
 
             long memAbs = (long) Double.parseDouble(m.get("value").toString());
             double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
@@ -298,8 +292,19 @@ public class InfrastructureService {
         }).collect(Collectors.toList());
     }
 
+    private String resolveServiceName(Map<String, String> metric) {
+        String service = metric.get("container_label_com_docker_compose_service");
+        if (service == null || service.isEmpty()) {
+            service = metric.get("name");
+            if (service != null && service.startsWith("/")) {
+                service = service.substring(1);
+            }
+        }
+        return (service != null && !service.isEmpty()) ? service : "unknown-service";
+    }
+
     private String metricToKey(Map<String, Object> m) {
         Map<String, String> metric = (Map<String, String>) m.get("metric");
-        return metric.get("container_label_com_docker_compose_service") + "@" + metric.get("instance");
+        return resolveServiceName(metric) + "@" + metric.get("instance");
     }
 }

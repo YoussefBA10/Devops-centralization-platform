@@ -27,9 +27,9 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
         labels:
-          environment: "vmpipe"
+          environment: "central-node"
           role: "central-node"
-          nodename: "vmpipe"
+          nodename: "central-node"
 
   # 3. Dynamic scraping of all Agent Nodes (Environment-aware)
   # Prometheus will automatically discover nodes based on labels added by Ansible
