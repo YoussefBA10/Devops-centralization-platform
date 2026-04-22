@@ -100,17 +100,17 @@
     # -----------------------------
     # Run Filebeat
     # -----------------------------
-    #- name: Run Filebeat
-    #  shell: |
-    #    docker run -d --name filebeat \
-    #    --restart=always \
-    #    --user root \
-    #    -v /var/lib/docker/containers:/var/lib/docker/containers:ro \
-    #    -v /var/run/docker.sock:/var/run/docker.sock:ro \
-    #    docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
-    #    filebeat -e \
-    #    -E "output.elasticsearch.enabled=false" \
-    #    -E "output.logstash.hosts=['{{ central_logstash_ip }}:5045']" \
-    #    -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
-    #  args:
-    #    executable: /bin/bash
+    - name: Run Filebeat
+      shell: |
+        docker run -d --name filebeat \
+        --restart=always \
+        --user root \
+        -v /var/lib/docker/containers:/var/lib/docker/containers:ro \
+        -v /var/run/docker.sock:/var/run/docker.sock:ro \
+        docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
+        filebeat -e \
+        -E "output.elasticsearch.enabled=false" \
+        -E "output.logstash.hosts=['{{ central_logstash_ip }}:5045']" \
+        -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
+      args:
+        executable: /bin/bash
