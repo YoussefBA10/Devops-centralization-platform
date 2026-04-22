@@ -232,6 +232,13 @@ public class InfrastructureService {
             }
         }
 
+        // Precision mapping for central node synonyms
+        if (envFilter.contains("central-node") || envFilter.contains("localhost")) {
+            nodeNameMap.put("cadvisor", env.getName());
+            nodeNameMap.put("node-exporter", env.getName());
+            nodeNameMap.put("localhost", env.getName());
+        }
+
         Map<String, Double> hostCpuMap = new java.util.HashMap<>();
         for (Map<String, Object> m : hostCpuData) {
             String inst = ((Map<String, String>) m.get("metric")).get("instance");
@@ -242,6 +249,16 @@ public class InfrastructureService {
         for (Map<String, Object> m : hostMemData) {
             String inst = ((Map<String, String>) m.get("metric")).get("instance");
             hostMemMap.put(inst.split(":")[0], Double.parseDouble(m.get("value").toString()));
+        }
+
+        // Bridge cadvisor instance names to host resources for central node
+        if (hostCpuMap.containsKey("node-exporter")) {
+            hostCpuMap.put("cadvisor", hostCpuMap.get("node-exporter"));
+            hostCpuMap.put("localhost", hostCpuMap.get("node-exporter"));
+        }
+        if (hostMemMap.containsKey("node-exporter")) {
+            hostMemMap.put("cadvisor", hostMemMap.get("node-exporter"));
+            hostMemMap.put("localhost", hostMemMap.get("node-exporter"));
         }
 
         Map<String, ServiceResourceDTO.ServiceResourceDTOBuilder> builders = new java.util.HashMap<>();
