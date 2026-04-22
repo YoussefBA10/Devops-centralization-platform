@@ -207,8 +207,8 @@ public class InfrastructureService {
 
         // Construct a smart environment filter
         // If it's a central node, include synonyms. Otherwise, strict match to avoid leakage.
-        String envFilter = (label.equalsIgnoreCase("central-node") || label.equalsIgnoreCase("vmpipe")) 
-                           ? "central-node|vmpipe|localhost" : label;
+        String envFilter = (label != null && (label.equalsIgnoreCase("central-node") || label.equalsIgnoreCase("vmpipe"))) 
+                           ? "central-node|vmpipe|localhost" : (label != null ? label : "");
 
         List<Map<String, Object>> cpuData = prometheusClient.getContainerCpuUsage(envFilter);
         List<Map<String, Object>> memData = prometheusClient.getContainerMemoryUsage(envFilter);

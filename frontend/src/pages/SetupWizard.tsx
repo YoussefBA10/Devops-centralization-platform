@@ -33,6 +33,12 @@ const SetupWizard: React.FC = () => {
     setLoading(true);
     setError(null);
     
+    if (formData.sshUser === formData.environmentName) {
+      setError('Security Restriction: SSH User and Environment Name cannot be identical. Please use different values.');
+      setLoading(false);
+      return;
+    }
+
     try {
       await initializeSetup(formData);
       setStep(3); // Move to success step
@@ -91,7 +97,7 @@ const SetupWizard: React.FC = () => {
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-2">
                 <h2 className="text-2xl font-semibold text-white">System Architecture</h2>
-                <p className="text-slate-400">Welcome to Monetique-Eye. To monitor your infrastructure, we need to locate your central <b>central-node</b>.</p>
+                <p className="text-slate-400">Welcome to Monetique-Eye. To monitor your infrastructure, we need to locate your central central-node.</p>
               </div>
               
               <div className="p-4 rounded-2xl bg-blue-500/5 border border-blue-500/10 flex gap-4">
@@ -156,6 +162,13 @@ const SetupWizard: React.FC = () => {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="px-4 py-2 rounded-lg bg-blue-500/5 border border-blue-500/10 flex items-center gap-3">
+                  <AlertCircle className="w-4 h-4 text-blue-400 shrink-0" />
+                  <p className="text-[11px] text-blue-300/70 italic">
+                    Info: For security reasons, the SSH user must differ from the environment name.
+                  </p>
                 </div>
               </div>
 

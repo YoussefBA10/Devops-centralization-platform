@@ -15,9 +15,17 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
   const [targetIp, setTargetIp] = useState('');
   const [sshUser, setSshUser] = useState('root');
   const [sshPassword, setSshPassword] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setLocalError(null);
+    
+    if (sshUser === envName) {
+      setLocalError(`Security Restriction: SSH username cannot be identical to the environment name (${envName}).`);
+      return;
+    }
+    
     onDeploy(targetIp, sshUser, sshPassword);
   };
 
@@ -67,23 +75,39 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
                 <label className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
                    SSH Password
                 </label>
-                <Input 
-                  type="password"
-                  placeholder="********" 
-                  value={sshPassword} 
-                  onChange={(e) => setSshPassword(e.target.value)}
-                  required
-                  className="h-12 bg-black/20 border-white/10 text-lg tracking-[0.2em]"
-                />
+                  <Input 
+                    type="password"
+                    placeholder="********" 
+                    value={sshPassword} 
+                    onChange={(e) => setSshPassword(e.target.value)}
+                    required
+                    className="h-12 bg-black/20 border-white/10 text-lg tracking-[0.2em]"
+                  />
+                </div>
+              </div>
+            
+            <div className="flex flex-col gap-3">
+              <div className="px-4 py-2 rounded-lg bg-blue-500/5 border border-blue-500/10 flex items-center gap-3">
+                <AlertCircle className="w-4 h-4 text-blue-400 shrink-0" />
+                <p className="text-[11px] text-blue-300/70 italic">
+                  Info: For security reasons, the SSH username must differ from the environment name ({envName}).
+                </p>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-amber-500 flex items-start gap-3">
+                 <AlertCircle className="w-5 h-5 shrink-0" />
+                 <p className="text-xs leading-relaxed font-medium">Warning: Password is used only once for SSH configuration and is not stored or logged anywhere in our system.</p>
               </div>
             </div>
-            
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-amber-500 flex items-start gap-3">
-               <AlertCircle className="w-5 h-5 shrink-0" />
-               <p className="text-xs leading-relaxed font-medium">Warning: Password is used only once for SSH configuration and is not stored or logged anywhere in our system.</p>
-            </div>
 
-            {error && (
+            {localError && (
+              <div className="p-4 rounded-xl flex items-start gap-3 border bg-destructive/10 border-destructive/20 text-destructive animate-in slide-in-from-top-2">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <span className="text-sm font-bold">{localError}</span>
+              </div>
+            )}
+
+            {error && !localError && (
               <div className="p-4 rounded-xl flex items-start gap-3 border bg-destructive/10 border-destructive/20 text-destructive animate-in slide-in-from-top-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 <span className="text-sm font-bold">{error}</span>
