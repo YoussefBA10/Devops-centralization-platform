@@ -58,6 +58,8 @@ export interface Ticket {
   id: number;
   title: string;
   description: string;
+  priority?: string;
+  node?: string;
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
   environment?: Environment;
   application?: Application;
@@ -102,6 +104,30 @@ export interface TopologyData {
   environmentId: number;
   nodes: Node[];
   edges: Edge[];
+}
+
+export interface Anomaly {
+  description: string;
+  node: string;
+  timestamp: string;
+  severity: 'CRITICAL' | 'WARNING' | 'INFO';
+  type: 'RESOURCE' | 'LOG' | 'RESTART' | 'STATUS';
+}
+
+export interface ActivityItem {
+  title: string;
+  type: 'system' | 'incident';
+  env: string;
+  timestamp: string;
+}
+
+export interface DashboardOverview {
+  totalNodes: number;
+  stabilityIndex: number;
+  openTickets: number;
+  recentActivity: ActivityItem[];
+  healthStream: string[];
+  systemLoad: number[];
 }
 
 export const _MOD_TYPES = true;

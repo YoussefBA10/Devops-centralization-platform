@@ -62,7 +62,10 @@ public class PrometheusClient {
                     Map<String, Object> item = new HashMap<>();
                     item.put("metric", res.get("metric"));
                     List valuePair = (List) res.get("value");
-                    item.put("value", valuePair.get(1));
+                    if (valuePair != null && valuePair.size() >= 2) {
+                        item.put("timestamp", valuePair.get(0));
+                        item.put("value", valuePair.get(1));
+                    }
                     list.add(item);
                 }
             }
@@ -112,39 +115,66 @@ public class PrometheusClient {
     }
 
     public List<Map<String, Object>> getContainerCpuUsage(String envFilter) {
-        String filter = "container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\"";
-        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (rate(container_cpu_usage_seconds_total{%s, environment=~\"%2$s\"}[5m]) or rate(container_cpu_usage_seconds_total{%s, container_label_env=~\"%2$s\"}[5m]))", filter, envFilter);
+        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (%s)", 
+                buildContainerQuery("rate(container_cpu_usage_seconds_total", "[5m])", envFilter));
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerMemoryUsage(String envFilter) {
-        String filter = "container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\"";
-        String query = String.format("max by (container_label_com_docker_compose_service, name, instance) (container_memory_usage_bytes{%s, environment=~\"%2$s\"} or container_memory_usage_bytes{%s, container_label_env=~\"%2$s\"})", filter, envFilter);
+        String query = String.format("max by (container_label_com_docker_compose_service, name, instance) (%s)", 
+                buildContainerQuery("container_memory_usage_bytes", "", envFilter));
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerNetworkRx(String envFilter) {
-        String filter = "container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\"";
-        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (rate(container_network_receive_bytes_total{%s, environment=~\"%2$s\"}[5m]) or rate(container_network_receive_bytes_total{%s, container_label_env=~\"%2$s\"}[5m]))", filter, envFilter);
+        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (%s)", 
+                buildContainerQuery("rate(container_network_receive_bytes_total", "[5m])", envFilter));
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerNetworkTx(String envFilter) {
-        String filter = "container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\"";
-        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (rate(container_network_transmit_bytes_total{%s, environment=~\"%2$s\"}[5m]) or rate(container_network_transmit_bytes_total{%s, container_label_env=~\"%2$s\"}[5m]))", filter, envFilter);
+        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (%s)", 
+                buildContainerQuery("rate(container_network_transmit_bytes_total", "[5m])", envFilter));
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerDiskRead(String envFilter) {
-        String filter = "container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\"";
-        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (rate(container_fs_reads_bytes_total{%s, environment=~\"%2$s\"}[5m]) or rate(container_fs_reads_bytes_total{%s, container_label_env=~\"%2$s\"}[5m]))", filter, envFilter);
+        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (%s)", 
+                buildContainerQuery("rate(container_fs_reads_bytes_total", "[5m])", envFilter));
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerDiskWrite(String envFilter) {
-        String filter = "container_label_com_docker_compose_service!~\"cadvisor|prometheus|node-exporter|logstash|elasticsearch|eye-agent|grafana\"";
-        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (rate(container_fs_writes_bytes_total{%s, environment=~\"%2$s\"}[5m]) or rate(container_fs_writes_bytes_total{%s, container_label_env=~\"%2$s\"}[5m]))", filter, envFilter);
+        String query = String.format("sum by (container_label_com_docker_compose_service, name, instance) (%s)", 
+                buildContainerQuery("rate(container_fs_writes_bytes_total", "[5m])", envFilter));
         return queryList(query);
+    }
+
+    public List<Map<String, Object>> getContainerStartTimes(String envFilter) {
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String query = String.format("last_over_time(container_start_time_seconds{%s, environment=~\"%s\"}[10m]) or last_over_time(container_start_time_seconds{%s, container_label_env=~\"%s\"}[10m])",
+                infraExclusion, envFilter, infraExclusion, envFilter);
+        return queryList(query);
+    }
+
+    public List<Map<String, Object>> getContainerRestartCounts(String envFilter) {
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String query = String.format("changes(container_start_time_seconds{%s, environment=~\"%s\"}[24h]) or changes(container_start_time_seconds{%s, container_label_env=~\"%s\"}[24h])",
+                infraExclusion, envFilter, infraExclusion, envFilter);
+        return queryList(query);
+    }
+
+    public List<Map<String, Object>> getContainerLastSeen(String envFilter) {
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String query = String.format("last_over_time(container_last_seen{%s, environment=~\"%s\"}[10m]) or last_over_time(container_last_seen{%s, container_label_env=~\"%s\"}[10m])",
+                infraExclusion, envFilter, infraExclusion, envFilter);
+        return queryList(query);
+    }
+
+    private String buildContainerQuery(String baseMetric, String suffix, String envFilter) {
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        return String.format("%1$s{%2$s, environment=~\"%3$s\"}%4$s or %1$s{%2$s, container_label_env=~\"%3$s\"}%4$s", 
+                baseMetric, infraExclusion, envFilter, suffix);
     }
 
     public List<Map<String, Object>> getHostTotalCpu(String envFilter) {

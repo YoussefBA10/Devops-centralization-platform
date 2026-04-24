@@ -26,6 +26,7 @@ public class ApplicationController {
     private final EnvironmentRepository environmentRepository;
     private final DeploymentService deploymentService;
     private final DeploymentLogRepository deploymentLogRepository;
+    private final com.monetique.eye.service.ActivityLogService activityLogService;
 
     @GetMapping
     public ResponseEntity<List<ApplicationDTO>> getApplications(@RequestParam Long environmentId) {
@@ -129,6 +130,7 @@ public class ApplicationController {
         // Async deployment
         deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName);
 
+        activityLogService.logActivity("Deployment Started: " + app.getName(), "deployment", env.getName());
         return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
     }
 
@@ -206,6 +208,7 @@ public class ApplicationController {
     @PostMapping("/{applicationId}/promote")
     public ResponseEntity<?> promote(@PathVariable Long applicationId, @RequestParam Long environmentId) {
         deploymentService.promoteApplication(environmentId, applicationId);
+        activityLogService.logActivity("Canary Promoted: " + applicationId, "deployment", "Global");
         return ResponseEntity.ok(Map.of("message", "Application promotion triggered."));
     }
 }

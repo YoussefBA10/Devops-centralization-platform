@@ -48,6 +48,7 @@ public class DataInitializer {
         // 1. Create Environment
         Environment env = new Environment();
         env.setName(finalName);
+        env.setPrometheusLabel(finalName);
         env.setCentralNodeIp(centralIp);
         env.setCreatedAt(java.time.LocalDateTime.now());
         env = environmentRepository.save(env);

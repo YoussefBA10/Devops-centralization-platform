@@ -42,16 +42,20 @@ public class DeploymentService {
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
 
+    private final com.monetique.eye.service.ActivityLogService activityLogService;
+
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
             EnvironmentRepository environmentRepository,
             ApplicationRepository applicationRepository,
             com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            com.monetique.eye.service.ActivityLogService activityLogService) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.managedNodeRepository = managedNodeRepository;
         this.objectMapper = objectMapper;
+        this.activityLogService = activityLogService;
     }
 
     @Async
@@ -91,11 +95,14 @@ public class DeploymentService {
             String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
-            executeProcess(new String[] {
+            executeProcessSecure(new String[] {
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
                     "--limit", targetIp,
+                    "-b",
+                    "-e", "ansible_become_pass=" + sshPassword,
+                    "-e", "ansible_ssh_pass=" + sshPassword,
                     "-e", "env_label=" + envLabel,
                     "-e", "ansible_user=" + sshUser,
                     "-e", "ssh_user=" + sshUser,
@@ -159,6 +166,9 @@ public class DeploymentService {
                     "-e", "ssh_user=" + sshUser));
 
             if (sshPassword != null && !sshPassword.isEmpty()) {
+                commandList.add("-b");
+                commandList.add("-e");
+                commandList.add("ansible_become_pass=" + sshPassword);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPassword);
                 executeProcessSecure(commandList.toArray(new String[0]), new DeploymentLog(), 300);
@@ -218,8 +228,12 @@ public class DeploymentService {
             String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
-            // 3. Execute Application Playbook
-            executeProcess(new String[] {
+            // Fetch credentials from ManagedNode
+            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
+                    .orElse(null);
+            String sshPass = (node != null) ? node.getSshPassword() : null;
+
+            List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
                     "-i", inventoryPath,
                     playbookPath,
@@ -227,10 +241,21 @@ public class DeploymentService {
                     "-e", "appName=" + appName,
                     "-e", "ansible_user=" + sshUser,
                     "-e", "central_ip=" + centralIp,
-                    "-e", "nodename=" + nodeName
-            }, deploymentLog, 600);
+                    "-e", "nodename=" + nodeName));
+
+            if (sshPass != null && !sshPass.isEmpty()) {
+                commandList.add("-b");
+                commandList.add("-e");
+                commandList.add("ansible_become_pass=" + sshPass);
+                commandList.add("-e");
+                commandList.add("ansible_ssh_pass=" + sshPass);
+                executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
+            } else {
+                executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
+            }
 
             deploymentLog.setStatus("SUCCESS");
+            activityLogService.logActivity("Application Deployed: " + appName, "deployment", environment.getName());
 
             // Auto-create application record if not exists
             if (applicationRepository.findAll().stream()
@@ -308,6 +333,9 @@ public class DeploymentService {
             }
 
             if (sshPass != null && !sshPass.isEmpty()) {
+                commandList.add("-b");
+                commandList.add("-e");
+                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 300);
@@ -316,6 +344,7 @@ public class DeploymentService {
             }
 
             deploymentLog.setStatus("SUCCESS");
+            activityLogService.logActivity("Application Undeployed: " + appName, "deployment", environment.getName());
             log.info("Undeployment successful for App: {}. Removing record from database.", appName);
 
             // Delete the application record after successful undeployment
@@ -387,6 +416,9 @@ public class DeploymentService {
             }
 
             if (sshPass != null && !sshPass.isEmpty()) {
+                commandList.add("-b");
+                commandList.add("-e");
+                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 120);
@@ -531,6 +563,9 @@ public class DeploymentService {
             }
 
             if (sshPass != null && !sshPass.isEmpty()) {
+                commandList.add("-b");
+                commandList.add("-e");
+                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
@@ -899,6 +934,7 @@ public class DeploymentService {
         pb.environment().put("ANSIBLE_HOST_KEY_CHECKING", "False");
         pb.environment().put("ANSIBLE_CONFIG", gitopsPath + "/ansible/ansible.cfg");
         pb.environment().put("ANSIBLE_SSH_ARGS", "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null");
+        pb.environment().put("ANSIBLE_SSH_PIPELINING", "True");
         pb.redirectErrorStream(true);
 
         Process process = pb.start();

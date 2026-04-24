@@ -122,12 +122,49 @@ public class InfrastructureService {
                 .build();
     }
 
+    public Map<String, Object> getEnvironmentHeatmap(Long environmentId) {
+        Environment env = environmentRepository.findById(environmentId)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+        
+        List<ServiceResourceDTO> resources = getEnvironmentServiceResources(environmentId);
+        
+        // Group by Node
+        Map<String, List<ServiceResourceDTO>> nodeGroups = resources.stream()
+                .collect(Collectors.groupingBy(ServiceResourceDTO::getNodeName));
+                
+        List<Map<String, Object>> nodeHeatmap = new ArrayList<>();
+        
+        for (Map.Entry<String, List<ServiceResourceDTO>> entry : nodeGroups.entrySet()) {
+            String nodeName = entry.getKey();
+            List<ServiceResourceDTO> nodeResources = entry.getValue();
+            
+            double maxCpu = nodeResources.stream().mapToDouble(ServiceResourceDTO::getCpuUsagePercent).max().orElse(0.0);
+            double maxRam = nodeResources.stream().mapToDouble(ServiceResourceDTO::getMemoryUsagePercent).max().orElse(0.0);
+            boolean hasCritical = nodeResources.stream().anyMatch(r -> "CRITICAL".equals(r.getStatus()));
+            
+            // Risk score formula: weighted average of peaks and status
+            double riskScore = (maxCpu * 0.4) + (maxRam * 0.4) + (hasCritical ? 20 : 0);
+            riskScore = Math.min(100, riskScore);
+            
+            nodeHeatmap.add(Map.of(
+                "id", nodeName,
+                "riskScore", Math.round(riskScore),
+                "status", hasCritical ? "CRITICAL" : (riskScore > 70 ? "WARNING" : "HEALTHY"),
+                "containerCount", nodeResources.size()
+            ));
+        }
+        
+        return Map.of(
+            "environmentId", environmentId,
+            "nodes", nodeHeatmap
+        );
+    }
+
     private TopologyData getTopologyForEnvironment(Environment env) {
-        String label = env.getPrometheusLabel();
         List<TopologyData.TopologyNode> nodes = new ArrayList<>();
         List<TopologyData.TopologyEdge> edges = new ArrayList<>();
-
-        List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=~\"%s|central-node\", job=\"node-exporter\"}", label));
+        String envFilter = buildEnvFilter(env);
+        List<Map<String, Object>> instances = prometheusClient.queryList(String.format("up{environment=~\"%s\", job=\"node-exporter\"}", envFilter));
         
         java.util.Set<String> processedIps = new java.util.HashSet<>();
         int agentCount = 1;
@@ -161,7 +198,7 @@ public class InfrastructureService {
                                    ip.equalsIgnoreCase("central-node");
 
             if (nodeLabel == null || nodeLabel.isEmpty()) {
-                if (isCentralNode) nodeLabel = "central-node";
+                if (isCentralNode) nodeLabel = env.getName();
                 else nodeLabel = "node-" + (agentCount++);
             }
 
@@ -203,12 +240,7 @@ public class InfrastructureService {
     public List<ServiceResourceDTO> getEnvironmentServiceResources(Long environmentId) {
         Environment env = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        String label = env.getPrometheusLabel();
-
-        // Construct a smart environment filter
-        // If it's a central node, include synonyms. Otherwise, strict match to avoid leakage.
-        String envFilter = (label != null && (label.equalsIgnoreCase("central-node") || label.equalsIgnoreCase("vmpipe"))) 
-                           ? "central-node|vmpipe|localhost" : (label != null ? label : "");
+        String envFilter = buildEnvFilter(env);
 
         List<Map<String, Object>> cpuData = prometheusClient.getContainerCpuUsage(envFilter);
         List<Map<String, Object>> memData = prometheusClient.getContainerMemoryUsage(envFilter);
@@ -216,7 +248,10 @@ public class InfrastructureService {
         List<Map<String, Object>> netTxData = prometheusClient.getContainerNetworkTx(envFilter);
         List<Map<String, Object>> ioReadData = prometheusClient.getContainerDiskRead(envFilter);
         List<Map<String, Object>> ioWriteData = prometheusClient.getContainerDiskWrite(envFilter);
-        
+        List<Map<String, Object>> startTimeData = prometheusClient.getContainerStartTimes(envFilter);
+        List<Map<String, Object>> restartData = prometheusClient.getContainerRestartCounts(envFilter);
+        List<Map<String, Object>> lastSeenData = prometheusClient.getContainerLastSeen(envFilter);
+
         List<Map<String, Object>> hostCpuData = prometheusClient.getHostTotalCpu(envFilter);
         List<Map<String, Object>> hostMemData = prometheusClient.getHostTotalMemory(envFilter);
 
@@ -232,11 +267,12 @@ public class InfrastructureService {
             }
         }
 
-        // Precision mapping for central node synonyms
-        if (envFilter.contains("central-node") || envFilter.contains("localhost")) {
+        // Precision mapping for management node synonyms
+        if (env.getName() != null && (env.getName().contains("central") || env.getName().contains("eye"))) {
             nodeNameMap.put("cadvisor", env.getName());
             nodeNameMap.put("node-exporter", env.getName());
             nodeNameMap.put("localhost", env.getName());
+            nodeNameMap.put("backend", env.getName());
         }
 
         Map<String, Double> hostCpuMap = new java.util.HashMap<>();
@@ -262,33 +298,68 @@ public class InfrastructureService {
         }
 
         Map<String, ServiceResourceDTO.ServiceResourceDTOBuilder> builders = new java.util.HashMap<>();
+        
+        // 1. Calculate the most recent "Now" per instance to avoid isolation leakage
+        Map<String, Long> instanceNowMap = new java.util.HashMap<>();
+        long clusterMaxTs = 0;
+        for (Map<String, Object> m : lastSeenData) {
+            String inst = ((Map<String, String>) m.get("metric")).get("instance");
+            Object tsObj = m.get("timestamp");
+            if (tsObj != null) {
+                long ts = (long) Double.parseDouble(tsObj.toString());
+                instanceNowMap.merge(inst, ts, Math::max);
+                if (ts > clusterMaxTs) clusterMaxTs = ts;
+            }
+        }
+        final long prometheusNow = clusterMaxTs > 0 ? clusterMaxTs : (System.currentTimeMillis() / 1000);
 
-        for (Map<String, Object> m : cpuData) {
+        // 1. Initialize builders from Liveness Data (Inventory Source of Truth)
+        for (Map<String, Object> m : lastSeenData) {
             Map<String, String> metric = (Map<String, String>) m.get("metric");
             String serviceName = resolveServiceName(metric);
+            if ("unknown-service".equals(serviceName)) continue;
+
             String inst = metric.get("instance");
             String key = serviceName + "@" + inst;
+            long lastSeen = (long) Double.parseDouble(m.get("value").toString());
+            
+            String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+            
+            String initialStatus = "HEALTHY";
+            String reason = null;
+            long nodeNow = instanceNowMap.getOrDefault(inst, prometheusNow);
+            long delta = nodeNow - lastSeen;
+            
+            if (delta > 120) {
+                initialStatus = "CRITICAL";
+                reason = String.format("Container stopped (Stale by %ds)", delta);
+            }
 
+            builders.put(key, ServiceResourceDTO.builder()
+                    .serviceName(serviceName)
+                    .nodeName(displayNode)
+                    .status(initialStatus)
+                    .healthReason(reason));
+        }
+
+        // 2. Populate Resource Metrics (CPU, MEM, etc.)
+        for (Map<String, Object> m : cpuData) {
+            String key = metricToKey(m);
+            Map<String, String> metric = (Map<String, String>) m.get("metric");
+            String inst = metric.get("instance");
+            
             double cpuAbs = Double.parseDouble(m.get("value").toString());
             double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
             double cpuPercent = (cpuAbs / hostTotal) * 100.0;
-
-            String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-
-            builders.computeIfAbsent(key, k -> ServiceResourceDTO.builder()
-                    .serviceName(serviceName)
-                    .nodeName(displayNode)
-                    .status("HEALTHY"))
-                    .cpuUsageCores(cpuAbs)
-                    .cpuUsagePercent(cpuPercent);
+            
+            builders.computeIfPresent(key, (k, b) -> b.cpuUsageCores(cpuAbs).cpuUsagePercent(cpuPercent));
         }
 
         for (Map<String, Object> m : memData) {
+            String key = metricToKey(m);
             Map<String, String> metric = (Map<String, String>) m.get("metric");
-            String serviceName = resolveServiceName(metric);
             String inst = metric.get("instance");
-            String key = serviceName + "@" + inst;
-
+            
             long memAbs = (long) Double.parseDouble(m.get("value").toString());
             double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
             double memPercent = ((double) memAbs / hostTotal) * 100.0;
@@ -301,12 +372,60 @@ public class InfrastructureService {
         for (Map<String, Object> m : netRxData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.networkRxBytesPerSec(Double.parseDouble(m.get("value").toString())));
         for (Map<String, Object> m : netTxData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.networkTxBytesPerSec(Double.parseDouble(m.get("value").toString())));
 
+        for (Map<String, Object> m : startTimeData) {
+            String key = metricToKey(m);
+            Object val = m.get("value");
+            if (val != null) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                String inst = metric.get("instance");
+                long nodeNow = instanceNowMap.getOrDefault(inst, prometheusNow);
+                long startTime = (long) Double.parseDouble(val.toString());
+                builders.computeIfPresent(key, (k, b) -> b.uptimeSeconds(nodeNow - startTime));
+            }
+        }
+
+        for (Map<String, Object> m : restartData) {
+            String key = metricToKey(m);
+            Object val = m.get("value");
+            if (val != null) {
+                int restarts = (int) Double.parseDouble(val.toString());
+                builders.computeIfPresent(key, (k, b) -> b.restartCount(restarts));
+            }
+        }
+
         return builders.values().stream().map(b -> {
             ServiceResourceDTO dto = b.build();
-            if (dto.getCpuUsagePercent() > 80 || dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
-            else if (dto.getCpuUsagePercent() > 60 || dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
+            // Resource Threshold Logic (Only upgrade status, never downgrade CRITICAL/Stopped states)
+            if (!"CRITICAL".equals(dto.getStatus())) {
+                if (dto.getCpuUsagePercent() > 80 || dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
+                else if (dto.getCpuUsagePercent() > 60 || dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
+            }
             return dto;
         }).collect(Collectors.toList());
+    }
+
+    private String buildEnvFilter(Environment env) {
+        java.util.Set<String> variants = new java.util.HashSet<>();
+        
+        String label = env.getPrometheusLabel();
+        if (label != null && !label.isEmpty()) {
+            variants.add(label);
+        }
+        
+        String name = env.getName();
+        if (name != null && !name.isEmpty()) {
+            variants.add(name);
+            
+            // Add infrastructure synonyms for known management node patterns
+            String lowerName = name.toLowerCase();
+            if (lowerName.contains("central") || lowerName.contains("eye") || lowerName.contains("vmpipe")) {
+                variants.add("central-node");
+                variants.add("vmpipe");
+                variants.add("localhost");
+            }
+        }
+        
+        return String.join("|", variants);
     }
 
     private String resolveServiceName(Map<String, String> metric) {

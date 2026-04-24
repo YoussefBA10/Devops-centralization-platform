@@ -35,6 +35,10 @@ public class Ticket {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    private String priority; // CRITICAL, HIGH, MEDIUM, LOW
+    
+    private String node;
+
     @Enumerated(EnumType.STRING)
     private TicketStatus status;
 

@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
     List<Ticket> findByEnvironmentId(Long environmentId);
+    int countByStatus(String status);
 }

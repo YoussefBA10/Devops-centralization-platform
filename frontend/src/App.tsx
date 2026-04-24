@@ -14,6 +14,7 @@ import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
 import SetupWizard from './pages/SetupWizard';
 import ApplicationsPage from './pages/ApplicationsPage';
+import AuditLogPage from './pages/AuditLogPage';
 import { useEnvironment } from './context/EnvironmentContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -88,6 +89,7 @@ function App() {
                     <Route path="/infrastructure" element={<InfrastructureTopologyPage />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/tickets" element={<TicketsPage />} />
+                    <Route path="/audit-log" element={<AuditLogPage />} />
                     <Route path="/chat" element={<ChatPage />} />
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>

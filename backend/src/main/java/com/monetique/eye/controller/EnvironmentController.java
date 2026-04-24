@@ -28,13 +28,16 @@ public class EnvironmentController {
     private final com.monetique.eye.repository.UserRepository userRepository;
     private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
 
+    private final com.monetique.eye.service.ActivityLogService activityLogService;
+
     public EnvironmentController(EnvironmentRepository environmentRepository,
             DeploymentService deploymentService,
             SecurityService securityService,
             com.monetique.eye.service.PrometheusClient prometheusClient,
             DeploymentLogRepository deploymentLogRepository,
             com.monetique.eye.repository.UserRepository userRepository,
-            com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository) {
+            com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository,
+            com.monetique.eye.service.ActivityLogService activityLogService) {
         this.environmentRepository = environmentRepository;
         this.deploymentService = deploymentService;
         this.securityService = securityService;
@@ -42,6 +45,7 @@ public class EnvironmentController {
         this.deploymentLogRepository = deploymentLogRepository;
         this.userRepository = userRepository;
         this.managedNodeRepository = managedNodeRepository;
+        this.activityLogService = activityLogService;
     }
 
     private String resolvePrometheusLabel(Environment env) {
@@ -224,6 +228,7 @@ public class EnvironmentController {
 
         // Return immediately with a placeholder, or wait slightly. Here we just return
         // async confirmation.
+        activityLogService.logActivity("Node Deployment Started: " + targetIp, "infrastructure", env.getName());
         return ResponseEntity.ok(Map.of(
                 "message", "Agent deployment triggered for " + targetIp,
                 "status", "IN_PROGRESS"));
@@ -243,6 +248,7 @@ public class EnvironmentController {
 
         deploymentService.undeployAgentAsync(env, ip, node.getSshUser(), node.getSshPassword());
 
+        activityLogService.logActivity("Node Undeployment Started: " + ip, "infrastructure", env.getName());
         return ResponseEntity.ok(Map.of(
                 "message", "Agent undeployment triggered for " + ip,
                 "status", "IN_PROGRESS"));
@@ -295,6 +301,7 @@ public class EnvironmentController {
             throw new RuntimeException("Environment with name '" + environment.getName() + "' already exists");
         }
         Environment env = environmentRepository.save(environment);
+        activityLogService.logActivity("Environment Created: " + env.getName(), "system", env.getName());
         // Initialize inventory group for this environment
         deploymentService.updateInventory(env.getName(), null, null);
         return env;
@@ -310,7 +317,9 @@ public class EnvironmentController {
         env.setDescription(details.getDescription());
         env.setPrometheusLabel(details.getPrometheusLabel());
 
-        return ResponseEntity.ok(environmentRepository.save(env));
+        Environment saved = environmentRepository.save(env);
+        activityLogService.logActivity("Environment Updated: " + saved.getName(), "system", saved.getName());
+        return ResponseEntity.ok(saved);
     }
 
     @DeleteMapping("/{id}")
@@ -331,6 +340,7 @@ public class EnvironmentController {
 
         // 3. Delete environment (Cascades will handle applications, logs, and tickets)
         environmentRepository.delete(env);
+        activityLogService.logActivity("Environment Deleted: " + env.getName(), "system", "Global");
         
         return ResponseEntity.ok(Map.of("message", "Environment deleted successfully"));
     }

@@ -63,6 +63,8 @@ public class LogService {
         Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, exportPageable);
 
         StringBuilder csv = new StringBuilder();
+        csv.append('\uFEFF');
+        csv.append("sep=,\n");
         csv.append("Timestamp,Source,Level,Category,Message\n");
 
         for (LogEventDTO log : page.getContent()) {

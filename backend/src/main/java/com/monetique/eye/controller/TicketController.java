@@ -7,6 +7,7 @@ import com.monetique.eye.entity.enums.TicketStatus;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.TicketRepository;
+import com.monetique.eye.service.ActivityLogService;
 import com.monetique.eye.service.SecurityService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,13 +22,16 @@ public class TicketController {
 
     private final TicketRepository ticketRepository;
     private final SecurityService securityService;
+    private final ActivityLogService activityLogService;
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
 
     public TicketController(TicketRepository ticketRepository, SecurityService securityService,
+                            ActivityLogService activityLogService,
                             EnvironmentRepository environmentRepository, ApplicationRepository applicationRepository) {
         this.ticketRepository = ticketRepository;
         this.securityService = securityService;
+        this.activityLogService = activityLogService;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
     }
@@ -45,6 +49,8 @@ public class TicketController {
         Ticket ticket = new Ticket();
         ticket.setTitle((String) body.get("title"));
         ticket.setDescription((String) body.get("description"));
+        ticket.setPriority((String) body.get("priority"));
+        ticket.setNode((String) body.get("node"));
         ticket.setStatus(TicketStatus.OPEN);
 
         Long envId = body.get("environmentId") != null
@@ -75,7 +81,7 @@ public class TicketController {
     }
 
     @PutMapping("/{id}/status")
-    public ResponseEntity<Ticket> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> request) {
+    public ResponseEntity<Ticket> updateStatus(@PathVariable Long id, @RequestParam String status) {
         Ticket ticket = ticketRepository.findById(id).orElse(null);
         if (ticket == null) {
             return ResponseEntity.notFound().build();
@@ -87,8 +93,10 @@ public class TicketController {
         }
 
         try {
-            ticket.setStatus(TicketStatus.valueOf(request.get("status")));
-            return ResponseEntity.ok(ticketRepository.save(ticket));
+            ticket.setStatus(TicketStatus.valueOf(status));
+            Ticket saved = ticketRepository.save(ticket);
+            activityLogService.logActivity("Ticket Status Updated: " + status + " (" + ticket.getTitle() + ")", "incident", ticket.getEnvironment().getName());
+            return ResponseEntity.ok(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }

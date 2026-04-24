@@ -24,6 +24,10 @@ const LogsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [limit, setLimit] = useState(50);
   const [severity, setSeverity] = useState('ALL');
+  const [page, setPage] = useState(0);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
 
   const [applications, setApplications] = useState<any[]>([]);
   const [selectedApp, setSelectedApp] = useState<any | null>(null);
@@ -47,7 +51,14 @@ const LogsPage: React.FC = () => {
     if (!selectedApp) return;
     if (!silent) setLoading(true);
     try {
-      const response = await getSystemLogs(selectedApp.id, { q: query, severity: severity === 'ALL' ? undefined : severity, size: limit });
+      const response = await getSystemLogs(selectedApp.id, { 
+        q: query, 
+        severity: severity === 'ALL' ? undefined : severity, 
+        size: limit,
+        page: page,
+        from: fromDate ? (fromDate.length === 16 ? `${fromDate}:00` : fromDate) : undefined,
+        to: toDate ? (toDate.length === 16 ? `${toDate}:00` : toDate) : undefined
+      });
       setLogs(response.data.logs || []);
       setMetadata({
         total: response.data.total || 0,
@@ -77,12 +88,19 @@ const LogsPage: React.FC = () => {
     try {
       const response = await exportSystemLogs(selectedApp.id, { 
         q: query, 
-        severity: severity === 'ALL' ? undefined : severity 
+        severity: severity === 'ALL' ? undefined : severity,
+        from: fromDate ? (fromDate.length === 16 ? `${fromDate}:00` : fromDate) : undefined,
+        to: toDate ? (toDate.length === 16 ? `${toDate}:00` : toDate) : undefined
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `logs_${selectedApp.name}_${new Date().getTime()}.csv`);
+      
+      const envName = selectedEnvironment?.name?.toLowerCase().replace(/\s+/g, '-') || 'env';
+      const appName = selectedApp.name?.toLowerCase().replace(/\s+/g, '-') || 'app';
+      const dateStr = new Date().toISOString().replace(/[:.T]/g, '-').slice(0, 19);
+      
+      link.setAttribute('download', `logs-${envName}-${appName}-${dateStr}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -94,18 +112,23 @@ const LogsPage: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [selectedApp, limit, severity]);
+  }, [selectedApp, limit, severity, page]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [query, selectedApp, limit, severity, fromDate, toDate]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isLive) {
+    if (isLive && page === 0 && !fromDate && !toDate) {
       interval = setInterval(() => fetchLogs(true), 5000);
     }
     return () => clearInterval(interval);
-  }, [selectedApp, query, limit, isLive]);
+  }, [selectedApp, query, limit, isLive, page, fromDate, toDate]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setPage(0);
     fetchLogs();
   };
 
@@ -139,7 +162,7 @@ const LogsPage: React.FC = () => {
 
       {/* Search Console */}
       <Card className="bg-secondary/30 border-white/5">
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-4">
           <form onSubmit={handleSearch} className="flex gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -192,6 +215,32 @@ const LogsPage: React.FC = () => {
               Search Console
             </Button>
           </form>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest w-12">From</label>
+              <Input 
+                type="datetime-local" 
+                className="h-9 text-xs bg-background" 
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest w-12 text-right">To</label>
+              <Input 
+                type="datetime-local" 
+                className="h-9 text-xs bg-background" 
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </div>
+            <Button variant="ghost" size="sm" className="h-9 text-xs ml-auto" onClick={() => { setFromDate(''); setToDate(''); setPage(0); fetchLogs(); }}>
+              Reset Filters
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -286,10 +335,26 @@ const LogsPage: React.FC = () => {
                Total: {metadata.total}
              </span>
            </div>
-           <div className="flex items-center gap-2">
-             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground"><ChevronLeft className="w-4 h-4" /></Button>
-             <span className="text-xs font-mono text-muted-foreground px-2">Page 1 / 1</span>
-             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground"><ChevronRight className="w-4 h-4" /></Button>
+            <div className="flex items-center gap-2">
+             <Button 
+               variant="ghost" 
+               size="icon" 
+               className="h-8 w-8 text-muted-foreground"
+               onClick={() => setPage(p => Math.max(0, p - 1))}
+               disabled={page === 0}
+             >
+               <ChevronLeft className="w-4 h-4" />
+             </Button>
+             <span className="text-xs font-mono text-muted-foreground px-2">Page {page + 1} / {Math.max(1, Math.ceil(metadata.total / limit))}</span>
+             <Button 
+               variant="ghost" 
+               size="icon" 
+               className="h-8 w-8 text-muted-foreground"
+               onClick={() => setPage(p => p + 1)}
+               disabled={(page + 1) * limit >= metadata.total}
+             >
+               <ChevronRight className="w-4 h-4" />
+             </Button>
            </div>
         </div>
       </Card>

@@ -72,7 +72,7 @@ public class LogController {
 
         return ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=logs_export_" + appId + ".csv")
-                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv"))
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv;charset=UTF-8"))
                 .contentLength(bytes.length)
                 .body(resource);
     }

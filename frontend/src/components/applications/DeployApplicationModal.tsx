@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Server, Code, Box, GitBranch, Info, Settings2, Settings, AlertCircle } from 'lucide-react';
+import { X, GitBranch, Box, Server, Code, Info, Settings2, AlertCircle, Upload, Check, ChevronRight, ChevronLeft, Loader2, FileCode, Trash2 } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';
 import { useEnvironment } from '../../context/EnvironmentContext';
+import api from '../../services/api';
+
+interface DetectedApp {
+  name: string;
+  type: string;
+  framework: string;
+  srcPath: string;
+  hasDockerfile: boolean;
+  hasNginxConf: boolean;
+}
 
 interface DeployApplicationModalProps {
   isOpen: boolean;
@@ -12,208 +22,185 @@ interface DeployApplicationModalProps {
   onDeploy: (data: any) => Promise<void>;
 }
 
+const FRAMEWORK_DEFAULTS: Record<string, { port: string; containerPort: string }> = {
+  'Java Spring Boot': { port: '8080', containerPort: '8080' },
+  'Node.js': { port: '3000', containerPort: '3000' },
+  'React': { port: '3000', containerPort: '80' },
+  'Vue.js': { port: '3000', containerPort: '80' },
+  'Angular': { port: '4200', containerPort: '80' },
+  'Next.js': { port: '3000', containerPort: '3000' },
+  'Python': { port: '8000', containerPort: '8000' },
+  'Go': { port: '8080', containerPort: '8080' },
+};
+
 const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen, initialData, onClose, onDeploy }) => {
   const { selectedEnvironment } = useEnvironment();
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [validating, setValidating] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [repoInfo, setRepoInfo] = useState<any>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Step 1
+  const [repoUrl, setRepoUrl] = useState('');
+  const [branch, setBranch] = useState('main');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [detectedApps, setDetectedApps] = useState<DetectedApp[]>([]);
+  const [repoName, setRepoName] = useState('');
+
+  // Step 2
+  const [selectedAppIdx, setSelectedAppIdx] = useState(0);
+  const [appName, setAppName] = useState('');
+  const [port, setPort] = useState('8080');
+  const [containerPort, setContainerPort] = useState('8080');
+  const [targetNode, setTargetNode] = useState('');
+  const [autoGenerateConfig, setAutoGenerateConfig] = useState(true);
   const [nodes, setNodes] = useState<any[]>([]);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'BACKEND',
-    appLanguage: 'Java Spring Boot',
-    repoUrl: '',
-    targetNode: '',
-    branch: 'main',
-    port: '8080',
-    envVars: '',
-    srcPath: 'backend/',
-    containerPort: '8080',
-    canary: false,
-    autoGenerateConfig: true,
+  // Step 3
+  const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
+  const [envText, setEnvText] = useState('');
 
-    // Fullstack distinct fields
-    frontendSrcPath: 'frontend/',
-    frontendPort: '3000',
-    frontendContainerPort: '80',
-    frontendAppLanguage: 'React',
-
-    backendSrcPath: 'backend/',
-    backendPort: '8080',
-    backendContainerPort: '8080',
-    backendAppLanguage: 'Java Spring Boot'
-  });
-// GitHub App logic temporarily disabled
-/*
-  const [connectLoading, setConnectLoading] = useState(false);
-
-  const handleConnectGithub = async () => {
-    try {
-      setConnectLoading(true);
-      const res = await getGitHubInstallUrl(initialData?.id || 0); 
-      if (res.data.url) {
-        window.open(res.data.url, '_blank', 'width=800,height=600');
-      }
-    } catch (e) {
-      console.error('Failed to initiate GitHub install', e);
-    } finally {
-      setConnectLoading(false);
-    }
-  };
-
-  const isPrivateRepoError = (msg: string) => {
-    const lower = msg.toLowerCase();
-    return lower.includes('authentication failed') || 
-           lower.includes('repository not found') || 
-           lower.includes('permission denied') ||
-           lower.includes('could not read username') ||
-           lower.includes('terminal prompts disabled') ||
-           lower.includes('could not read from remote repository');
-  };
-*/
-
+  // Edit mode: skip step 1
   useEffect(() => {
-    if (isOpen) {
-      if (initialData) {
-        setFormData({
-          ...formData,
-          name: initialData.name || '',
-          type: initialData.type || 'BACKEND',
-          appLanguage: initialData.appLanguage || 'Java Spring Boot',
-          repoUrl: initialData.repoUrl || '',
-          targetNode: initialData.targetNode || '',
-          branch: initialData.branch || 'main',
-          port: initialData.port?.toString() || '8080',
-          containerPort: initialData.containerPort?.toString() || '8080',
-          srcPath: initialData.srcPath || (initialData.type === 'BACKEND' ? 'backend/' : 'frontend/'),
-          canary: false,
-          autoGenerateConfig: true
-        });
-      } else {
-        setFormData({
-          name: '',
-          type: 'BACKEND',
-          appLanguage: 'Java Spring Boot',
-          repoUrl: '',
-          targetNode: '',
-          branch: 'main',
-          port: '8080',
-          envVars: '',
-          srcPath: 'backend/',
-          containerPort: '8080',
-          canary: false,
-          autoGenerateConfig: true,
-          frontendSrcPath: 'frontend/',
-          frontendPort: '3000',
-          frontendContainerPort: '80',
-          frontendAppLanguage: 'React',
-          backendSrcPath: 'backend/',
-          backendPort: '8080',
-          backendContainerPort: '8080',
-          backendAppLanguage: 'Java Spring Boot'
-        });
-        setRepoInfo(null);
-      }
-
-      if (selectedEnvironment) {
-        getEnvironmentNodes(selectedEnvironment.id)
-          .then(res => setNodes(res.data))
-          .catch(err => console.error("Failed to load nodes", err));
-      }
+    if (!isOpen) return;
+    if (initialData) {
+      setStep(2);
+      setRepoUrl(initialData.repoUrl || '');
+      setBranch(initialData.branch || 'main');
+      setRepoName(initialData.name || '');
+      setDetectedApps([{
+        name: initialData.name,
+        type: initialData.type || 'BACKEND',
+        framework: initialData.appLanguage || 'Java Spring Boot',
+        srcPath: initialData.srcPath || '.',
+        hasDockerfile: true,
+        hasNginxConf: false
+      }]);
+      setSelectedAppIdx(0);
+      setAppName(initialData.name || '');
+      setPort(initialData.port?.toString() || '8080');
+      setContainerPort(initialData.containerPort?.toString() || '8080');
+      setTargetNode(initialData.targetNode || '');
+      setAutoGenerateConfig(true);
+    } else {
+      setStep(1);
+      setRepoUrl('');
+      setBranch('main');
+      setDetectedApps([]);
+      setRepoName('');
+      setSelectedAppIdx(0);
+      setAppName('');
+      setPort('8080');
+      setContainerPort('8080');
+      setTargetNode('');
+      setAutoGenerateConfig(true);
+      setEnvVars([]);
+      setEnvText('');
+    }
+    setLocalError(null);
+    if (selectedEnvironment) {
+      getEnvironmentNodes(selectedEnvironment.id)
+        .then(res => setNodes(res.data))
+        .catch(() => {});
     }
   }, [isOpen, initialData, selectedEnvironment]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const value = e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value;
-    setFormData({ ...formData, [e.target.name]: value });
-    if (localError) setLocalError(null);
-  };
-
-  const validateGithub = async () => {
-    if (!formData.repoUrl) return;
-    setValidating(true);
-    setTimeout(() => {
-      let repoName = formData.repoUrl.split('/').pop()?.replace('.git', '') || 'Application Repository';
-      setRepoInfo({
-        name: repoName,
-        description: 'Auto-detected repository details.',
-        lastCommit: 'Just now'
-      });
-      if (!formData.name) setFormData({ ...formData, name: repoName });
-      setValidating(false);
-    }, 1500);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    let envMap: Record<string, string> = {};
-    if (formData.envVars) {
-      formData.envVars.split('\n').forEach(line => {
-        const [key, val] = line.split('=');
-        if (key && val) envMap[key.trim()] = val.trim();
-      });
+  // When selected app changes, update defaults
+  useEffect(() => {
+    if (detectedApps.length === 0) return;
+    const app = detectedApps[selectedAppIdx];
+    if (!app) return;
+    if (!appName || appName === detectedApps[selectedAppIdx === 0 ? 0 : selectedAppIdx - 1]?.name) {
+      setAppName(app.name);
     }
+    const defaults = FRAMEWORK_DEFAULTS[app.framework] || { port: '8080', containerPort: '8080' };
+    setPort(defaults.port);
+    setContainerPort(defaults.containerPort);
+  }, [selectedAppIdx, detectedApps]);
 
-    const basePayload = {
-      id: initialData?.id,
-      name: formData.name,
-      environmentId: selectedEnvironment?.id,
-      repoUrl: formData.repoUrl,
-      targetNode: formData.targetNode,
-      branch: formData.branch,
-      envVars: envMap,
-      canary: formData.canary,
-      autoGenerateConfig: formData.autoGenerateConfig
+  const analyzeRepo = async () => {
+    if (!repoUrl.trim()) return;
+    setAnalyzing(true);
+    setLocalError(null);
+    setDetectedApps([]);
+    try {
+      const res = await api.post('/repo/analyze', { repoUrl, branch });
+      const data = res.data;
+      if (data.error) {
+        setLocalError(data.error);
+      } else if (data.apps && data.apps.length > 0) {
+        setDetectedApps(data.apps);
+        setRepoName(data.repoName || '');
+        setAppName(data.apps[0].name);
+        const defaults = FRAMEWORK_DEFAULTS[data.apps[0].framework] || { port: '8080', containerPort: '8080' };
+        setPort(defaults.port);
+        setContainerPort(defaults.containerPort);
+        setStep(2);
+      } else {
+        setLocalError('No recognizable applications detected in this repository. Ensure it contains a pom.xml, package.json, requirements.txt, or go.mod.');
+      }
+    } catch (err: any) {
+      setLocalError(err.response?.data?.error || 'Failed to analyze repository.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const parseEnvFile = (text: string) => {
+    const lines = text.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'));
+    const vars: { key: string; value: string }[] = [];
+    for (const line of lines) {
+      const eqIdx = line.indexOf('=');
+      if (eqIdx > 0) {
+        vars.push({ key: line.substring(0, eqIdx).trim(), value: line.substring(eqIdx + 1).trim().replace(/^["']|["']$/g, '') });
+      }
+    }
+    return vars;
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setEnvText(text);
+      setEnvVars(parseEnvFile(text));
     };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleDeploy = async () => {
+    const selectedApp = detectedApps[selectedAppIdx];
+    if (!selectedApp || !selectedEnvironment) return;
+    setLoading(true);
+    setLocalError(null);
+
+    const envMap: Record<string, string> = {};
+    envVars.forEach(v => { if (v.key.trim()) envMap[v.key.trim()] = v.value; });
 
     try {
-      setLocalError(null);
-      if (formData.type === 'FULLSTACK') {
-        // Backend
-        await onDeploy({
-          ...basePayload,
-          name: formData.name + '-backend',
-          type: 'BACKEND',
-          appLanguage: formData.backendAppLanguage,
-          port: parseInt(formData.backendPort),
-          containerPort: parseInt(formData.backendContainerPort),
-          srcPath: formData.backendSrcPath
-        });
-        // Frontend
-        await onDeploy({
-          ...basePayload,
-          name: formData.name + '-frontend',
-          type: 'FRONTEND',
-          appLanguage: formData.frontendAppLanguage,
-          port: parseInt(formData.frontendPort),
-          containerPort: parseInt(formData.frontendContainerPort),
-          srcPath: formData.frontendSrcPath
-        });
-      } else {
-        await onDeploy({
-          ...basePayload,
-          type: formData.type,
-          appLanguage: formData.appLanguage,
-          port: parseInt(formData.port),
-          containerPort: parseInt(formData.containerPort),
-          srcPath: formData.srcPath
-        });
-      }
+      await onDeploy({
+        id: initialData?.id,
+        name: appName,
+        environmentId: selectedEnvironment.id,
+        type: selectedApp.type,
+        appLanguage: selectedApp.framework,
+        repoUrl,
+        targetNode,
+        branch,
+        port: parseInt(port),
+        containerPort: parseInt(containerPort),
+        srcPath: selectedApp.srcPath,
+        envVars: envMap,
+        autoGenerateConfig,
+        canary: false
+      });
       onClose();
-    } catch (error: any) {
-      console.error(error);
-      const msg = error.response?.data?.message || 'Deployment failed. Please check your configuration.';
-      setLocalError(msg);
-      // Ensure the user sees the error
-      setTimeout(() => {
-        scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 50);
+    } catch (err: any) {
+      setLocalError(err.response?.data?.message || 'Deployment failed.');
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
@@ -221,280 +208,243 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
 
   if (!isOpen) return null;
 
+  const selectedApp = detectedApps[selectedAppIdx];
+  const stepLabels = ['Repository', 'Configure', 'Variables'];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0a0a0b]/80 backdrop-blur-sm animate-in fade-in duration-200">
       <Card className="w-full max-w-2xl bg-card border-white/10 shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg text-primary">
-              <Box className="w-5 h-5" />
-            </div>
+            <div className="p-2 bg-primary/10 rounded-lg text-primary"><Box className="w-5 h-5" /></div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight">
-                {initialData ? 'Edit Application' : 'Deploy Application'}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {initialData ? 'Modify existing configuration' : 'Configure and deploy a new service'}
-              </p>
+              <h2 className="text-xl font-bold tracking-tight">{initialData ? 'Edit Application' : 'Deploy Application'}</h2>
+              <p className="text-sm text-muted-foreground">{stepLabels[step - 1]} — Step {step} of 3</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-muted-foreground hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-muted-foreground hover:text-white"><X className="w-5 h-5" /></button>
         </div>
 
-        <div ref={scrollContainerRef} className="p-6 overflow-y-auto">
-          <form id="deploy-form" onSubmit={handleSubmit} className="space-y-6">
-
-            {/* Error Display */}
-            {localError && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
-                <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-red-500 uppercase tracking-widest text-[10px]">Deployment Error</p>
-                  <p className="text-sm text-red-200/80 leading-relaxed">{localError}</p>
-                </div>
-                <button 
-                  onClick={() => setLocalError(null)}
-                  className="ml-auto text-red-500/50 hover:text-red-500 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+        {/* Step Indicator */}
+        <div className="px-6 pt-4 pb-2 flex items-center gap-2">
+          {[1, 2, 3].map(s => (
+            <React.Fragment key={s}>
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-all ${s < step ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : s === step ? 'bg-primary/20 text-primary border border-primary/40 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'bg-white/5 text-muted-foreground border border-white/10'}`}>
+                {s < step ? <Check className="w-3.5 h-3.5" /> : s}
               </div>
-            )}
+              {s < 3 && <div className={`flex-1 h-px ${s < step ? 'bg-emerald-500/30' : 'bg-white/10'}`} />}
+            </React.Fragment>
+          ))}
+        </div>
 
-            {/* Informational Banner */}
-            <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg text-primary/90 text-sm">
-              <Info className="w-5 h-5 shrink-0 mt-0.5" />
-              <p><strong>Containerized Architecture:</strong> All applications are dynamically compiled and deployed as independent Docker containers on your target infrastructure.</p>
+        {/* Content */}
+        <div ref={scrollRef} className="p-6 overflow-y-auto flex-1">
+          {localError && (
+            <div className="p-4 mb-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300">
+              <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0"><p className="text-sm text-red-200/80 leading-relaxed break-words">{localError}</p></div>
+              <button onClick={() => setLocalError(null)} className="text-red-500/50 hover:text-red-500"><X className="w-4 h-4" /></button>
             </div>
+          )}
 
-            {/* GitHub Section */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <GitBranch className="w-4 h-4" /> Source Repository
-              </h3>
-              <div className="flex gap-4">
-                <Input
-                  name="repoUrl"
-                  value={formData.repoUrl}
-                  onChange={handleChange}
-                  placeholder="https://github.com/organization/repo.git"
-                  className="flex-1 bg-black/20 focus:bg-black/40 border-white/10 focus:border-primary/50"
-                  required
-                />
-                <Button type="button" onClick={validateGithub} loading={validating} variant="outline" className="shrink-0 border-white/10 hover:bg-primary/20 hover:text-primary hover:border-primary/50">
-                  <span className="flex items-center gap-2">Validate <GitBranch className="w-4 h-4" /></span>
-                </Button>
+          {/* ========== STEP 1 ========== */}
+          {step === 1 && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg text-primary/90 text-sm">
+                <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                <p>Enter your Git repository URL. The system will clone and automatically detect all deployable applications and their frameworks.</p>
               </div>
-
-              {repoInfo && (
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex items-start gap-3 animate-in slide-in-from-top-2">
-                  <GitBranch className="w-5 h-5 text-emerald-500 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-bold text-emerald-500">{repoInfo.name}</p>
-                    <p className="text-xs text-muted-foreground">{repoInfo.description}</p>
-                    <p className="text-[10px] uppercase tracking-widest text-emerald-500/70 mt-1">Ready for deployment</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* App Configuration */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Application Name</label>
-                <Input name="name" value={formData.name} onChange={handleChange} placeholder="e.g. user-service" className="bg-black/20 border-white/10" required />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Branch</label>
-                <div className="relative">
-                  <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input name="branch" value={formData.branch} onChange={handleChange} placeholder="main" className="pl-9 bg-black/20 border-white/10" required />
-                </div>
-              </div>
-            </div>
-
-            {/* General Type Select */}
-            <div className="space-y-2 border-b border-white/5 pb-4">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Architecture Type</label>
-              <select name="type" value={formData.type} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none">
-                <option value="BACKEND">Backend API</option>
-                <option value="FRONTEND">Frontend Web</option>
-                <option value="FULLSTACK">Fullstack Monolith (Deploys 2 Containers)</option>
-              </select>
-            </div>
-
-            {/* STANDARD CONFIG (Backend/Frontend) */}
-            {formData.type !== 'FULLSTACK' && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Code className="w-3 h-3" /> Framework</label>
-                    <select name="appLanguage" value={formData.appLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none">
-                      <option value="Java Spring Boot">Java (Spring Boot)</option>
-                      <option value="Node.js">Node.js (Express/Nest)</option>
-                      <option value="React">React (Vite/CRA)</option>
-                      <option value="Python">Python (FastAPI/Flask)</option>
-                      <option value="Go">Go (Gin/Fiber)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase text-muted-foreground">Source Directory</label>
-                    <Input name="srcPath" value={formData.srcPath} onChange={handleChange} placeholder="e.g. backend/ or ." className="bg-black/20 border-white/10" />
-                  </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Repository URL</label>
+                  <Input value={repoUrl} onChange={e => setRepoUrl(e.target.value)} placeholder="https://github.com/organization/repo.git" className="bg-black/20 border-white/10" />
                 </div>
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Exposed Port (Host)</label>
-                    <Input name="port" type="number" value={formData.port} onChange={handleChange} placeholder="8080" className="bg-black/20 border-white/10" required />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Internal Port (Container)</label>
-                    <Input name="containerPort" type="number" value={formData.containerPort} onChange={handleChange} placeholder="80" className="bg-black/20 border-white/10" required />
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Branch</label>
+                  <div className="relative">
+                    <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" className="pl-9 bg-black/20 border-white/10" />
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* FULLSTACK CONFIG */}
-            {formData.type === 'FULLSTACK' && (
-              <div className="space-y-6">
-                {/* Backend Section */}
-                <div className="p-4 bg-black/20 border border-blue-500/10 rounded-lg space-y-4">
-                  <h4 className="text-sm font-bold text-blue-400">Backend Configuration</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework</label>
-                      <select name="backendAppLanguage" value={formData.backendAppLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-blue-500 text-white appearance-none">
-                        <option value="Java Spring Boot">Java (Spring Boot)</option>
-                        <option value="Node.js">Node.js</option>
-                        <option value="Python">Python</option>
-                        <option value="Go">Go</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold uppercase text-muted-foreground">Source Directory</label>
-                      <Input name="backendSrcPath" value={formData.backendSrcPath} onChange={handleChange} placeholder="backend/" className="bg-black/40 border-white/10" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port</label>
-                      <Input name="backendPort" type="number" value={formData.backendPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port</label>
-                      <Input name="backendContainerPort" type="number" value={formData.backendContainerPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Frontend Section */}
-                <div className="p-4 bg-black/20 border border-emerald-500/10 rounded-lg space-y-4">
-                  <h4 className="text-sm font-bold text-emerald-400">Frontend Configuration</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework</label>
-                      <select name="frontendAppLanguage" value={formData.frontendAppLanguage} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-emerald-500 text-white appearance-none">
-                        <option value="React">React (Vite/CRA)</option>
-                        <option value="Node.js">Next.js/Nuxt</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold uppercase text-muted-foreground">Source Directory</label>
-                      <Input name="frontendSrcPath" value={formData.frontendSrcPath} onChange={handleChange} placeholder="frontend/" className="bg-black/40 border-white/10" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port</label>
-                      <Input name="frontendPort" type="number" value={formData.frontendPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port</label>
-                      <Input name="frontendContainerPort" type="number" value={formData.frontendContainerPort} onChange={handleChange} className="bg-black/40 border-white/10" required />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Auto Generate Toggle */}
-            <div className="flex items-center gap-3 mt-4">
-              <input
-                type="checkbox"
-                id="autoGen"
-                name="autoGenerateConfig"
-                checked={formData.autoGenerateConfig}
-                onChange={handleChange}
-                className="w-4 h-4 rounded border-white/10 bg-black/20 text-primary accent-primary"
-              />
-              <label htmlFor="autoGen" className="text-sm font-medium flex items-center gap-2 cursor-pointer">
-                <Settings2 className="w-4 h-4 text-muted-foreground" />
-                Auto-generate Dockerfile and Nginx configuration if missing
-              </label>
+              <Button onClick={analyzeRepo} loading={analyzing} disabled={!repoUrl.trim()} className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                {analyzing ? (
+                  <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Cloning & Analyzing Repository...</span>
+                ) : (
+                  <span className="flex items-center gap-2"><GitBranch className="w-4 h-4" />Analyze Repository</span>
+                )}
+              </Button>
             </div>
+          )}
 
-            {/* Infrastructure Target */}
-            <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold flex items-center gap-2"><Server className="w-4 h-4 text-primary" /> Infrastructure Target</h3>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-500 font-medium">
-                  <Info className="w-3 h-3" /> Credentials managed by Node
+          {/* ========== STEP 2 ========== */}
+          {step === 2 && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              {/* Detected Apps */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2"><FileCode className="w-4 h-4" />Detected Applications ({detectedApps.length})</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  {detectedApps.map((app, idx) => (
+                    <button key={idx} type="button" onClick={() => setSelectedAppIdx(idx)}
+                      className={`p-4 rounded-xl border text-left transition-all ${selectedAppIdx === idx ? 'border-primary/50 bg-primary/5 shadow-[0_0_15px_rgba(59,130,246,0.1)]' : 'border-white/10 bg-black/20 hover:border-white/20'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${app.type === 'FRONTEND' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                            {app.type === 'FRONTEND' ? 'FE' : 'BE'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm">{app.name}</p>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">{app.framework} · {app.srcPath}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {app.hasDockerfile && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20 font-bold">Dockerfile</span>}
+                          {selectedAppIdx === idx && <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center"><Check className="w-3 h-3 text-white" /></div>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase text-muted-foreground block mb-2">Target Node</label>
-                <select name="targetNode" value={formData.targetNode} onChange={handleChange} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none" required>
-                  <option value="">Select an active node...</option>
-                  {nodes.map(node => (
-                    <option key={node.ip} value={node.ip}>{node.hostname || node.ip}</option>
-                  ))}
-                </select>
+
+              {/* Config */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Application Name</label>
+                  <Input value={appName} onChange={e => setAppName(e.target.value)} placeholder="app-name" className="bg-black/20 border-white/10" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework</label>
+                  <Input value={selectedApp?.framework || ''} readOnly className="bg-black/30 border-white/5 text-muted-foreground cursor-not-allowed" />
+                </div>
               </div>
 
-              <div className="pt-2 border-t border-white/5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port (Host)</label>
+                  <Input type="number" value={port} onChange={e => setPort(e.target.value)} className="bg-black/20 border-white/10" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port (Container)</label>
+                  <Input type="number" value={containerPort} onChange={e => setContainerPort(e.target.value)} className="bg-black/20 border-white/10" required />
+                </div>
+              </div>
+
+              {/* Target Node */}
+              <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-3">
+                <h3 className="text-sm font-bold flex items-center gap-2"><Server className="w-4 h-4 text-primary" />Infrastructure Target</h3>
+                <select value={targetNode} onChange={e => setTargetNode(e.target.value)} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none" required>
+                  <option value="">Select a node...</option>
+                  {nodes.map((n: any) => <option key={n.ip} value={n.ip}>{n.hostname || n.ip}</option>)}
+                </select>
                 <div className="flex items-center justify-between p-2 bg-white/5 rounded-lg border border-white/5">
                   <div className="flex items-center gap-3">
-                    <Settings className="w-3.5 h-3.5 text-primary" />
+                    <Settings2 className="w-3.5 h-3.5 text-primary" />
                     <div>
-                      <p className="text-[11px] font-bold">Auto-generate Configuration</p>
-                      <p className="text-[9px] text-muted-foreground">Creates Dockerfile/Nginx configs if missing.</p>
+                      <p className="text-[11px] font-bold">Auto-generate Dockerfile & Nginx</p>
+                      <p className="text-[9px] text-muted-foreground">Creates config files if missing in repo.</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, autoGenerateConfig: !prev.autoGenerateConfig }))}
-                    className={`w-10 h-5 rounded-full transition-colors relative ${formData.autoGenerateConfig ? 'bg-primary' : 'bg-white/10'}`}
-                  >
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${formData.autoGenerateConfig ? 'left-5.5' : 'left-0.5'}`}></div>
+                  <button type="button" onClick={() => setAutoGenerateConfig(!autoGenerateConfig)}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${autoGenerateConfig ? 'bg-primary' : 'bg-white/10'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${autoGenerateConfig ? 'left-[22px]' : 'left-0.5'}`} />
                   </button>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Env Vars */}
-            <div className="space-y-2">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Environment Variables</label>
-                <p className="text-[10px] text-muted-foreground italic mb-1">For Frontend apps, these are securely injected as Docker build arguments.</p>
-                <textarea
-                  name="envVars"
-                  value={formData.envVars}
-                  onChange={handleChange}
-                  placeholder="KEY=VALUE&#10;NODE_ENV=production"
-                  className="w-full h-24 p-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white font-mono resize-none placeholder:text-white/20"
-                />
+          {/* ========== STEP 3 ========== */}
+          {step === 3 && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="flex items-start gap-3 p-4 bg-primary/10 border border-primary/20 rounded-lg text-primary/90 text-sm">
+                <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                <p>Define environment variables for <strong>{appName}</strong>. You can type them manually or upload a <code className="bg-primary/20 px-1 rounded">.env</code> file.</p>
               </div>
 
-              {/* Deployment Strategy section removed. Updates default to standard replacement. */}
-            </div>
+              {/* Upload */}
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors text-sm font-medium">
+                  <Upload className="w-4 h-4" /> Upload .env file
+                  <input type="file" accept=".env,.txt" className="hidden" onChange={handleFileUpload} />
+                </label>
+                <span className="text-xs text-muted-foreground">or type below</span>
+              </div>
 
-          </form>
+              {/* Textarea */}
+              <textarea
+                value={envText}
+                onChange={e => { setEnvText(e.target.value); setEnvVars(parseEnvFile(e.target.value)); }}
+                placeholder={"# Paste your environment variables\nDATABASE_URL=postgres://...\nAPI_KEY=your-secret-key\nNODE_ENV=production"}
+                className="w-full h-28 p-3 rounded-lg bg-black/20 border border-white/10 text-sm font-mono focus:outline-none focus:border-primary/50 text-white resize-none placeholder:text-white/20"
+              />
+
+              {/* Parsed Variables Table */}
+              {envVars.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{envVars.length} Variables Detected</h4>
+                  <div className="border border-white/10 rounded-lg overflow-hidden">
+                    <div className="grid grid-cols-[1fr_1fr_40px] gap-px bg-white/5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <div className="p-2 bg-black/40">Key</div>
+                      <div className="p-2 bg-black/40">Value</div>
+                      <div className="p-2 bg-black/40" />
+                    </div>
+                    {envVars.map((v, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_1fr_40px] gap-px bg-white/5">
+                        <input value={v.key} onChange={e => { const n = [...envVars]; n[i].key = e.target.value; setEnvVars(n); }} className="p-2 bg-black/60 text-xs font-mono text-white border-none focus:outline-none focus:bg-black/80" />
+                        <input value={v.value} onChange={e => { const n = [...envVars]; n[i].value = e.target.value; setEnvVars(n); }} className="p-2 bg-black/60 text-xs font-mono text-white border-none focus:outline-none focus:bg-black/80" />
+                        <button onClick={() => setEnvVars(envVars.filter((_, j) => j !== i))} className="flex items-center justify-center bg-black/60 text-muted-foreground hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Summary */}
+              <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Deployment Summary</h4>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <span className="text-muted-foreground">App</span><span className="font-bold">{appName}</span>
+                  <span className="text-muted-foreground">Framework</span><span className="font-bold">{selectedApp?.framework}</span>
+                  <span className="text-muted-foreground">Node</span><span className="font-bold">{targetNode || '—'}</span>
+                  <span className="text-muted-foreground">Port</span><span className="font-bold">{port}:{containerPort}</span>
+                  <span className="text-muted-foreground">Env Vars</span><span className="font-bold">{envVars.length} variable{envVars.length !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="p-6 border-t border-white/5 flex items-center justify-end gap-3 bg-black/20">
-          <Button variant="outline" onClick={onClose} className="border-white/10">Cancel</Button>
-          <Button type="submit" form="deploy-form" loading={loading} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-            {initialData ? 'Update & Redeploy' : 'Deploy Application'}
-          </Button>
+        {/* Footer */}
+        <div className="p-6 border-t border-white/5 flex items-center justify-between bg-black/20">
+          <div>
+            {step > 1 && !initialData && (
+              <Button variant="outline" onClick={() => { setStep(step - 1); setLocalError(null); }} className="border-white/10">
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+            )}
+            {step > 2 && initialData && (
+              <Button variant="outline" onClick={() => { setStep(step - 1); setLocalError(null); }} className="border-white/10">
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={onClose} className="border-white/10">Cancel</Button>
+            {step === 2 && (
+              <Button onClick={() => { if (!targetNode) { setLocalError('Please select a target node.'); return; } setLocalError(null); setStep(3); }}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                Next <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            )}
+            {step === 3 && (
+              <Button onClick={handleDeploy} loading={loading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                {initialData ? 'Update & Redeploy' : 'Deploy Application'}
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
     </div>
