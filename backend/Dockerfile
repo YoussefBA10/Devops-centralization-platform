@@ -8,7 +8,7 @@ RUN mvn package -DskipTests
 
 # Run stage 
 FROM eclipse-temurin:21-jre-alpine
-RUN apk add --no-cache bash ansible sshpass openssh-client dos2unix
+RUN apk add --no-cache bash ansible sshpass openssh-client dos2unix git
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8880 9001

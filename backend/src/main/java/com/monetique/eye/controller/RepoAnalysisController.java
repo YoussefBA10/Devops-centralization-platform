@@ -261,17 +261,14 @@ public class RepoAnalysisController {
         // 2. Try default "git"
         if (!gitExecutable.equals("git") && canRun("git")) return "git";
         
-        // 3. Try common Windows paths
-        String os = System.getProperty("os.name").toLowerCase();
-        if (os.contains("win")) {
-            String[] commonPaths = {
-                "C:\\Program Files\\Git\\bin\\git.exe",
-                "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-                System.getProperty("user.home") + "\\AppData\\Local\\Programs\\Git\\bin\\git.exe"
-            };
-            for (String path : commonPaths) {
-                if (new File(path).exists()) return path;
-            }
+        // 3. Try common Linux paths
+        String[] commonPaths = {
+            "/usr/bin/git",
+            "/usr/local/bin/git",
+            "/usr/bin/git-core/git"
+        };
+        for (String path : commonPaths) {
+            if (new File(path).exists() && canRun(path)) return path;
         }
         
         return gitExecutable; // fallback to whatever was configured
