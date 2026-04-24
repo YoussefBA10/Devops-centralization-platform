@@ -32,6 +32,11 @@ public class GitHubService {
     private String privateKeyPath;
 
     private final RestTemplate restTemplate = new RestTemplate();
+    private final com.monetique.eye.repository.GitHubTokenRepository gitHubTokenRepository;
+
+    public GitHubService(com.monetique.eye.repository.GitHubTokenRepository gitHubTokenRepository) {
+        this.gitHubTokenRepository = gitHubTokenRepository;
+    }
 
     public String generateAppJwt() throws Exception {
         byte[] keyBytes = Files.readAllBytes(Paths.get(privateKeyPath));
@@ -74,5 +79,64 @@ public class GitHubService {
         }
 
         throw new RuntimeException("Failed to get GitHub installation token: " + response.getStatusCode());
+    }
+
+    public java.util.List<Map<String, Object>> getUserRepos(String userId) {
+        com.monetique.eye.entity.GitHubToken token = gitHubTokenRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalStateException("No GitHub token found. Please add your PAT first."));
+
+        org.springframework.web.reactive.function.client.WebClient webClient = org.springframework.web.reactive.function.client.WebClient.builder()
+                .baseUrl("https://api.github.com")
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + token.getAccessToken())
+                .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
+                .defaultHeader("X-GitHub-Api-Version", "2022-11-28")
+                .build();
+
+        return webClient.get()
+                .uri("/user/repos?visibility=all&sort=updated&per_page=100")
+                .retrieve()
+                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<java.util.List<Map<String, Object>>>() {})
+                .block();
+    }
+
+    public java.nio.file.Path cloneRepo(String userId, String repoFullName, String branch) {
+        com.monetique.eye.entity.GitHubToken token = gitHubTokenRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalStateException("No GitHub token found. Please add your PAT first."));
+
+        try {
+            java.nio.file.Path tempDir = Files.createTempDirectory("repo-clone-");
+            log.info("Cloning repo: {} branch: {} into {}", repoFullName, branch, tempDir);
+
+            String cloneUrl = "https://" + token.getAccessToken() + "@github.com/" + repoFullName + ".git";
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    "git", "clone", "--depth", "1", "--branch", branch,
+                    cloneUrl, tempDir.toString()
+            );
+            pb.environment().put("GIT_TERMINAL_PROMPT", "0");
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            StringBuilder output = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                log.warn("Git clone failed with exit code {}: {}", exitCode, output);
+                throw new RuntimeException("Failed to clone repository. Git output: " + output.toString().trim());
+            }
+
+            return tempDir;
+        } catch (Exception e) {
+            if (e instanceof RuntimeException) {
+                throw (RuntimeException) e;
+            }
+            throw new RuntimeException("Error executing git clone: " + e.getMessage(), e);
+        }
     }
 }

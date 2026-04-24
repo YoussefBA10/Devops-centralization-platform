@@ -24,8 +24,14 @@ public class RepoAnalysisController {
     @Value("${monetique.git.executable:git}")
     private String gitExecutable;
 
+    private final com.monetique.eye.service.GitHubService gitHubService;
+
+    public RepoAnalysisController(com.monetique.eye.service.GitHubService gitHubService) {
+        this.gitHubService = gitHubService;
+    }
+
     @PostMapping("/analyze")
-    public ResponseEntity<RepoAnalysisDTO.Response> analyzeRepo(@RequestBody RepoAnalysisDTO.Request request) {
+    public ResponseEntity<RepoAnalysisDTO.Response> analyzeRepo(@RequestBody RepoAnalysisDTO.Request request, org.springframework.security.core.Authentication authentication) {
         Path tempDir = null;
         try {
             // Validate input
@@ -35,35 +41,42 @@ public class RepoAnalysisController {
             }
 
             String branch = (request.getBranch() != null && !request.getBranch().isBlank()) ? request.getBranch() : "main";
+            String repoUrl = request.getRepoUrl();
 
-            // Create temp directory
-            tempDir = Files.createTempDirectory("repo-analysis-");
-            log.info("Analyzing repo: {} branch: {} into {}", request.getRepoUrl(), branch, tempDir);
+            if (!repoUrl.startsWith("http")) {
+                // It's a repo full name (e.g., owner/repo), use GitHubService with PAT
+                String userId = authentication.getName();
+                tempDir = gitHubService.cloneRepo(userId, repoUrl, branch);
+            } else {
+                // Create temp directory for public repo
+                tempDir = Files.createTempDirectory("repo-analysis-");
+                log.info("Analyzing public repo: {} branch: {} into {}", repoUrl, branch, tempDir);
 
-            // Shallow clone
-            String gitCmd = resolveGitExecutable();
-            ProcessBuilder pb = new ProcessBuilder(
-                    gitCmd, "clone", "--depth", "1", "--branch", branch,
-                    request.getRepoUrl(), tempDir.toString()
-            );
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
+                // Shallow clone
+                String gitCmd = resolveGitExecutable();
+                ProcessBuilder pb = new ProcessBuilder(
+                        gitCmd, "clone", "--depth", "1", "--branch", branch,
+                        repoUrl, tempDir.toString()
+                );
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
 
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+                StringBuilder output = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
                 }
-            }
 
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                log.warn("Git clone failed with exit code {}: {}", exitCode, output);
-                return ResponseEntity.ok(RepoAnalysisDTO.Response.builder()
-                        .error("Failed to clone repository. Ensure the URL is correct and the repo is public. Git output: " + output.toString().trim())
-                        .apps(List.of())
-                        .build());
+                int exitCode = process.waitFor();
+                if (exitCode != 0) {
+                    log.warn("Git clone failed with exit code {}: {}", exitCode, output);
+                    return ResponseEntity.ok(RepoAnalysisDTO.Response.builder()
+                            .error("Failed to clone repository. Ensure the URL is correct and the repo is public. Git output: " + output.toString().trim())
+                            .apps(List.of())
+                            .build());
+                }
             }
 
             // Extract repo name

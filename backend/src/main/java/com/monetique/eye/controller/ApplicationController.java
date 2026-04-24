@@ -54,7 +54,7 @@ public class ApplicationController {
     }
 
     @PostMapping("/deploy")
-    public ResponseEntity<?> deployApplication(@RequestBody DeployRequestDTO request) {
+    public ResponseEntity<?> deployApplication(@RequestBody DeployRequestDTO request, org.springframework.security.core.Authentication authentication) {
         Environment env = environmentRepository.findById(request.getEnvironmentId())
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
@@ -128,7 +128,7 @@ public class ApplicationController {
         applicationRepository.save(app);
 
         // Async deployment
-        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName);
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName, authentication.getName());
 
         activityLogService.logActivity("Deployment Started: " + app.getName(), "deployment", env.getName());
         return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
@@ -206,8 +206,8 @@ public class ApplicationController {
     }
     /** Transitions a Canary deployment to Stable. */
     @PostMapping("/{applicationId}/promote")
-    public ResponseEntity<?> promote(@PathVariable Long applicationId, @RequestParam Long environmentId) {
-        deploymentService.promoteApplication(environmentId, applicationId);
+    public ResponseEntity<?> promote(@PathVariable Long applicationId, @RequestParam Long environmentId, org.springframework.security.core.Authentication authentication) {
+        deploymentService.promoteApplication(environmentId, applicationId, authentication.getName());
         activityLogService.logActivity("Canary Promoted: " + applicationId, "deployment", "Global");
         return ResponseEntity.ok(Map.of("message", "Application promotion triggered."));
     }

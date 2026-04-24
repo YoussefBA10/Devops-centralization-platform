@@ -38,6 +38,7 @@ public class DeploymentService {
     private final ApplicationRepository applicationRepository;
     private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
     private final ObjectMapper objectMapper;
+    private final com.monetique.eye.repository.GitHubTokenRepository gitHubTokenRepository;
 
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
@@ -49,12 +50,14 @@ public class DeploymentService {
             ApplicationRepository applicationRepository,
             com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository,
             ObjectMapper objectMapper,
+            com.monetique.eye.repository.GitHubTokenRepository gitHubTokenRepository,
             com.monetique.eye.service.ActivityLogService activityLogService) {
         this.deploymentLogRepository = deploymentLogRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.managedNodeRepository = managedNodeRepository;
         this.objectMapper = objectMapper;
+        this.gitHubTokenRepository = gitHubTokenRepository;
         this.activityLogService = activityLogService;
     }
 
@@ -456,7 +459,7 @@ public class DeploymentService {
     @Async
     @Transactional
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
-            Long applicationId, String previousName) {
+            Long applicationId, String previousName, String userId) {
 
         Environment environment = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found: " + environmentId));
@@ -507,6 +510,14 @@ public class DeploymentService {
                         .reduce("", (a, b) -> a + " " + b).trim();
             }
 
+            String finalRepoUrl = request.getRepoUrl();
+            if (userId != null) {
+                com.monetique.eye.entity.GitHubToken token = gitHubTokenRepository.findByUserId(userId).orElse(null);
+                if (token != null && !finalRepoUrl.startsWith("http")) {
+                    finalRepoUrl = "https://" + token.getAccessToken() + "@github.com/" + finalRepoUrl + ".git";
+                }
+            }
+
             // Execute Application Playbook
             List<String> commandList = new ArrayList<>(List.of(
                     "ansible-playbook",
@@ -515,7 +526,7 @@ public class DeploymentService {
                     "--limit", request.getTargetNode(),
                     "-e", "appName=" + request.getName(),
                     "-e", "target_host=" + request.getTargetNode(),
-                    "-e", "repoUrl=" + request.getRepoUrl(),
+                    "-e", "repoUrl=" + finalRepoUrl,
                     "-e", "branch=" + request.getBranch(),
                     "-e", "appPort=" + hostPort,
                     "-e", "appType=" + request.getType(),
@@ -592,7 +603,7 @@ public class DeploymentService {
             // Auto-Promotion Stage 2
             if (request.getAutoPromote() != null && request.getAutoPromote()) {
                 log.info("Auto-Promotion Stage 1 (Canary) successful for {}. Triggering Stage 2 (Promotion) to Stable...", request.getName());
-                this.promoteApplication(environmentId, applicationId);
+                this.promoteApplication(environmentId, applicationId, userId);
             }
 
         } catch (Exception e) {
@@ -970,7 +981,7 @@ public class DeploymentService {
 
     @Async
     @Transactional
-    public void promoteApplication(Long environmentId, Long applicationId) {
+    public void promoteApplication(Long environmentId, Long applicationId, String userId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new RuntimeException("Application not found: " + applicationId));
 
@@ -992,7 +1003,7 @@ public class DeploymentService {
         // Map env vars if possible (currently not persistent in DB, but we could add them if needed)
         // For now, we assume promotion uses the last configuration.
 
-        deployApplicationFull(environmentId, request, applicationId, app.getName());
+        deployApplicationFull(environmentId, request, applicationId, app.getName(), userId);
     }
 
     /**
