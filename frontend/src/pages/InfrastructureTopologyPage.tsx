@@ -151,10 +151,10 @@ const InfrastructureTopologyPage: React.FC = () => {
         const envIdStr = node.environmentId?.toString();
         const envIndex = envIds.indexOf(envIdStr);
         const nodesInEnv = data.nodes.filter((n: any) => n.environmentId?.toString() === envIdStr);
-        const nodeIndex = nodesInEnv.indexOf(node);
+
 
         // Separate central from agents to make a tree layout
-        const centralNode = nodesInEnv.find((n: any) => n.id.includes('central'));
+
         const agents = nodesInEnv.filter((n: any) => !n.id.includes('central'));
         const isCentral = node.id.includes('central');
         

@@ -1,11 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   ArrowUpDown, 
-  Cpu, 
-  HardDrive, 
-  Network, 
   RefreshCcw, 
-  ShieldCheck, 
   Activity,
   Server,
   Clock,

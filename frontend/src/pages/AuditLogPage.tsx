@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, Clock, Download, RefreshCw, ChevronLeft, ChevronRight, Info, AlertCircle, Box, Server, GitBranch, Terminal } from 'lucide-react';
+import { Search, Filter, Calendar, Download, RefreshCw, ChevronLeft, ChevronRight, Info, AlertCircle, Box, Server, Terminal } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { format } from 'date-fns';
 import api from '../services/api';

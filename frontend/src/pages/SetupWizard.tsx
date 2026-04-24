@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Server, 
   Settings, 
-  Terminal, 
   Shield, 
   ChevronRight, 
   CheckCircle2, 

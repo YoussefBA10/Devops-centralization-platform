@@ -11,7 +11,7 @@ import {
   ChevronLeft,
   Activity
 } from 'lucide-react';
-import api from '../services/api';
+
 import { useEnvironment } from '../context/EnvironmentContext';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
@@ -119,7 +119,7 @@ const LogsPage: React.FC = () => {
   }, [query, selectedApp, limit, severity, fromDate, toDate]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: any;
     if (isLive && page === 0 && !fromDate && !toDate) {
       interval = setInterval(() => fetchLogs(true), 5000);
     }
@@ -271,7 +271,7 @@ const LogsPage: React.FC = () => {
                <Filter className="w-3.5 h-3.5" />
                Raw Output
              </div>
-             <RefreshCw className={`w-3.5 h-3.5 cursor-pointer hover:text-primary transition-colors ${loading ? 'animate-spin' : ''}`} onClick={fetchLogs} />
+             <RefreshCw className={`w-3.5 h-3.5 cursor-pointer hover:text-primary transition-colors ${loading ? 'animate-spin' : ''}`} onClick={() => fetchLogs()} />
           </div>
         </div>
 

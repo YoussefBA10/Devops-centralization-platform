@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, GitBranch, Box, Server, Code, Info, Settings2, AlertCircle, Upload, Check, ChevronRight, ChevronLeft, Loader2, FileCode, Trash2 } from 'lucide-react';
+import { X, GitBranch, Box, Server, Info, Settings2, AlertCircle, Upload, Check, ChevronRight, ChevronLeft, Loader2, FileCode, Trash2 } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';
@@ -45,7 +45,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   const [branch, setBranch] = useState('main');
   const [analyzing, setAnalyzing] = useState(false);
   const [detectedApps, setDetectedApps] = useState<DetectedApp[]>([]);
-  const [repoName, setRepoName] = useState('');
+  const [, setRepoName] = useState('');
 
   // Step 2
   const [selectedAppIdx, setSelectedAppIdx] = useState(0);
