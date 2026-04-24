@@ -34,7 +34,7 @@ api.interceptors.response.use(
   }
 );
 
-export const initializeSetup = (data: { vmpipeIp: string; vmpipeHostname?: string; environmentName?: string; sshUser?: string }) => 
+export const initializeSetup = (data: { vmpipeIp: string; vmpipeHostname?: string; environmentName?: string; sshUser?: string; osFamily?: string }) => 
   api.post('/setup/initialize', data);
 
 export const getEnvironmentStats = () => api.get('/environments/stats');
