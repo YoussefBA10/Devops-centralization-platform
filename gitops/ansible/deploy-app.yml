@@ -154,7 +154,7 @@
     - name: Inject build-time ARGs into existing Dockerfile
       blockinfile:
         path: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
-        insertbefore: "RUN (npm|yarn|pnpm) run build|RUN (npm|yarn|pnpm) build"
+        insertbefore: "RUN (npm|yarn|pnpm|vite|react-scripts).* (build|install)"
         marker: "# {mark} ANSIBLE MANAGED BLOCK: BUILD ARGS"
         block: |
           {% for key in env_map.keys() %}
@@ -214,7 +214,7 @@
       when: conflicting_container_name != ""
 
     - name: Build Docker Image
-      command: docker build -t {{ image_name }}:latest {{ dockerBuildArgs | default('') }} .
+      command: docker build --no-cache -t {{ image_name }}:latest {{ dockerBuildArgs | default('') }} .
       args:
         chdir: "{{ app_dir }}/{{ srcPath | default('.') }}"
 

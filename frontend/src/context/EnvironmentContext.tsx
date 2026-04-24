@@ -28,16 +28,34 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setLoading(true);
     try {
       const response = await api.get('/environments');
-      const data = response.data;
+      const data = response.data as Environment[];
       setEnvironments(data);
-      if (data.length > 0 && !selectedEnvironment) {
-        setSelectedEnvironment(data[0]);
+      
+      const storedId = localStorage.getItem('selectedEnvironmentId');
+      if (data.length > 0) {
+        if (storedId) {
+          const storedEnv = data.find(e => e.id === parseInt(storedId));
+          if (storedEnv) {
+            setSelectedEnvironment(storedEnv);
+          } else {
+            setSelectedEnvironment(data[0]);
+            localStorage.setItem('selectedEnvironmentId', data[0].id.toString());
+          }
+        } else if (!selectedEnvironment) {
+          setSelectedEnvironment(data[0]);
+          localStorage.setItem('selectedEnvironmentId', data[0].id.toString());
+        }
       }
     } catch (error) {
       console.error('Failed to fetch environments', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSetSelectedEnvironment = (env: Environment) => {
+    setSelectedEnvironment(env);
+    localStorage.setItem('selectedEnvironmentId', env.id.toString());
   };
   
   
@@ -80,7 +98,7 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
       value={{ 
         environments, 
         selectedEnvironment, 
-        setSelectedEnvironment, 
+        setSelectedEnvironment: handleSetSelectedEnvironment, 
         loading, 
         initialized: environments.length > 0,
         refreshEnvironments,
