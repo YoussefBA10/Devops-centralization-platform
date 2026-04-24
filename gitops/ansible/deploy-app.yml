@@ -151,6 +151,18 @@
       shell: "sed -i -E 's/listen\\s+[0-9]+/listen {{ containerPort | default(80) }}/g' {{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
       when: nginx_stat.stat.exists and appType == 'FRONTEND'
 
+    - name: Inject build-time ARGs into existing Dockerfile
+      blockinfile:
+        path: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        insertbefore: "RUN (npm|yarn|pnpm) run build|RUN (npm|yarn|pnpm) build"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK: BUILD ARGS"
+        block: |
+          {% for key in env_map.keys() %}
+          ARG {{ key }}
+          ENV {{ key }}=${{ key }}
+          {% endfor %}
+      when: dockerfile_stat.stat.exists and appType == 'FRONTEND' and env_map.keys() | length > 0
+
     - name: Cleanup old container if renamed (Task 2)
       docker_container:
         name: "{{ oldAppName }}"
