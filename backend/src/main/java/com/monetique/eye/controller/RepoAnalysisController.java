@@ -3,6 +3,7 @@ package com.monetique.eye.controller;
 import com.monetique.eye.dto.RepoAnalysisDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.BufferedReader;
@@ -19,6 +20,9 @@ import java.util.stream.Stream;
 @RestController
 @RequestMapping("/api/repo")
 public class RepoAnalysisController {
+    
+    @Value("${monetique.git.executable:git}")
+    private String gitExecutable;
 
     @PostMapping("/analyze")
     public ResponseEntity<RepoAnalysisDTO.Response> analyzeRepo(@RequestBody RepoAnalysisDTO.Request request) {
@@ -37,8 +41,9 @@ public class RepoAnalysisController {
             log.info("Analyzing repo: {} branch: {} into {}", request.getRepoUrl(), branch, tempDir);
 
             // Shallow clone
+            String gitCmd = resolveGitExecutable();
             ProcessBuilder pb = new ProcessBuilder(
-                    "git", "clone", "--depth", "1", "--branch", branch,
+                    gitCmd, "clone", "--depth", "1", "--branch", branch,
                     request.getRepoUrl(), tempDir.toString()
             );
             pb.redirectErrorStream(true);
@@ -247,5 +252,37 @@ public class RepoAnalysisController {
             }
         } catch (Exception ignored) {}
         return null;
+    }
+
+    private String resolveGitExecutable() {
+        // 1. Try configured executable
+        if (canRun(gitExecutable)) return gitExecutable;
+        
+        // 2. Try default "git"
+        if (!gitExecutable.equals("git") && canRun("git")) return "git";
+        
+        // 3. Try common Windows paths
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            String[] commonPaths = {
+                "C:\\Program Files\\Git\\bin\\git.exe",
+                "C:\\Program Files (x86)\\Git\\bin\\git.exe",
+                System.getProperty("user.home") + "\\AppData\\Local\\Programs\\Git\\bin\\git.exe"
+            };
+            for (String path : commonPaths) {
+                if (new File(path).exists()) return path;
+            }
+        }
+        
+        return gitExecutable; // fallback to whatever was configured
+    }
+
+    private boolean canRun(String cmd) {
+        try {
+            new ProcessBuilder(cmd, "--version").start().waitFor();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

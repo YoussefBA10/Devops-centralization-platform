@@ -53,5 +53,7 @@ groq:
   model: ${GROQ_MODEL:llama-3.3-70b-versatile}
 
 monetique:
+  git:
+    executable: ${GIT_EXECUTABLE:git}
   gitops:
     path: ${MONETIQUE_GITOPS_PATH:../gitops}

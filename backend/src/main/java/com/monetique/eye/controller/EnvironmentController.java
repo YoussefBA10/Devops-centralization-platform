@@ -214,6 +214,7 @@ public class EnvironmentController {
         String targetIp = request.get("targetIp");
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
+        String osFamily = request.getOrDefault("osFamily", "ubuntu");
 
         // Task 1: Check if node already exists
         if (managedNodeRepository.findByEnvironmentAndIp(env, targetIp).isPresent()) {
@@ -224,7 +225,7 @@ public class EnvironmentController {
         }
 
         CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser,
-                sshPassword);
+                sshPassword, osFamily);
 
         // Return immediately with a placeholder, or wait slightly. Here we just return
         // async confirmation.

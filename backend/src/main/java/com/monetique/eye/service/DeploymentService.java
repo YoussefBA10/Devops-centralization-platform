@@ -60,7 +60,7 @@ public class DeploymentService {
 
     @Async
     public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser,
-            String sshPassword) {
+            String sshPassword, String osFamily) {
         log.info("Starting agent deployment for environment: {} at IP: {}", environment.getName(), targetIp);
 
         DeploymentLog deploymentLog = DeploymentLog.builder()
@@ -85,7 +85,14 @@ public class DeploymentService {
                     deploymentLog, 300);
 
             // 3. Execute Ansible Playbook
-            String playbookPath = gitopsPath + "/ansible/deploy-tools.yml";
+            String playbookFile = "deploy-tools.yml"; // default
+            if ("redhat".equalsIgnoreCase(osFamily)) {
+                playbookFile = "deploy-tools-redhat.yml";
+            } else if ("ubuntu".equalsIgnoreCase(osFamily)) {
+                playbookFile = "deploy-tools-ubuntu.yml";
+            }
+            
+            String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
             String envLabel = environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");

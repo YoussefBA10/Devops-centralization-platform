@@ -1,5 +1,5 @@
 ---
-- name: Deploy Observability Tools to Agent Node
+- name: Deploy Observability Tools to RedHat Agent Node
   hosts: "{{ target_host | default('all') }}"
   become: yes
   any_errors_fatal: yes
@@ -20,8 +20,8 @@
           - curl
           - wget
           - htop
-          - net-tools
         state: present
+
     # -----------------------------
     # Check if Docker exists
     # -----------------------------
@@ -32,31 +32,22 @@
       changed_when: false
 
     # -----------------------------
-    # Fix broken Docker repo (IMPORTANT)
+    # Install Docker (RedHat/CentOS)
     # -----------------------------
-    - name: Remove broken Docker repo
-      file:
-        path: /etc/apt/sources.list.d/docker.list
-        state: absent
+    - name: Add Docker repo (RedHat)
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
       when: docker_check.failed
 
-    - name: Remove Docker keyring conflict
-      file:
-        path: /etc/apt/keyrings/docker.asc
-        state: absent
-      when: docker_check.failed
-
-    # -----------------------------
-    # Install Docker
-    # -----------------------------
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-      when: docker_check.failed
-
-    - name: Install Docker
-      apt:
-        name: docker.io
+    - name: Install Docker and dependencies
+      dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
         state: present
       when: docker_check.failed
 
