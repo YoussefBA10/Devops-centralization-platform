@@ -19,14 +19,14 @@ const ResourceMetric: React.FC<{ label: string; value: number; icon: React.React
         {icon}
         {label}
       </div>
-      <span className={value > 90 ? 'text-destructive' : value > 70 ? 'text-amber-500' : 'text-primary'}>
-        {value.toFixed(1)}%
+      <span className={(value || 0) > 90 ? 'text-destructive' : (value || 0) > 70 ? 'text-amber-500' : 'text-primary'}>
+        {(value || 0).toFixed(1)}%
       </span>
     </div>
     <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
       <div 
         className={`h-full transition-all duration-1000 ${color}`} 
-        style={{ width: `${Math.min(value, 100)}%` }}
+        style={{ width: `${Math.min(value || 0, 100)}%` }}
       ></div>
     </div>
   </div>

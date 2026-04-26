@@ -99,6 +99,7 @@ public class EnvironmentController {
 
         String label = getLabelValue(env.getPrometheusLabel());
         return ResponseEntity.ok(Map.of(
+                "cpuUsage", prometheusClient.getCpuUsage(label),
                 "ramUsagePercent", prometheusClient.getMemoryUsagePercent(label),
                 "diskUsagePercent", prometheusClient.getDiskUsagePercent(label),
                 "nodeCount", prometheusClient.getActiveNodeCount(label)));
