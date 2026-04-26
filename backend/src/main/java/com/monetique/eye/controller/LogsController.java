@@ -3,6 +3,7 @@ package com.monetique.eye.controller;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.service.ElasticsearchLogService;
+import com.monetique.eye.security.RequiresPermission;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/logs")
+@RequiresPermission("MONITORING_LOGS")
 public class LogsController {
 
     private final ElasticsearchLogService esLogService;

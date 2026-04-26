@@ -43,6 +43,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   // Step 1
   const [repoUrl, setRepoUrl] = useState('');
   const [branch, setBranch] = useState('main');
+  const [isPrivateRepo, setIsPrivateRepo] = useState(false);
+  const [githubToken, setGithubToken] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
   const [detectedApps, setDetectedApps] = useState<DetectedApp[]>([]);
   const [, setRepoName] = useState('');
@@ -124,7 +126,20 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     setLocalError(null);
     setDetectedApps([]);
     try {
-      const res = await api.post('/repo/analyze', { repoUrl, branch });
+      if (isPrivateRepo && githubToken.trim()) {
+        try {
+          await api.post('/github/token', { token: githubToken.trim() });
+        } catch (err: any) {
+          throw new Error(err.response?.data?.message || 'Failed to validate or save GitHub token.');
+        }
+      }
+
+      let finalRepoUrl = repoUrl;
+      if (isPrivateRepo) {
+        finalRepoUrl = finalRepoUrl.replace('https://github.com/', '').replace('.git', '').replace('http://github.com/', '');
+      }
+
+      const res = await api.post('/repo/analyze', { repoUrl: finalRepoUrl, branch });
       const data = res.data;
       if (data.error) {
         setLocalError(data.error);
@@ -140,7 +155,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         setLocalError('No recognizable applications detected in this repository. Ensure it contains a pom.xml, package.json, requirements.txt, or go.mod.');
       }
     } catch (err: any) {
-      setLocalError(err.response?.data?.error || 'Failed to analyze repository.');
+      setLocalError(err.message || err.response?.data?.error || 'Failed to analyze repository.');
     } finally {
       setAnalyzing(false);
     }
@@ -180,6 +195,11 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     const envMap: Record<string, string> = {};
     envVars.forEach(v => { if (v.key.trim()) envMap[v.key.trim()] = v.value; });
 
+    let finalRepoUrl = repoUrl;
+    if (isPrivateRepo) {
+      finalRepoUrl = finalRepoUrl.replace('https://github.com/', '').replace('.git', '').replace('http://github.com/', '');
+    }
+
     try {
       await onDeploy({
         id: initialData?.id,
@@ -187,7 +207,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         environmentId: selectedEnvironment.id,
         type: selectedApp.type,
         appLanguage: selectedApp.framework,
-        repoUrl,
+        repoUrl: finalRepoUrl,
         targetNode,
         branch,
         port: parseInt(port),
@@ -267,6 +287,38 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                     <Input value={branch} onChange={e => setBranch(e.target.value)} placeholder="main" className="pl-9 bg-black/20 border-white/10" />
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="isPrivateRepo"
+                    checked={isPrivateRepo}
+                    onChange={(e) => setIsPrivateRepo(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/10 bg-black/20 text-primary focus:ring-primary focus:ring-offset-0"
+                  />
+                  <label htmlFor="isPrivateRepo" className="text-sm font-medium text-white/80 cursor-pointer">
+                    This is a private repository
+                  </label>
+                </div>
+
+                {isPrivateRepo && (
+                  <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">GitHub Personal Access Token (PAT)</label>
+                    <div className="relative">
+                      <Settings2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="password"
+                        value={githubToken}
+                        onChange={e => setGithubToken(e.target.value)}
+                        placeholder="ghp_xxxxxxxxxxxxxxxxx"
+                        className="pl-9 bg-black/20 border-white/10"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Your token will be securely saved and used for deployment. It requires the 'repo' scope.
+                    </p>
+                  </div>
+                )}
               </div>
               <Button onClick={analyzeRepo} loading={analyzing} disabled={!repoUrl.trim()} className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
                 {analyzing ? (

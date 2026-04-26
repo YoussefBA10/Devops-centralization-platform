@@ -10,8 +10,11 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+import com.monetique.eye.security.RequiresPermission;
+
 @RestController
 @RequestMapping("/api/deploy")
+@RequiresPermission("APP_DEPLOYMENT_CREATE")
 public class DeployController {
 
     private final GitHubService gitHubService;

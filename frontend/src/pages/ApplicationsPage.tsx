@@ -9,7 +9,10 @@ import DeployApplicationModal from '../components/applications/DeployApplication
 import ConfirmationModal from '../components/ConfirmationModal';
 
 const ApplicationsPage: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, permissions } = useAuth();
+  const canCreate = isAdmin || permissions?.appDeployment?.create;
+  const canEdit = isAdmin || permissions?.appDeployment?.edit;
+  const canDelete = isAdmin || permissions?.appDeployment?.delete;
   const { selectedEnvironment } = useEnvironment();
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -219,7 +222,7 @@ const ApplicationsPage: React.FC = () => {
               Manage and deploy services for <span className="font-bold text-primary">{selectedEnvironment?.name || '...'}</span>
             </p>
           </div>
-          {isAdmin && (
+          {canCreate && (
             <Button
               onClick={() => setIsDeployModalOpen(true)}
               className="bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] transition-all h-11 px-6"
@@ -283,7 +286,7 @@ const ApplicationsPage: React.FC = () => {
                         <span className="text-[10px] text-muted-foreground">{app.appLanguage}</span>
                       </div>
                     </div>
-                    <button onClick={() => handleDelete(app.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {canDelete && <button onClick={() => handleDelete(app.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
 
                   <a href={app.repoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-primary transition-colors mb-4 truncate group/repo">
@@ -316,8 +319,8 @@ const ApplicationsPage: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" className={`flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20 ${app.status === 'FAILED' ? 'border-red-500/30 hover:border-red-500/60 text-red-400' : ''}`} onClick={() => handleViewLogs(app)}>{app.status === 'FAILED' ? <><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> View Error</> : <><Terminal className="w-3.5 h-3.5 mr-1.5" /> Logs</>}</Button>
-                      <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" onClick={() => handleEditApp(app)}><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit</Button>
-                      <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}</Button>
+                      {canEdit && <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" onClick={() => handleEditApp(app)}><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit</Button>}
+                      {canEdit && <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}</Button>}
                     </div>
                   </div>
                 </div>
@@ -330,7 +333,7 @@ const ApplicationsPage: React.FC = () => {
               <Box className="w-12 h-12 text-muted-foreground/30 mb-4" />
               <h3 className="text-lg font-bold text-muted-foreground">No Applications Found</h3>
               <p className="text-sm text-muted-foreground/70 mb-6">Deploy a new application to get started.</p>
-              {isAdmin && <Button onClick={() => setIsDeployModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Deploy Application</Button>}
+              {canCreate && <Button onClick={() => setIsDeployModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Deploy Application</Button>}
             </div>
           )}
         </div>

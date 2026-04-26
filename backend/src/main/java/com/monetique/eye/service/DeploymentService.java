@@ -157,36 +157,40 @@ public class DeploymentService {
             String sshPassword) {
         log.info("Starting undeployment for IP: {} (Environment: {})", targetIp, environment.getName());
         try {
-            // 1. Run Ansible Undeploy Playbook
-            String playbookPath = gitopsPath + "/ansible/undeploy-node.yml";
+            // 1. Run Ansible Undeploy Playbook (Only if credentials exist)
+            if (sshUser != null && !sshUser.isEmpty()) {
+                String playbookPath = gitopsPath + "/ansible/undeploy-node.yml";
 
-            // Generate a temporary inventory for just this target to ensure we don't
-            // undeploy others accidentally
-            File tempInventory = File.createTempFile("undeploy-inventory", ".ini");
-            try (FileWriter writer = new FileWriter(tempInventory)) {
-                writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
-            }
+                // Generate a temporary inventory for just this target to ensure we don't
+                // undeploy others accidentally
+                File tempInventory = File.createTempFile("undeploy-inventory", ".ini");
+                try (FileWriter writer = new FileWriter(tempInventory)) {
+                    writer.write("[agents]\n" + targetIp + " ansible_user=" + sshUser + "\n");
+                }
 
-            List<String> commandList = new ArrayList<>(List.of(
-                    "ansible-playbook",
-                    "-i", tempInventory.getAbsolutePath(),
-                    playbookPath,
-                    "--limit", targetIp,
-                    "-e", "target_host=" + targetIp,
-                    "-e", "ssh_user=" + sshUser));
+                List<String> commandList = new ArrayList<>(List.of(
+                        "ansible-playbook",
+                        "-i", tempInventory.getAbsolutePath(),
+                        playbookPath,
+                        "--limit", targetIp,
+                        "-e", "target_host=" + targetIp,
+                        "-e", "ssh_user=" + sshUser));
 
-            if (sshPassword != null && !sshPassword.isEmpty()) {
-                commandList.add("-b");
-                commandList.add("-e");
-                commandList.add("ansible_become_pass=" + sshPassword);
-                commandList.add("-e");
-                commandList.add("ansible_ssh_pass=" + sshPassword);
-                executeProcessSecure(commandList.toArray(new String[0]), new DeploymentLog(), 300);
+                if (sshPassword != null && !sshPassword.isEmpty()) {
+                    commandList.add("-b");
+                    commandList.add("-e");
+                    commandList.add("ansible_become_pass=" + sshPassword);
+                    commandList.add("-e");
+                    commandList.add("ansible_ssh_pass=" + sshPassword);
+                    executeProcessSecure(commandList.toArray(new String[0]), new DeploymentLog(), 300);
+                } else {
+                    executeProcess(commandList.toArray(new String[0]), new DeploymentLog(), 300);
+                }
+
+                tempInventory.delete();
             } else {
-                executeProcess(commandList.toArray(new String[0]), new DeploymentLog(), 300);
+                log.warn("Skipping remote undeployment for {} as no SSH credentials were provided. Only cleaning up local records.", targetIp);
             }
-
-            tempInventory.delete();
 
             // 2. Remove from Prometheus
             deregisterNodeFromPrometheus(targetIp);

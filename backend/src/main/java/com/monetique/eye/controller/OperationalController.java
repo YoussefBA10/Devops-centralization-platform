@@ -6,6 +6,7 @@ import com.monetique.eye.entity.LogAggregationWindow;
 import com.monetique.eye.repository.AiOperationalSummaryRepository;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.LogAggregationWindowRepository;
+import com.monetique.eye.security.RequiresPermission;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.monetique.eye.service.InfrastructureService;
@@ -16,6 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/operational")
+@RequiresPermission("MONITORING_OBSERVABILITY")
 public class OperationalController {
 
     private final LogAggregationWindowRepository aggregationRepository;
@@ -40,17 +42,30 @@ public class OperationalController {
     public List<LogAggregationWindow> getStabilityData(@RequestParam Long environmentId) {
         List<Application> apps = applicationRepository.findByEnvironmentId(environmentId);
         if (apps.isEmpty()) return List.of();
+        // Use the first app as a representative for the environment's overall stability trend
         return aggregationRepository.findTop24ByApplicationOrderByWindowEndDesc(apps.get(0));
     }
 
     @GetMapping("/digest")
     public ResponseEntity<AiOperationalSummary> getLatestSummary(@RequestParam Long environmentId) {
         List<Application> apps = applicationRepository.findByEnvironmentId(environmentId);
-        if (apps.isEmpty()) return ResponseEntity.notFound().build();
+        
+        if (apps.isEmpty()) {
+            // Return a default summary if no apps exist yet
+            return ResponseEntity.ok(AiOperationalSummary.builder()
+                    .summaryText("No applications deployed in this environment yet. Deploy your first service to begin tracking operational health.")
+                    .businessRisk("LOW")
+                    .generatedAt(java.time.LocalDateTime.now())
+                    .build());
+        }
 
         return summaryRepository.findTopByApplicationIdOrderByGeneratedAtDesc(apps.get(0).getId())
                 .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+                .orElse(ResponseEntity.ok(AiOperationalSummary.builder()
+                        .summaryText("No operational data available for " + apps.get(0).getName() + " yet. The next analysis cycle will generate a summary.")
+                        .businessRisk("LOW")
+                        .generatedAt(java.time.LocalDateTime.now())
+                        .build()));
     }
 
     @GetMapping("/heatmap")

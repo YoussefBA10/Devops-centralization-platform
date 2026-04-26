@@ -1,6 +1,7 @@
 package com.monetique.eye.controller;
 
 import com.monetique.eye.dto.RepoAnalysisDTO;
+import com.monetique.eye.security.RequiresPermission;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,7 @@ public class RepoAnalysisController {
     }
 
     @PostMapping("/analyze")
+    @RequiresPermission("APP_DEPLOYMENT_CREATE")
     public ResponseEntity<RepoAnalysisDTO.Response> analyzeRepo(@RequestBody RepoAnalysisDTO.Request request, org.springframework.security.core.Authentication authentication) {
         Path tempDir = null;
         try {

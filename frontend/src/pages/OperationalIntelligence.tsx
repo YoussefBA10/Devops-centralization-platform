@@ -236,10 +236,15 @@ const OperationalIntelligence: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                ) : (
+                ) : loading ? (
                   <div className="h-full flex flex-col p-8">
                     <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
                     <p className="text-muted-foreground font-medium italic">Synthesizing environment telemetry...</p>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col p-8 items-center justify-center text-center">
+                    <Brain className="w-12 h-12 text-muted-foreground mb-4 opacity-20" />
+                    <p className="text-muted-foreground font-medium italic">Executive Digest is currently being generated. Check back in a few minutes.</p>
                   </div>
                 )}
               </CardContent>

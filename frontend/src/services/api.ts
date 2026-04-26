@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { showPermissionError } from '../components/ui/Toast';
 
 const getBaseURL = () => {
   const url = import.meta.env.VITE_API_URL || 'http://localhost:8880/api';
@@ -25,10 +26,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+    } else if (error.response?.status === 403) {
+      const message = error.response?.data?.message || 'You do not have permission to perform this action.';
+      showPermissionError(message);
     }
     return Promise.reject(error);
   }

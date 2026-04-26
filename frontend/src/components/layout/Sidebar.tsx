@@ -15,20 +15,74 @@ import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
 
 const Sidebar: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, permissions, loading } = useAuth();
+
+  // Debugging: Log permissions to see if they are arriving
+  React.useEffect(() => {
+    if (permissions) {
+      console.log("Sidebar Permissions Received:", permissions);
+    }
+  }, [permissions]);
 
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Observability', path: '/operational', icon: Activity },
-    { name: 'Infrastructure', path: '/infrastructure', icon: Share2 },
-    { name: 'Logs', path: '/logs', icon: Terminal },
-    { name: 'Incidents', path: '/tickets', icon: FileText },
-    { name: 'AI Assistant', path: '/chat', icon: MessageSquare },
+    { 
+        name: 'Dashboard', 
+        path: '/', 
+        icon: LayoutDashboard,
+        show: true 
+    },
+    { 
+      name: 'Environments', 
+      path: '/environments', 
+      icon: Layers,
+      show: isAdmin || permissions?.environmentAccess
+    },
+    { 
+      name: 'Applications', 
+      path: '/applications', 
+      icon: Box,
+      show: isAdmin || permissions?.appDeployment?.view
+    },
+    { 
+      name: 'Observability', 
+      path: '/operational', 
+      icon: Activity,
+      show: isAdmin || permissions?.monitoring?.observability
+    },
+    { 
+      name: 'Infrastructure', 
+      path: '/infrastructure', 
+      icon: Share2,
+      show: isAdmin || permissions?.monitoring?.infraGraph
+    },
+    { 
+      name: 'Logs', 
+      path: '/logs', 
+      icon: Terminal,
+      show: isAdmin || permissions?.monitoring?.logs
+    },
+    { 
+      name: 'Incidents', 
+      path: '/tickets', 
+      icon: FileText,
+      show: isAdmin || permissions?.incidents?.view
+    },
+    { 
+      name: 'AI Assistant', 
+      path: '/chat', 
+      icon: MessageSquare,
+      show: isAdmin || permissions?.chatbotAccess
+    },
   ];
 
-  if (isAdmin) {
-    navItems.splice(1, 0, { name: 'Environments', path: '/environments', icon: Layers });
-    navItems.splice(2, 0, { name: 'Applications', path: '/applications', icon: Box });
+  const visibleItems = navItems.filter(item => item.show);
+
+  if (loading && !permissions && !isAdmin) {
+      return (
+          <div className="w-64 h-full bg-card border-r border-border flex flex-col p-8 items-center justify-center">
+              <Activity className="w-8 h-8 text-primary animate-spin" />
+          </div>
+      );
   }
 
   return (
@@ -41,7 +95,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       <nav className="flex-1 px-4 py-4 space-y-1">
-        {navItems.map((item) => (
+        {visibleItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
@@ -59,12 +113,23 @@ const Sidebar: React.FC = () => {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3 px-4 py-3 text-muted-foreground hover:text-foreground cursor-pointer group transition-colors">
-          <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-500" />
-          <span className="font-medium">Settings</span>
+      {isAdmin && (
+        <div className="p-4 border-t border-border">
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${
+                isActive 
+                  ? 'bg-primary/10 text-primary border border-primary/20' 
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`
+            }
+          >
+            <Settings className="w-5 h-5 group-hover:rotate-45 transition-transform duration-500" />
+            <span className="font-medium">Settings</span>
+          </NavLink>
         </div>
-      </div>
+      )}
     </div>
   );
 };

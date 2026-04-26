@@ -8,6 +8,7 @@ import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.DeploymentLogRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.service.DeploymentService;
+import com.monetique.eye.security.RequiresPermission;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +30,7 @@ public class ApplicationController {
     private final com.monetique.eye.service.ActivityLogService activityLogService;
 
     @GetMapping
+    @RequiresPermission("APP_DEPLOYMENT_VIEW")
     public ResponseEntity<List<ApplicationDTO>> getApplications(@RequestParam Long environmentId) {
         List<Application> apps = applicationRepository.findByEnvironmentId(environmentId);
         List<ApplicationDTO> dtos = apps.stream().map(app -> ApplicationDTO.builder()
@@ -54,6 +56,7 @@ public class ApplicationController {
     }
 
     @PostMapping("/deploy")
+    @RequiresPermission("APP_DEPLOYMENT_CREATE")
     public ResponseEntity<?> deployApplication(@RequestBody DeployRequestDTO request, org.springframework.security.core.Authentication authentication) {
         Environment env = environmentRepository.findById(request.getEnvironmentId())
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
@@ -136,6 +139,7 @@ public class ApplicationController {
 
     /** Poll live status of an application (for frontend polling while DEPLOYING). */
     @GetMapping("/{id}/status")
+    @RequiresPermission("APP_DEPLOYMENT_VIEW")
     public ResponseEntity<?> getApplicationStatus(@PathVariable Long id) {
         Application app = applicationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
@@ -151,6 +155,7 @@ public class ApplicationController {
      * This enables the frontend to surface the exact Ansible/SSH error when deployment fails.
      */
     @GetMapping("/{id}/logs")
+    @RequiresPermission("APP_DEPLOYMENT_VIEW")
     public ResponseEntity<?> getApplicationLogs(@PathVariable Long id) {
         Application app = applicationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
@@ -175,6 +180,7 @@ public class ApplicationController {
 
     /** Trigger a remote restart for a specific application. */
     @PostMapping("/{id}/restart")
+    @RequiresPermission("APP_DEPLOYMENT_EDIT")
     public ResponseEntity<?> restartApplication(@PathVariable Long id) {
         Application app = applicationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
@@ -191,6 +197,7 @@ public class ApplicationController {
 
     /** Remove an application record from the database. */
     @DeleteMapping("/{id}")
+    @RequiresPermission("APP_DEPLOYMENT_DELETE")
     public ResponseEntity<?> deleteApplication(@PathVariable Long id) {
         Application app = applicationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
@@ -206,6 +213,7 @@ public class ApplicationController {
     }
     /** Transitions a Canary deployment to Stable. */
     @PostMapping("/{applicationId}/promote")
+    @RequiresPermission("APP_DEPLOYMENT_EDIT")
     public ResponseEntity<?> promote(@PathVariable Long applicationId, @RequestParam Long environmentId, org.springframework.security.core.Authentication authentication) {
         deploymentService.promoteApplication(environmentId, applicationId, authentication.getName());
         activityLogService.logActivity("Canary Promoted: " + applicationId, "deployment", "Global");

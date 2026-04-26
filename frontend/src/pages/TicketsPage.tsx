@@ -6,9 +6,13 @@ import {
   Clock, 
   ArrowRight,
   History,
-  Star
+  Star,
+  Edit,
+  Trash2,
+  X
 } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
 import type { Ticket, Application, TopologyData } from '../types/index';
 import { Card, CardContent } from '../components/ui/Card';
@@ -16,15 +20,22 @@ import { Button, Input } from '../components/ui/Input';
 
 const TicketsPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { permissions, isAdmin } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED'>('ALL');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingTicketId, setEditingTicketId] = useState<number | null>(null);
   const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'LOW', node: '', applicationId: '' });
   const [applications, setApplications] = useState<Application[]>([]);
   const [topology, setTopology] = useState<TopologyData | null>(null);
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
+
+  const canEdit = isAdmin || permissions?.incidents?.edit;
+  const canDelete = isAdmin || permissions?.incidents?.delete;
+  const canCreate = isAdmin || permissions?.incidents?.create;
 
   useEffect(() => {
     const fetchFormData = async () => {
@@ -68,19 +79,52 @@ const TicketsPage: React.FC = () => {
   const raiseTicket = async () => {
     if (!selectedEnvironment || !newTicket.title.trim()) return;
     try {
-      await api.post('/tickets', {
-        title: newTicket.title,
-        description: newTicket.description,
-        priority: newTicket.priority,
-        node: newTicket.node || undefined,
-        applicationId: newTicket.applicationId ? parseInt(newTicket.applicationId) : undefined,
-        environmentId: selectedEnvironment.id
-      });
+      if (isEditing && editingTicketId) {
+        await api.put(`/tickets/${editingTicketId}`, {
+          ...newTicket,
+          applicationId: newTicket.applicationId ? parseInt(newTicket.applicationId) : null,
+          environmentId: selectedEnvironment.id
+        });
+      } else {
+        await api.post('/tickets', {
+          title: newTicket.title,
+          description: newTicket.description,
+          priority: newTicket.priority,
+          node: newTicket.node || undefined,
+          applicationId: newTicket.applicationId ? parseInt(newTicket.applicationId) : undefined,
+          environmentId: selectedEnvironment.id
+        });
+      }
       setIsModalOpen(false);
+      setIsEditing(false);
+      setEditingTicketId(null);
       setNewTicket({ title: '', description: '', priority: 'LOW', node: '', applicationId: '' });
       fetchTickets();
     } catch (error) {
-      console.error('Failed to raise ticket', error);
+      console.error('Failed to save ticket', error);
+    }
+  };
+
+  const handleEditClick = (ticket: Ticket) => {
+    setNewTicket({
+      title: ticket.title,
+      description: ticket.description,
+      priority: ticket.priority,
+      node: ticket.node || '',
+      applicationId: ticket.application?.id?.toString() || ''
+    });
+    setEditingTicketId(ticket.id);
+    setIsEditing(true);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteTicket = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this incident ticket?')) return;
+    try {
+      await api.delete(`/tickets/${id}`);
+      fetchTickets();
+    } catch (error) {
+      console.error('Failed to delete ticket', error);
     }
   };
 
@@ -111,10 +155,12 @@ const TicketsPage: React.FC = () => {
           <Button variant="outline" onClick={fetchTickets} loading={loading}>
             <History className="w-4 h-4" />
           </Button>
-          <Button onClick={() => setIsModalOpen(true)}>
-            <Plus className="w-4 h-4" />
-            Raise Ticket
-          </Button>
+          {canCreate && (
+            <Button onClick={() => { setIsEditing(false); setIsModalOpen(true); setNewTicket({ title: '', description: '', priority: 'LOW', node: '', applicationId: '' }); }}>
+              <Plus className="w-4 h-4" />
+              Raise Ticket
+            </Button>
+          )}
         </div>
       </div>
 
@@ -123,9 +169,16 @@ const TicketsPage: React.FC = () => {
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <Card className="w-full max-w-md bg-card/95 border-primary/20 shadow-2xl">
             <CardContent className="p-6 space-y-6">
-              <div>
-                <h3 className="text-xl font-bold tracking-tight">Raise Incident Ticket</h3>
-                <p className="text-sm text-muted-foreground mt-1">Describe the issue affecting {selectedEnvironment?.name}.</p>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight">{isEditing ? 'Edit Incident Ticket' : 'Raise Incident Ticket'}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {isEditing ? `Modifying ticket #${editingTicketId}` : `Describe the issue affecting ${selectedEnvironment?.name}.`}
+                  </p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-5 h-5" />
+                </button>
               </div>
               
               <div className="space-y-4">
@@ -193,7 +246,9 @@ const TicketsPage: React.FC = () => {
 
               <div className="flex justify-end gap-3 pt-2 border-t border-border">
                 <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                <Button onClick={raiseTicket} disabled={!newTicket.title.trim()}>Submit Ticket</Button>
+                <Button onClick={raiseTicket} disabled={!newTicket.title.trim()}>
+                  {isEditing ? 'Save Changes' : 'Submit Ticket'}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -245,7 +300,8 @@ const TicketsPage: React.FC = () => {
                         <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest border ${getStatusStyle(ticket.status)}`}>
                           {ticket.status.replace('_', ' ')}
                         </span>
-                        {ticket.node && <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-md ml-2">{ticket.node}</span>}
+                        {ticket.environment && <span className="text-xs font-semibold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md ml-2">{ticket.environment.name}</span>}
+                        {ticket.node && <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-md ml-1">{ticket.node}</span>}
                         {ticket.application && <span className="text-xs text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-md ml-1">{ticket.application.name}</span>}
                       </div>
                       <p className="text-sm text-muted-foreground truncate max-w-2xl">{ticket.description}</p>
@@ -290,6 +346,28 @@ const TicketsPage: React.FC = () => {
                       >
                         <Star className="w-4 h-4" fill={favorites.has(ticket.id) ? 'currentColor' : 'none'} />
                       </Button>
+                      
+                      {canEdit && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 text-muted-foreground hover:text-primary"
+                          onClick={() => handleEditClick(ticket)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                      
+                      {canDelete && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 text-muted-foreground hover:text-destructive"
+                          onClick={() => handleDeleteTicket(ticket.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>

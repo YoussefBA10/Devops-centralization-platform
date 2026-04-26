@@ -8,6 +8,7 @@ import com.monetique.eye.service.ElasticsearchLogService;
 import com.monetique.eye.service.LogAggregationService;
 import com.monetique.eye.service.PrometheusClient;
 import com.monetique.eye.service.RecurringPatternService;
+import com.monetique.eye.service.AiDigestService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -27,19 +28,22 @@ public class OperationalScheduler {
     private final ElasticsearchLogService esLogService;
     private final LogAggregationService aggregationService;
     private final RecurringPatternService patternService;
+    private final AiDigestService aiDigestService;
 
     public OperationalScheduler(EnvironmentRepository environmentRepository,
-                                ApplicationRepository applicationRepository,
-                                PrometheusClient prometheusClient,
-                                ElasticsearchLogService esLogService,
-                                LogAggregationService aggregationService,
-                                RecurringPatternService patternService) {
+                                 ApplicationRepository applicationRepository,
+                                 PrometheusClient prometheusClient,
+                                 ElasticsearchLogService esLogService,
+                                 LogAggregationService aggregationService,
+                                 RecurringPatternService patternService,
+                                 AiDigestService aiDigestService) {
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.prometheusClient = prometheusClient;
         this.esLogService = esLogService;
         this.aggregationService = aggregationService;
         this.patternService = patternService;
+        this.aiDigestService = aiDigestService;
     }
 
     @Scheduled(fixedRate = 60000)
@@ -67,6 +71,13 @@ public class OperationalScheduler {
                 
                 // 4. Save window
                 aggregationService.saveWindow(app, errorCount, stabilityIndex);
+
+                // 5. Generate AI Digest (limit frequency or only for active environments)
+                try {
+                    aiDigestService.generateApplicationDigest(app, stabilityIndex, errorCount);
+                } catch (Exception e) {
+                    log.error("Failed to generate AI digest for {}: {}", app.getName(), e.getMessage());
+                }
             }
         }
         

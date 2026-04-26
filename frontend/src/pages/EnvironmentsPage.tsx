@@ -20,6 +20,7 @@ import { Button, Input } from '../components/ui/Input';
 import EnvironmentCard from '../components/environment/EnvironmentCard';
 import DeployNodeModal from '../components/environment/DeployNodeModal';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 
 
@@ -41,6 +42,10 @@ interface EnvResources {
 
 
 const EnvironmentsPage: React.FC = () => {
+  const { isAdmin, permissions } = useAuth();
+  const canCreate = isAdmin || permissions?.envDeployment?.create;
+  const canEdit = isAdmin || permissions?.envDeployment?.edit;
+  const canDelete = isAdmin || permissions?.envDeployment?.delete;
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteEnvModal, setShowDeleteEnvModal] = useState(false);
   const { environments, refreshEnvironments, createEnvironment, updateEnvironment, deleteEnvironment, loading: envLoading } = useEnvironment();
@@ -226,13 +231,13 @@ const EnvironmentsPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button className="h-11 px-6 shadow-lg shadow-primary/20" onClick={() => {
+          {canCreate && <Button className="h-11 px-6 shadow-lg shadow-primary/20" onClick={() => {
             setCreateError(null);
             setShowCreateModal(true);
           }}>
             <Plus className="w-4 h-4 mr-2" />
             Create New
-          </Button>
+          </Button>}
           <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => { refreshEnvironments(); fetchData(); }} loading={envLoading}>
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -320,17 +325,17 @@ const EnvironmentsPage: React.FC = () => {
                 setSelectedEnv(env);
                 setShowDeployModal(true);
               }}
-              onEdit={() => {
+              onEdit={canEdit ? () => {
                 setSelectedEnv(env);
                 setEditEnvData({ name: env.name, description: env.description || '', prometheusLabel: env.prometheusLabel || '' });
                 setCreateError(null);
                 setShowEditModal(true);
-              }}
-              onDelete={() => {
+              } : undefined}
+              onDelete={canDelete ? () => {
                 setSelectedEnv(env);
                 setCreateError(null);
                 setShowDeleteEnvModal(true);
-              }}
+              } : undefined}
             />
           );
         })}

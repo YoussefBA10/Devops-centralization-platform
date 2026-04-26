@@ -37,8 +37,8 @@ interface EnvironmentCardProps {
   resources: EnvResources;
   onDeployClick: () => void;
   onNodesClick: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   onRefresh: () => void;
   activeDeploymentIp?: string | null;
 }
@@ -160,7 +160,7 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
             <Button variant="ghost" size="icon" className="rounded-xl hover:bg-white/5 transition-colors" onClick={onNodesClick} disabled={status === 'deploying'}>
               <Settings className="w-5 h-5 text-muted-foreground hover:text-white transition-colors" />
             </Button>
-            <div className="relative">
+            {(onEdit || onDelete) && <div className="relative">
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -175,24 +175,24 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)}></div>
                   <div className="absolute right-0 mt-2 w-48 bg-[#111114] border border-white/10 rounded-xl shadow-2xl py-2 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <button 
+                    {onEdit && <button 
                       onClick={() => { onEdit(); setShowMenu(false); }}
                       className="w-full text-left px-4 py-2 text-sm hover:bg-white/5 flex items-center gap-2 transition-colors"
                     >
                       <Settings className="w-4 h-4 text-primary" />
                       Edit Environment
-                    </button>
-                    <button 
+                    </button>}
+                    {onDelete && <button 
                       onClick={() => { onDelete(); setShowMenu(false); }}
                       className="w-full text-left px-4 py-2 text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete Environment
-                    </button>
+                    </button>}
                   </div>
                 </>
               )}
-            </div>
+            </div>}
           </div>
         </div>
 

@@ -9,5 +9,6 @@ import java.util.Optional;
 
 @Repository
 public interface ManagedNodeRepository extends JpaRepository<ManagedNode, Long> {
+    java.util.List<ManagedNode> findByEnvironment(Environment environment);
     Optional<ManagedNode> findByEnvironmentAndIp(Environment environment, String ip);
 }

@@ -9,8 +9,8 @@ import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.TicketRepository;
 import com.monetique.eye.service.ActivityLogService;
 import com.monetique.eye.service.SecurityService;
+import com.monetique.eye.security.RequiresPermission;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,6 +37,7 @@ public class TicketController {
     }
 
     @GetMapping
+    @RequiresPermission("INCIDENTS_VIEW")
     public List<Ticket> getAll(@RequestParam(required = false) Long environmentId) {
         if (environmentId != null) {
             return ticketRepository.findByEnvironmentId(environmentId);
@@ -45,6 +46,7 @@ public class TicketController {
     }
 
     @PostMapping
+    @RequiresPermission("INCIDENTS_CREATE")
     public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
         Ticket ticket = new Ticket();
         ticket.setTitle((String) body.get("title"));
@@ -71,27 +73,49 @@ public class TicketController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN') or @securityService.canAccessEnvironment(#ticket.environment.id)")
-    public ResponseEntity<Ticket> update(@PathVariable Long id, @RequestBody Ticket ticket) {
-        if (!ticketRepository.existsById(id)) {
+    @RequiresPermission("INCIDENTS_EDIT")
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Ticket ticket = ticketRepository.findById(id).orElse(null);
+        if (ticket == null) {
             return ResponseEntity.notFound().build();
         }
-        ticket.setId(id);
+
+        if (body.containsKey("title")) ticket.setTitle((String) body.get("title"));
+        if (body.containsKey("description")) ticket.setDescription((String) body.get("description"));
+        if (body.containsKey("priority")) ticket.setPriority((String) body.get("priority"));
+        if (body.containsKey("node")) ticket.setNode((String) body.get("node"));
+        if (body.containsKey("status")) {
+            try {
+                ticket.setStatus(TicketStatus.valueOf((String) body.get("status")));
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        if (body.containsKey("environmentId")) {
+            Long envId = Long.valueOf(body.get("environmentId").toString());
+            environmentRepository.findById(envId).ifPresent(ticket::setEnvironment);
+        }
+
+        if (body.containsKey("applicationId")) {
+            Object appIdObj = body.get("applicationId");
+            if (appIdObj != null) {
+                Long appId = Long.valueOf(appIdObj.toString());
+                applicationRepository.findById(appId).ifPresent(ticket::setApplication);
+            } else {
+                ticket.setApplication(null);
+            }
+        }
+
         return ResponseEntity.ok(ticketRepository.save(ticket));
     }
 
     @PutMapping("/{id}/status")
+    @RequiresPermission("INCIDENTS_EDIT")
     public ResponseEntity<Ticket> updateStatus(@PathVariable Long id, @RequestParam String status) {
         Ticket ticket = ticketRepository.findById(id).orElse(null);
         if (ticket == null) {
             return ResponseEntity.notFound().build();
         }
         
-        // ADMIN always has access; others must be linked to the environment
-        if (!securityService.canAccessEnvironment(ticket.getEnvironment().getId())) {
-            return ResponseEntity.status(403).build();
-        }
-
         try {
             ticket.setStatus(TicketStatus.valueOf(status));
             Ticket saved = ticketRepository.save(ticket);
@@ -100,5 +124,17 @@ public class TicketController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+    @DeleteMapping("/{id}")
+    @RequiresPermission("INCIDENTS_DELETE")
+    public ResponseEntity<?> delete(@PathVariable Long id) {
+        Ticket ticket = ticketRepository.findById(id).orElse(null);
+        if (ticket == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String envName = ticket.getEnvironment() != null ? ticket.getEnvironment().getName() : "Global";
+        ticketRepository.delete(ticket);
+        activityLogService.logActivity("Ticket Deleted: " + ticket.getTitle(), "incident", envName);
+        return ResponseEntity.ok().build();
     }
 }

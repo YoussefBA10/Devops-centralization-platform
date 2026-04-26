@@ -15,6 +15,9 @@ import LoginPage from './pages/LoginPage';
 import SetupWizard from './pages/SetupWizard';
 import ApplicationsPage from './pages/ApplicationsPage';
 import AuditLogPage from './pages/AuditLogPage';
+import UserManagementPage from './pages/UserManagementPage';
+import AccessDeniedPage from './pages/AccessDeniedPage';
+import ChatWidget from './components/layout/ChatWidget';
 import { useEnvironment } from './context/EnvironmentContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -61,6 +64,15 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Admin-only route wrapper
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) {
+    return <AccessDeniedPage title="Admin Only" message="This section is restricted to administrators. Contact your system administrator if you believe you should have access." />;
+  }
+  return <>{children}</>;
+};
+
 function App() {
   useAuth();
 
@@ -91,10 +103,12 @@ function App() {
                     <Route path="/tickets" element={<TicketsPage />} />
                     <Route path="/audit-log" element={<AuditLogPage />} />
                     <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/settings" element={<AdminRoute><UserManagementPage /></AdminRoute>} />
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
                 </main>
               </div>
+              <ChatWidget />
             </div>
           </ProtectedRoute>
         }
