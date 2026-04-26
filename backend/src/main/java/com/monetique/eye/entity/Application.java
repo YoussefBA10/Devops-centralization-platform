@@ -60,6 +60,10 @@ public class Application {
     private String githubInstallationId;
     private String githubRepoFullName;
     private String githubRepoUrl;
+    
+    private String gitToken; // For private repo access
+    @Column(columnDefinition = "TEXT")
+    private String envVarsJson; // Environment variables stored as JSON
 
     private java.time.LocalDateTime createdAt;
 

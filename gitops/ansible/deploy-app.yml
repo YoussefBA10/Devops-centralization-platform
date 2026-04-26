@@ -213,6 +213,12 @@
             - conflicting_container_name != oldAppName
       when: conflicting_container_name != ""
 
+    - name: Remove old image before build
+      docker_image:
+        name: "{{ image_name }}"
+        state: absent
+      ignore_errors: yes
+
     - name: Build Docker Image
       command: >
         docker build --no-cache

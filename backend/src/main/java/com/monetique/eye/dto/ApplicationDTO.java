@@ -31,4 +31,6 @@ public class ApplicationDTO {
     private String githubInstallationId;
     private String githubRepoFullName;
     private String githubRepoUrl;
+    private String gitToken;
+    private java.util.Map<String, String> envVars;
 }

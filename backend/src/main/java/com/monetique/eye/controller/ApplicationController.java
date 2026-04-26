@@ -27,6 +27,7 @@ public class ApplicationController {
     private final EnvironmentRepository environmentRepository;
     private final DeploymentService deploymentService;
     private final DeploymentLogRepository deploymentLogRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final com.monetique.eye.service.ActivityLogService activityLogService;
 
     @GetMapping
@@ -51,6 +52,8 @@ public class ApplicationController {
                 .isCanary(app.getIsCanary())
                 .canaryPort(app.getCanaryPort())
                 .lastErrorMessage(app.getLastErrorMessage())
+                .gitToken(app.getGitToken())
+                .envVars(parseEnvVars(app.getEnvVarsJson()))
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -127,6 +130,14 @@ public class ApplicationController {
 
         app.setStatus("DEPLOYING");
         app.setLastDeployedAt(LocalDateTime.now());
+        app.setGitToken(request.getGitToken());
+        if (request.getEnvVars() != null) {
+            try {
+                app.setEnvVarsJson(objectMapper.writeValueAsString(request.getEnvVars()));
+            } catch (Exception e) {
+                // Log error but continue
+            }
+        }
 
         applicationRepository.save(app);
 
@@ -210,6 +221,51 @@ public class ApplicationController {
         deploymentService.undeployApplicationFull(id);
 
         return ResponseEntity.ok(Map.of("message", "Undeployment started. Application will be removed shortly."));
+    }
+
+    /** Triggers a redeployment using previously saved credentials and parameters. */
+    @PostMapping("/{id}/redeploy")
+    @RequiresPermission("APP_DEPLOYMENT_CREATE")
+    public ResponseEntity<?> redeployApplication(@PathVariable Long id, org.springframework.security.core.Authentication authentication) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+
+        Environment env = app.getEnvironment();
+        
+        // Convert saved entity back to a request DTO for the deployment service
+        DeployRequestDTO request = new DeployRequestDTO();
+        request.setId(app.getId());
+        request.setName(app.getName());
+        request.setEnvironmentId(env.getId());
+        request.setType(app.getType());
+        request.setAppLanguage(app.getAppLanguage());
+        request.setRepoUrl(app.getRepoUrl());
+        request.setTargetNode(app.getTargetNode());
+        request.setBranch(app.getBranch());
+        request.setPort(app.getPort());
+        request.setSrcPath(app.getSrcPath());
+        request.setContainerPort(app.getContainerPort());
+        request.setGitToken(app.getGitToken());
+        request.setEnvVars(parseEnvVars(app.getEnvVarsJson()));
+        request.setAutoPromote(true);
+
+        app.setStatus("DEPLOYING");
+        app.setLastDeployedAt(LocalDateTime.now());
+        applicationRepository.save(app);
+
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), null, authentication.getName());
+
+        activityLogService.logActivity("Redeployment Started: " + app.getName(), "deployment", env.getName());
+        return ResponseEntity.ok(Map.of("message", "Redeployment triggered successfully", "appId", app.getId()));
+    }
+
+    private Map<String, String> parseEnvVars(String json) {
+        if (json == null || json.isEmpty()) return Map.of();
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
     /** Transitions a Canary deployment to Stable. */
     @PostMapping("/{applicationId}/promote")

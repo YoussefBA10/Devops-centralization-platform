@@ -57,6 +57,7 @@ export const deployApplication = (data: any) => api.post('/applications/deploy',
 export const restartApplication = (appId: number) => api.post(`/applications/${appId}/restart`);
 export const getApplicationLogs = (appId: number) => api.get(`/applications/${appId}/logs`);
 export const getApplicationStatus = (appId: number) => api.get(`/applications/${appId}/status`);
+export const redeployApplication = (appId: number) => api.post(`/applications/${appId}/redeploy`);
 export const deleteApplicationRecord = (appId: number) => api.delete(`/applications/${appId}`);
 export const promoteApplication = (envId: number, appId: number) => 
   api.post(`/applications/${appId}/promote`, null, { params: { environmentId: envId } });

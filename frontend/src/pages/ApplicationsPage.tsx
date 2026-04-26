@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord /*, getGitHubInstallUrl, disconnectGitHub */ } from '../services/api';
+import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, redeployApplication /*, getGitHubInstallUrl, disconnectGitHub */ } from '../services/api';
 import { Search, Plus, GitBranch, RefreshCw, Terminal, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -190,6 +190,27 @@ const ApplicationsPage: React.FC = () => {
     });
   };
 
+  const handleRedeploy = async (app: any) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Full Redeployment',
+      message: `This will perform a full redeployment of '${app.name}'. The existing container and image will be deleted, fresh code will be pulled from Git, and the application will be rebuilt using its saved parameters and environment variables. Continue?`,
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          setConfirmModal(prev => ({ ...prev, loading: true }));
+          await redeployApplication(app.id);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          setApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'DEPLOYING' } : a));
+          fetchApps();
+        } catch (e) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          throw e;
+        }
+      }
+    });
+  };
+
   const filteredApps = applications.filter((app) => {
     if (filter !== 'ALL') {
       if (filter === 'RUNNING' || filter === 'FAILED') {
@@ -320,7 +341,8 @@ const ApplicationsPage: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="sm" className={`flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20 ${app.status === 'FAILED' ? 'border-red-500/30 hover:border-red-500/60 text-red-400' : ''}`} onClick={() => handleViewLogs(app)}>{app.status === 'FAILED' ? <><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> View Error</> : <><Terminal className="w-3.5 h-3.5 mr-1.5" /> Logs</>}</Button>
                       {canEdit && <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" onClick={() => handleEditApp(app)}><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit</Button>}
-                      {canEdit && <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}</Button>}
+                      {canEdit && <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRedeploy(app)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> Redeploy</Button>}
+                      {canEdit && <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><Zap className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> {app.status === 'DELETING' ? 'Deleting...' : app.status === 'DEPLOYING' ? 'Restarting...' : 'Restart'}</Button>}
                     </div>
                   </div>
                 </div>

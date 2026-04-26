@@ -13,6 +13,7 @@ public class DeployRequestDTO {
     private String repoUrl;
     private String targetNode;
     private String branch;
+    private String gitToken;
     private Integer port;
     private Map<String, String> envVars;
     private String srcPath;

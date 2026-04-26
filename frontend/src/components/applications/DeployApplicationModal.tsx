@@ -84,6 +84,13 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
       setContainerPort(initialData.containerPort?.toString() || '8080');
       setTargetNode(initialData.targetNode || '');
       setAutoGenerateConfig(true);
+      setGithubToken(initialData.gitToken || '');
+      setIsPrivateRepo(!!initialData.gitToken);
+      if (initialData.envVars) {
+        const vars = Object.entries(initialData.envVars as Record<string, string>).map(([key, value]) => ({ key, value }));
+        setEnvVars(vars);
+        setEnvText(vars.map(v => `${v.key}=${v.value}`).join('\n'));
+      }
     } else {
       setStep(1);
       setRepoUrl('');
@@ -214,6 +221,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         containerPort: parseInt(containerPort),
         srcPath: selectedApp.srcPath,
         envVars: envMap,
+        gitToken: githubToken,
         autoGenerateConfig,
         canary: false
       });

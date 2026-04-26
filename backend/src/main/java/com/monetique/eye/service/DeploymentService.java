@@ -515,7 +515,13 @@ public class DeploymentService {
             }
 
             String finalRepoUrl = request.getRepoUrl();
-            if (userId != null) {
+            if (request.getGitToken() != null && !request.getGitToken().isEmpty()) {
+                if (finalRepoUrl.startsWith("https://")) {
+                    finalRepoUrl = "https://" + request.getGitToken() + "@" + finalRepoUrl.substring(8);
+                } else if (!finalRepoUrl.startsWith("http")) {
+                    finalRepoUrl = "https://" + request.getGitToken() + "@github.com/" + finalRepoUrl + ".git";
+                }
+            } else if (userId != null) {
                 com.monetique.eye.entity.GitHubToken token = gitHubTokenRepository.findByUserId(userId).orElse(null);
                 if (token != null && !finalRepoUrl.startsWith("http")) {
                     finalRepoUrl = "https://" + token.getAccessToken() + "@github.com/" + finalRepoUrl + ".git";
