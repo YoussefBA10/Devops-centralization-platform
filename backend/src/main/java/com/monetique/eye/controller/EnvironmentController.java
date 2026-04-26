@@ -249,9 +249,17 @@ public class EnvironmentController {
     @PutMapping("/{id}")
     @RequiresPermission("ENV_DEPLOYMENT_EDIT")
     public Environment update(@PathVariable Long id, @RequestBody Environment env) {
-        env.setId(id);
-        Environment saved = environmentRepository.save(env);
-        activityLogService.logActivity("Environment Updated: " + env.getName(), "environment", env.getName());
+        Environment existing = environmentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+        
+        // Update only metadata fields
+        existing.setName(env.getName());
+        existing.setDescription(env.getDescription());
+        existing.setPrometheusLabel(env.getPrometheusLabel());
+        existing.setCentralNodeIp(env.getCentralNodeIp());
+        
+        Environment saved = environmentRepository.save(existing);
+        activityLogService.logActivity("Environment Updated: " + saved.getName(), "environment", saved.getName());
         return saved;
     }
 
