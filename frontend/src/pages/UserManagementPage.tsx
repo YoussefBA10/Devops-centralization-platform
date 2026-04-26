@@ -398,7 +398,7 @@ const UserManagementPage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       {[
-                        { key: 'observability', label: 'Dashboard', icon: Shield },
+                        { key: 'observability', label: 'Observability', icon: Shield },
                         { key: 'logs', label: 'Log Explorer', icon: Terminal },
                         { key: 'infraGraph', label: 'Infra Graph', icon: Share2 }
                       ].map(item => (

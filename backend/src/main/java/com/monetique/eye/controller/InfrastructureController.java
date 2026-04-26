@@ -44,7 +44,7 @@ public class InfrastructureController {
     }
 
     @GetMapping("/heatmap")
-    @RequiresPermission("MONITORING_INFRA_GRAPH")
+    @RequiresPermission("MONITORING_OBSERVABILITY")
     public Map<String, Object> getHeatmap(@RequestParam Long environmentId) {
         // Keeping as stub for now
         return Map.of(
@@ -57,7 +57,7 @@ public class InfrastructureController {
     }
 
     @GetMapping("/services/resources")
-    @RequiresPermission("MONITORING_INFRA_GRAPH")
+    @RequiresPermission("MONITORING_OBSERVABILITY")
     public List<ServiceResourceDTO> getServiceResources(@RequestParam Long environmentId) {
         return infrastructureService.getEnvironmentServiceResources(environmentId);
     }

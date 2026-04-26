@@ -41,12 +41,21 @@ const TicketsPage: React.FC = () => {
     const fetchFormData = async () => {
       if (!selectedEnvironment) return;
       try {
-        const [appRes, topRes] = await Promise.all([
+        const [appRes, nodeRes] = await Promise.all([
           api.get<Application[]>(`/applications?environmentId=${selectedEnvironment.id}`),
-          api.get<TopologyData>(`/infrastructure/global/topology?environmentId=${selectedEnvironment.id}`)
+          api.get<any[]>(`/environments/${selectedEnvironment.id}/nodes`)
         ]);
         setApplications(appRes.data);
-        setTopology(topRes.data);
+        setTopology({
+          nodes: nodeRes.data.map(n => ({
+            id: n.ip,
+            label: n.nodeName,
+            ip: n.ip,
+            type: 'node'
+          })),
+          edges: [],
+          environmentId: selectedEnvironment.id
+        });
       } catch (err) {
         console.error('Failed to fetch form data', err);
       }
