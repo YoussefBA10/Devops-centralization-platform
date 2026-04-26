@@ -22,8 +22,9 @@
           - htop
           - net-tools
         state: present
+
     # -----------------------------
-    # Check if Docker exists
+    # Cross-Platform Docker Check
     # -----------------------------
     - name: Check if Docker is installed
       command: docker --version
@@ -32,31 +33,27 @@
       changed_when: false
 
     # -----------------------------
-    # Fix broken Docker repo (IMPORTANT)
+    # Install Docker (Distro Aware)
     # -----------------------------
-    - name: Remove broken Docker repo
-      file:
-        path: /etc/apt/sources.list.d/docker.list
-        state: absent
-      when: docker_check.failed
-
-    - name: Remove Docker keyring conflict
-      file:
-        path: /etc/apt/keyrings/docker.asc
-        state: absent
-      when: docker_check.failed
-
-    # -----------------------------
-    # Install Docker
-    # -----------------------------
-    - name: Update apt cache
+    - name: Install Docker dependencies (Debian/Ubuntu)
       apt:
+        name: [apt-transport-https, ca-certificates, gnupg, lsb-release]
         update_cache: yes
-      when: docker_check.failed
+      when: 
+        - docker_check.failed
+        - ansible_os_family == "Debian"
 
-    - name: Install Docker
-      apt:
-        name: docker.io
+    - name: Add Docker Repo (RedHat/CentOS)
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+      when:
+        - docker_check.failed
+        - ansible_os_family == "RedHat"
+
+    - name: Install Docker (Universal)
+      package:
+        name: "{{ (ansible_os_family == 'Debian') | ternary('docker.io', 'docker-ce') }}"
         state: present
       when: docker_check.failed
 
@@ -67,56 +64,61 @@
         enabled: yes
 
     # -----------------------------
-    # Ensure containers are absent (idempotent)
+    # Firewall Management (RedHat)
+    # -----------------------------
+    - name: Open Monitoring Ports in FirewallD (RedHat)
+      firewalld:
+        port: "{{ item }}"
+        permanent: yes
+        state: enabled
+        immediate: yes
+      loop:
+        - 8081/tcp # cAdvisor
+        - 9100/tcp # Node Exporter
+      when: ansible_os_family == "RedHat"
+      ignore_errors: yes
+
+    # -----------------------------
+    # Cleanup & Run Containers
     # -----------------------------
     - name: Remove old containers if exist
-      shell: |
-        docker rm -f cadvisor node-exporter filebeat || true
+      shell: "docker rm -f cadvisor node-exporter filebeat || true"
       args:
         executable: /bin/bash
       changed_when: false
 
-    # -----------------------------
-    # Run cAdvisor
-    # -----------------------------
     - name: Run cAdvisor
       shell: |
         docker run -d --name cadvisor \
         --restart=always \
         -p 8081:8080 \
-        -v /:/rootfs:ro \
-        -v /var/run:/var/run:ro \
-        -v /sys:/sys:ro \
-        -v /var/lib/docker/:/var/lib/docker:ro \
-        -v /dev/disk/:/dev/disk:ro \
+        -v /:/rootfs:ro,z \
+        -v /var/run:/var/run:ro,z \
+        -v /sys:/sys:ro,z \
+        -v /var/lib/docker/:/var/lib/docker:ro,z \
+        -v /dev/disk/:/dev/disk:ro,z \
         gcr.io/cadvisor/cadvisor:latest
       args:
         executable: /bin/bash
 
-    # -----------------------------
-    # Run Node Exporter
-    # -----------------------------
     - name: Run Node Exporter
       shell: |
         docker run -d --name node-exporter \
         --restart=always \
         -p 9100:9100 \
-        -v /:/host:ro,rslave \
+        -v /:/host:ro,rslave,z \
         prom/node-exporter:latest \
         --path.rootfs=/host
       args:
         executable: /bin/bash
 
-    # -----------------------------
-    # Run Filebeat
-    # -----------------------------
     - name: Run Filebeat
       shell: |
         docker run -d --name filebeat \
         --restart=always \
         --user root \
-        -v /var/lib/docker/containers:/var/lib/docker/containers:ro \
-        -v /var/run/docker.sock:/var/run/docker.sock:ro \
+        -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
+        -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
         docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
         filebeat -e \
         -E "output.elasticsearch.enabled=false" \

@@ -68,7 +68,9 @@ fi
 # Check for sshpass if password is provided
 if [ -n "$PASSWORD" ] && ! command -v sshpass &> /dev/null; then
     error "sshpass is required for password automation but is not installed."
-    echo -e "${YELLOW}Fix:${NC} Run 'sudo apt-get install sshpass -y' on this machine."
+    echo -e "${YELLOW}Fix:${NC}"
+    echo -e "   - Debian/Ubuntu: ${BLUE}sudo apt-get install sshpass -y${NC}"
+    echo -e "   - RHEL/CentOS:   ${BLUE}sudo dnf install sshpass -y${NC}"
     exit 1
 fi
 

@@ -65,7 +65,7 @@ public class ActivityLogController {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
         for (ActivityLog log : logs) {
-            String user = log.getExecutedBy() != null ? log.getExecutedBy().getUsername() : "Admin";
+            String user = log.getExecutedBy() != null ? log.getExecutedBy().getUsername() : "System";
             writer.printf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"%n",
                     log.getTimestamp().format(formatter),
                     log.getType(),

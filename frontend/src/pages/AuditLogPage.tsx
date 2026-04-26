@@ -236,9 +236,9 @@ const AuditLogPage: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-[10px] text-primary border border-primary/20">
-                          {log.executedBy?.username?.charAt(0).toUpperCase() || 'A'}
+                          {log.executedBy?.username?.charAt(0).toUpperCase() || 'S'}
                         </div>
-                        <span className="text-sm text-gray-400">{log.executedBy?.username || 'Admin'}</span>
+                        <span className="text-sm text-gray-400">{log.executedBy?.username || 'System'}</span>
                       </div>
                     </td>
                   </tr>
