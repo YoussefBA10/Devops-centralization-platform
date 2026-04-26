@@ -273,7 +273,7 @@ public class EnvironmentController {
     }
 
     @PostMapping("/{id}/deploy-agent")
-    @RequiresPermission("ENV_DEPLOYMENT_EDIT")
+    @RequiresPermission("ENV_DEPLOYMENT_CREATE")
     public ResponseEntity<Map<String, Object>> deployAgent(@PathVariable Long id,
             @RequestBody Map<String, String> request) {
         Environment env = environmentRepository.findById(id)
