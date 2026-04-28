@@ -1104,7 +1104,7 @@ public class DeploymentService {
             // 2. netstat check for port
             // 3. ss check for port
             String checkCommand = String.format(
-                "docker ps --filter status=running --format '{{.Names}}' | grep -iE '%s' || netstat -tuln | grep ':%s' || ss -tuln | grep ':%s'", 
+                "docker ps --filter status=running | grep -iE '%s' || netstat -tuln | grep ':%s' || ss -tuln | grep ':%s'", 
                 appPattern, port, port
             );
 
