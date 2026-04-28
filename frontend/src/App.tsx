@@ -17,6 +17,7 @@ import ApplicationsPage from './pages/ApplicationsPage';
 import AuditLogPage from './pages/AuditLogPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AccessDeniedPage from './pages/AccessDeniedPage';
+import DocumentationPage from './pages/DocumentationPage';
 import ChatWidget from './components/layout/ChatWidget';
 import { useEnvironment } from './context/EnvironmentContext';
 
@@ -103,6 +104,7 @@ function App() {
                     <Route path="/tickets" element={<TicketsPage />} />
                     <Route path="/audit-log" element={<AuditLogPage />} />
                     <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/documentation" element={<DocumentationPage />} />
                     <Route path="/settings" element={<AdminRoute><UserManagementPage /></AdminRoute>} />
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>

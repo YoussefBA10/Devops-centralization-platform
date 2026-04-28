@@ -9,7 +9,8 @@ import {
   MessageSquare,
   LayoutDashboard,
   Settings,
-  Box
+  Box,
+  Book
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
@@ -72,6 +73,12 @@ const Sidebar: React.FC = () => {
       path: '/chat', 
       icon: MessageSquare,
       show: isAdmin || permissions?.chatbotAccess
+    },
+    { 
+      name: 'Documentation', 
+      path: '/documentation', 
+      icon: Book,
+      show: true 
     },
   ];
 

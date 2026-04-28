@@ -80,4 +80,10 @@ export const deleteEnvironment = (id: number) => api.delete(`/environments/${id}
 export const getGitHubInstallUrl = (appId: number) => api.get('/github/install', { params: { appId } });
 export const disconnectGitHub = (appId: number) => api.post(`/github/apps/${appId}/disconnect`);
 
+// Notifications
+export const getNotifications = () => api.get('/notifications');
+export const getUnreadCount = () => api.get('/notifications/unread-count');
+export const markNotificationAsRead = (id: number) => api.post(`/notifications/${id}/read`);
+export const markAllNotificationsAsRead = () => api.post('/notifications/read-all');
+
 export default api;

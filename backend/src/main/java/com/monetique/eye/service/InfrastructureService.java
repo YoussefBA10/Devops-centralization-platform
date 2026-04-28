@@ -184,17 +184,22 @@ public class InfrastructureService {
             processedIps.add(ip);
 
             String nodeInstance = ip + ":9100";
-            Double cpu = prometheusClient.getCpuUsageForInstance(nodeInstance);
-            Double ram = prometheusClient.getMemoryUsagePercentForInstance(nodeInstance);
+            Object upVal = nodeMap.get("value");
+            boolean isUp = upVal != null && "1".equals(upVal.toString());
 
-            if (cpu == 0.0 || ram == 0.0) {
+            Double cpu = isUp ? prometheusClient.getCpuUsageForInstance(nodeInstance) : 0.0;
+            Double ram = isUp ? prometheusClient.getMemoryUsagePercentForInstance(nodeInstance) : 0.0;
+
+            if (isUp && (cpu == 0.0 || ram == 0.0)) {
                 cpu = prometheusClient.queryMetric(String.format("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\", instance=~\"%s.*\"}[5m])) * 100", ip));
                 ram = prometheusClient.queryMetric(String.format("(1 - (node_memory_MemAvailable_bytes{instance=~\"%s.*\"} / node_memory_MemTotal_bytes{instance=~\"%s.*\"})) * 100", ip, ip));
             }
 
-            String status = "HEALTHY";
-            if (cpu > 90 || ram > 90) status = "CRITICAL";
-            else if (cpu > 80 || ram > 85) status = "WARNING";
+            String status = isUp ? "HEALTHY" : "OFFLINE";
+            if (isUp) {
+                if (cpu > 90 || ram > 90) status = "CRITICAL";
+                else if (cpu > 80 || ram > 85) status = "WARNING";
+            }
 
             String nodeLabel = metric.get("nodename");
             boolean isCentralNode = ip.equals(env.getCentralNodeIp()) || 

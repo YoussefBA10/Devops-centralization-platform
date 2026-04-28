@@ -35,6 +35,7 @@ public class AdminPermissionController {
     private final UserPermissionDetailRepository userPermissionDetailRepository;
     private final EnvironmentAccessRepository environmentAccessRepository;
     private final SecurityService securityService;
+    private final com.monetique.eye.service.NotificationService notificationService;
 
     @GetMapping("/me")
     public ResponseEntity<UserPermissionDto> getMyPermissions() {
@@ -166,6 +167,14 @@ public class AdminPermissionController {
                         .build())
                 .collect(Collectors.toList());
         environmentAccessRepository.saveAll(accesses);
+
+        // 4. Notify User
+        notificationService.createNotification(
+                userId,
+                "Permissions Updated",
+                "Your system privileges have been updated by an administrator.",
+                "PERMISSION_CHANGE"
+        );
 
         return ResponseEntity.ok(dto);
     }

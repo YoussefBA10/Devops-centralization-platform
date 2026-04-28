@@ -28,7 +28,7 @@ public class TopologyData {
         private String type; // 'server' or 'db-server'
         private Integer cpu;
         private Integer ram;
-        private String status; // 'HEALTHY', 'WARNING', 'CRITICAL'
+        private String status; // 'HEALTHY', 'WARNING', 'CRITICAL', 'OFFLINE'
         private String environmentName;
         private Long environmentId;
     }
