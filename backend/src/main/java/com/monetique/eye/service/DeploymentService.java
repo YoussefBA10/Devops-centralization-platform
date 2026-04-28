@@ -1089,7 +1089,6 @@ public class DeploymentService {
         try {
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
             
-            // Find managed node to get credentials
             Optional<com.monetique.eye.entity.ManagedNode> nodeOpt = managedNodeRepository.findAll().stream()
                 .filter(n -> n.getIp().equals(targetIp))
                 .findFirst();
@@ -1097,9 +1096,17 @@ public class DeploymentService {
             String sshPass = nodeOpt.map(com.monetique.eye.entity.ManagedNode::getSshPassword).orElse("");
             String sshUser = nodeOpt.map(com.monetique.eye.entity.ManagedNode::getSshUser).orElse("root");
 
-            // We check for container name OR the port being listened on
-            String checkCommand = String.format("docker ps --filter name=%s --filter status=running --format '{{.Names}}' | grep %s || ss -tuln | grep :%s", 
-                appName, appName, port);
+            // Normalize app name for regex (replace spaces with potential separators)
+            String appPattern = appName.trim().replaceAll("\\s+", "[-_ ]");
+            
+            // Check Command:
+            // 1. Docker ps matching name
+            // 2. netstat check for port
+            // 3. ss check for port
+            String checkCommand = String.format(
+                "docker ps --filter status=running --format '{{.Names}}' | grep -iE '%s' || netstat -tuln | grep ':%s' || ss -tuln | grep ':%s'", 
+                appPattern, port, port
+            );
 
             ProcessBuilder pb = new ProcessBuilder(
                 "ansible", "all", "-i", inventoryPath, "--limit", targetIp,
@@ -1121,12 +1128,14 @@ public class DeploymentService {
                     output.append(line).append("\n");
                 }
             }
-            process.waitFor(20, TimeUnit.SECONDS);
+            process.waitFor(25, TimeUnit.SECONDS);
             
             String result = output.toString();
-            // Ansible shell module returns "CHANGED" or "SUCCESS" if the command exit code was 0
-            // If grep finds something, exit code is 0. If not, exit code is 1.
-            return process.exitValue() == 0 && (result.contains(appName) || result.contains(":" + port));
+            log.info("App check raw output for {}: {}", targetIp, result);
+            
+            // If the process exit value is 0, it means one of the commands in the chain found a match
+            // and Ansible successfully executed it.
+            return process.exitValue() == 0 && !result.contains("FAILED") && !result.contains("UNREACHABLE");
         } catch (Exception e) {
             log.error("Failed to check if app is running: {}", e.getMessage());
             return false;
