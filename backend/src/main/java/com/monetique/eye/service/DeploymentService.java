@@ -1142,6 +1142,8 @@ public class DeploymentService {
             log.error("Failed to check if app is running: {}", e.getMessage());
             return false;
         }
+    }
+
     @Async
     public void restartContainer(String targetNodeIp, String containerName) {
         log.info("Restarting container {} on node {}", containerName, targetNodeIp);
