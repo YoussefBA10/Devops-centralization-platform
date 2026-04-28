@@ -282,4 +282,19 @@ public class ApplicationController {
         activityLogService.logActivity("Canary Promoted: " + applicationId, "deployment", "Global");
         return ResponseEntity.ok(Map.of("message", "Application promotion triggered."));
     }
+
+    @PostMapping("/check-running")
+    @RequiresPermission("APP_DEPLOYMENT_WRITE")
+    public ResponseEntity<Map<String, Object>> checkRunning(@RequestBody Map<String, String> request) {
+        String targetIp = request.get("targetIp");
+        String appName = request.get("appName");
+        String port = request.get("port");
+
+        if (targetIp == null || appName == null || port == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Missing parameters"));
+        }
+
+        boolean isRunning = deploymentService.isApplicationRunning(targetIp, appName, port);
+        return ResponseEntity.ok(Map.of("isRunning", isRunning));
+    }
 }

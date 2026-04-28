@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, GitBranch, Box, Server, Info, Settings2, AlertCircle, Upload, Check, ChevronRight, ChevronLeft, Loader2, FileCode, Trash2 } from 'lucide-react';
+import { X, GitBranch, Box, Server, Info, Settings2, AlertCircle, Upload, Check, ChevronRight, ChevronLeft, Loader2, FileCode, Trash2, Zap } from 'lucide-react';
 import { Button, Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';
@@ -203,6 +203,31 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
 
     const envMap: Record<string, string> = {};
     envVars.forEach(v => { if (v.key.trim()) envMap[v.key.trim()] = v.value; });
+
+    if (alreadyDeployed) {
+      try {
+        const checkRes = await api.post('/applications/check-running', {
+          targetIp: targetNode,
+          appName: appName,
+          port: port
+        });
+        
+        if (!checkRes.data.isRunning) {
+          const proceed = window.confirm("The application was NOT detected running on the target node and port. \n\nClick 'OK' to register it anyway, or 'Cancel' to quit and deploy it properly.");
+          if (!proceed) {
+            setLoading(false);
+            return;
+          }
+        } else {
+          alert("Application found! The service is running on the node. Proceeding with registration.");
+        }
+      } catch (err) {
+        if (!window.confirm("Could not reach the target node to verify the application status. Register anyway?")) {
+          setLoading(false);
+          return;
+        }
+      }
+    }
 
     let finalRepoUrl = repoUrl;
     if (isPrivateRepo) {

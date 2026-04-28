@@ -1083,4 +1083,53 @@ public class DeploymentService {
             return null;
         }
     }
+
+    public boolean isApplicationRunning(String targetIp, String appName, String port) {
+        log.info("Checking if application {} or port {} is running on {}", appName, port, targetIp);
+        try {
+            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+            
+            // Find managed node to get credentials
+            Optional<com.monetique.eye.entity.ManagedNode> nodeOpt = managedNodeRepository.findAll().stream()
+                .filter(n -> n.getIp().equals(targetIp))
+                .findFirst();
+            
+            String sshPass = nodeOpt.map(com.monetique.eye.entity.ManagedNode::getSshPassword).orElse("");
+            String sshUser = nodeOpt.map(com.monetique.eye.entity.ManagedNode::getSshUser).orElse("root");
+
+            // We check for container name OR the port being listened on
+            String checkCommand = String.format("docker ps --filter name=%s --filter status=running --format '{{.Names}}' | grep %s || ss -tuln | grep :%s", 
+                appName, appName, port);
+
+            ProcessBuilder pb = new ProcessBuilder(
+                "ansible", "all", "-i", inventoryPath, "--limit", targetIp,
+                "-m", "shell", "-a", checkCommand,
+                "-e", "ansible_ssh_pass=" + sshPass,
+                "-e", "ansible_become_pass=" + sshPass,
+                "-e", "ansible_user=" + sshUser
+            );
+            
+            pb.environment().put("ANSIBLE_HOST_KEY_CHECKING", "False");
+            pb.directory(new File(gitopsPath));
+            pb.redirectErrorStream(true);
+            
+            Process process = pb.start();
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append("\n");
+                }
+            }
+            process.waitFor(20, TimeUnit.SECONDS);
+            
+            String result = output.toString();
+            // Ansible shell module returns "CHANGED" or "SUCCESS" if the command exit code was 0
+            // If grep finds something, exit code is 0. If not, exit code is 1.
+            return process.exitValue() == 0 && (result.contains(appName) || result.contains(":" + port));
+        } catch (Exception e) {
+            log.error("Failed to check if app is running: {}", e.getMessage());
+            return false;
+        }
+    }
 }
