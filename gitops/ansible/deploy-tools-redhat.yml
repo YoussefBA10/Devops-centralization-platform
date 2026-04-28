@@ -13,6 +13,12 @@
     - name: Pre-flight Check - Verify connectivity
       ping:
     
+    - name: Ensure EPEL repository is present
+      package:
+        name: epel-release
+        state: present
+      ignore_errors: yes
+
     - name: Ensure common tools are installed
       package:
         name:
