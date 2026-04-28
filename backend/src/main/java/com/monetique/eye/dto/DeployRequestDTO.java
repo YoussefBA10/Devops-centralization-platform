@@ -22,4 +22,5 @@ public class DeployRequestDTO {
     private Boolean autoGenerateConfig;
 
     private Boolean autoPromote;
+    private Boolean alreadyDeployed;
 }

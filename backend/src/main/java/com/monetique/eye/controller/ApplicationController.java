@@ -128,6 +128,13 @@ public class ApplicationController {
             }
         }
 
+        if (request.getAlreadyDeployed() != null && request.getAlreadyDeployed()) {
+            app.setStatus("RUNNING");
+            applicationRepository.save(app);
+            activityLogService.logActivity("Application Registered (Already Deployed): " + app.getName(), "deployment", env.getName());
+            return ResponseEntity.ok(Map.of("message", "Application registered successfully", "appId", app.getId()));
+        }
+
         app.setStatus("DEPLOYING");
         app.setLastDeployedAt(LocalDateTime.now());
         app.setGitToken(request.getGitToken());

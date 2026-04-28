@@ -61,6 +61,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   // Step 3
   const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
   const [envText, setEnvText] = useState('');
+  const [alreadyDeployed, setAlreadyDeployed] = useState(false);
 
   // Edit mode: skip step 1
   useEffect(() => {
@@ -105,6 +106,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
       setAutoGenerateConfig(true);
       setEnvVars([]);
       setEnvText('');
+      setAlreadyDeployed(false);
     }
     setLocalError(null);
     if (selectedEnvironment) {
@@ -223,7 +225,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         envVars: envMap,
         gitToken: githubToken,
         autoGenerateConfig,
-        canary: false
+        canary: false,
+        alreadyDeployed
       });
       onClose();
     } catch (err: any) {
@@ -409,6 +412,20 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                   <button type="button" onClick={() => setAutoGenerateConfig(!autoGenerateConfig)}
                     className={`w-10 h-5 rounded-full transition-colors relative ${autoGenerateConfig ? 'bg-primary' : 'bg-white/10'}`}>
                     <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${autoGenerateConfig ? 'left-[22px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-2 bg-white/5 rounded-lg border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <div>
+                      <p className="text-[11px] font-bold">App is already deployed</p>
+                      <p className="text-[9px] text-muted-foreground">Skip initial deployment, just register app.</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setAlreadyDeployed(!alreadyDeployed)}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${alreadyDeployed ? 'bg-amber-500' : 'bg-white/10'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${alreadyDeployed ? 'left-[22px]' : 'left-0.5'}`} />
                   </button>
                 </div>
               </div>
