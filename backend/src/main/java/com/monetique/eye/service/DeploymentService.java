@@ -981,8 +981,10 @@ public class DeploymentService {
             throw new RuntimeException("Process timed out after " + timeoutSeconds + " seconds");
         }
 
-        String currentLog = logEntry.getLogOutput() == null ? "" : logEntry.getLogOutput();
-        logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
+        if (logEntry != null) {
+            String currentLog = logEntry.getLogOutput() == null ? "" : logEntry.getLogOutput();
+            logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
+        }
 
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
@@ -1139,6 +1141,31 @@ public class DeploymentService {
         } catch (Exception e) {
             log.error("Failed to check if app is running: {}", e.getMessage());
             return false;
+        }
+    @Async
+    public void restartContainer(String targetNodeIp, String containerName) {
+        log.info("Restarting container {} on node {}", containerName, targetNodeIp);
+        try {
+            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+            
+            Optional<com.monetique.eye.entity.ManagedNode> nodeOpt = managedNodeRepository.findAll().stream()
+                .filter(n -> n.getIp().equals(targetNodeIp))
+                .findFirst();
+            
+            String sshPass = nodeOpt.map(com.monetique.eye.entity.ManagedNode::getSshPassword).orElse("");
+            String sshUser = nodeOpt.map(com.monetique.eye.entity.ManagedNode::getSshUser).orElse("root");
+
+            executeProcessSecure(new String[] {
+                    "ansible", "all", "-i", inventoryPath, "--limit", targetNodeIp,
+                    "-m", "shell", "-a", "docker restart " + containerName,
+                    "-b",
+                    "-e", "ansible_become_pass=" + sshPass,
+                    "-e", "ansible_ssh_pass=" + sshPass,
+                    "-e", "ansible_user=" + sshUser
+            }, null, 60); 
+            log.info("Container {} restarted successfully on {}", containerName, targetNodeIp);
+        } catch (Exception e) {
+            log.error("Failed to restart container {}: {}", containerName, e.getMessage());
         }
     }
 }

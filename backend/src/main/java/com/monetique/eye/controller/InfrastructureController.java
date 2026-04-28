@@ -17,6 +17,7 @@ import java.util.Map;
 public class InfrastructureController {
 
     private final InfrastructureService infrastructureService;
+    private final com.monetique.eye.service.DeploymentService deploymentService;
 
     @GetMapping("/global")
     @RequiresPermission("ENV_DEPLOYMENT_VIEW")
@@ -60,5 +61,14 @@ public class InfrastructureController {
     @RequiresPermission("MONITORING_OBSERVABILITY")
     public List<ServiceResourceDTO> getServiceResources(@RequestParam Long environmentId) {
         return infrastructureService.getEnvironmentServiceResources(environmentId);
+    }
+
+    @PostMapping("/restart-container")
+    @RequiresPermission("APP_DEPLOYMENT_EDIT")
+    public Map<String, String> restartContainer(@RequestBody Map<String, String> request) {
+        String targetIp = request.get("targetIp");
+        String containerName = request.get("containerName");
+        deploymentService.restartContainer(targetIp, containerName);
+        return Map.of("message", "Restart command sent for " + containerName);
     }
 }

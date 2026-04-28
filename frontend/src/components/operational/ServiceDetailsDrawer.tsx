@@ -14,10 +14,10 @@ import {
   History,
   RefreshCw
 } from 'lucide-react';
-import { restartApplication, getApplications } from '../../services/api';
+import { restartApplication, getApplications, getEnvironmentNodes, restartContainer } from '../../services/api';
 import { useToast } from '../ui/Toast';
 import { useEnvironment } from '../../context/EnvironmentContext';
-import type { ServiceResource, Application } from '../../types/index';
+import type { ServiceResource, Application, Node } from '../../types/index';
 
 interface Props {
   service: ServiceResource | null;
@@ -49,7 +49,25 @@ const ServiceDetailsDrawer: React.FC<Props> = ({ service, onClose }) => {
       );
 
       if (!targetApp) {
-        showToast(`Could not find a managed application for "${service.serviceName}".`, 'warning');
+        // 1b. Fallback: Generic restart for system/infra containers (like cadvisor)
+        const nodesRes = await getEnvironmentNodes(selectedEnvironment.id);
+        const nodes: Node[] = nodesRes.data;
+        
+        const targetNode = nodes.find(n => 
+          n.label === service.nodeName || 
+          n.ip === service.nodeName ||
+          n.id === service.nodeName ||
+          (n.id.includes('-') && n.id.split('-').pop()?.replace(/-/g, '.') === service.nodeName)
+        );
+
+        if (!targetNode || !targetNode.ip) {
+          showToast(`Could not find a managed application or node IP for "${service.serviceName}".`, 'warning');
+          return;
+        }
+
+        await restartContainer(targetNode.ip, service.serviceName);
+        showToast(`System container restart triggered for ${service.serviceName}.`, 'success');
+        onClose();
         return;
       }
 
