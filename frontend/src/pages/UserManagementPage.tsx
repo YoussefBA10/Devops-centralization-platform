@@ -29,6 +29,7 @@ import api from '../services/api';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
 import ConfirmationModal from '../components/ConfirmationModal';
+import { useToast } from '../components/ui/Toast';
 
 interface User {
   id: number;
@@ -79,6 +80,7 @@ const UserManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const { showToast } = useToast();
 
   // User CRUD states
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -124,10 +126,10 @@ const UserManagementPage: React.FC = () => {
     setSaving(true);
     try {
       await api.put(`/admin/permissions/${selectedUser.username}`, permissions);
-      alert('Permissions saved successfully!');
+      showToast('Permissions saved successfully!', 'success');
     } catch (err) {
       console.error("Failed to save permissions", err);
-      alert('Failed to save permissions');
+      showToast('Failed to save permissions', 'error');
     } finally {
       setSaving(false);
     }

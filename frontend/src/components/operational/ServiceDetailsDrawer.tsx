@@ -11,9 +11,13 @@ import {
   Server,
   Zap,
   BarChart3,
-  History
+  History,
+  RefreshCw
 } from 'lucide-react';
-import type { ServiceResource } from '../../types/index';
+import { restartApplication, getApplications } from '../../services/api';
+import { useToast } from '../ui/Toast';
+import { useEnvironment } from '../../context/EnvironmentContext';
+import type { ServiceResource, Application } from '../../types/index';
 
 interface Props {
   service: ServiceResource | null;
@@ -21,7 +25,45 @@ interface Props {
 }
 
 const ServiceDetailsDrawer: React.FC<Props> = ({ service, onClose }) => {
+  const { selectedEnvironment } = useEnvironment();
+  const { showToast } = useToast();
+  const [restarting, setRestarting] = React.useState(false);
+
   if (!service) return null;
+
+  const handleRestart = async () => {
+    if (!selectedEnvironment) return;
+    setRestarting(true);
+    try {
+      // 1. Fetch applications for this environment to find the ID
+      const appsRes = await getApplications(selectedEnvironment.id);
+      const apps: Application[] = appsRes.data;
+      
+      const normalize = (s: string) => s.toLowerCase().replace(/[-_ ]/g, '');
+      const searchName = normalize(service.serviceName);
+
+      // Match by serviceNameKeyword (which is what pulse uses) or name
+      const targetApp = apps.find(a => 
+        normalize(a.serviceNameKeyword || '') === searchName || 
+        normalize(a.name) === searchName
+      );
+
+      if (!targetApp) {
+        showToast(`Could not find a managed application for "${service.serviceName}".`, 'warning');
+        return;
+      }
+
+      // 2. Trigger restart
+      await restartApplication(targetApp.id);
+      showToast(`Restart command sent for ${targetApp.name}.`, 'success');
+      onClose();
+    } catch (err) {
+      console.error("Restart failed", err);
+      showToast("Failed to trigger restart.", 'error');
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -178,11 +220,13 @@ const ServiceDetailsDrawer: React.FC<Props> = ({ service, onClose }) => {
 
           {/* Footer Actions */}
           <div className="p-6 border-t border-white/5 flex gap-4">
-            <button className="flex-1 py-3 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 transition-all text-sm">
-              Restart Service
-            </button>
-            <button className="flex-1 py-3 bg-white/5 text-foreground font-bold rounded-xl hover:bg-white/10 transition-all text-sm border border-white/5">
-              View Logs
+            <button 
+              onClick={handleRestart}
+              disabled={restarting}
+              className="flex-1 py-3 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2"
+            >
+              {restarting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {restarting ? 'Restarting...' : 'Restart Service'}
             </button>
           </div>
         </motion.div>

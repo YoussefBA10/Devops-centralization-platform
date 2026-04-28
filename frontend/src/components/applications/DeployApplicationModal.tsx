@@ -5,6 +5,8 @@ import { Card } from '../ui/Card';
 import { getEnvironmentNodes } from '../../services/api';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import api from '../../services/api';
+import { useToast } from '../ui/Toast';
+import ConfirmationModal from '../ConfirmationModal';
 
 interface DetectedApp {
   name: string;
@@ -62,6 +64,9 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
   const [envText, setEnvText] = useState('');
   const [alreadyDeployed, setAlreadyDeployed] = useState(false);
+  const { showToast } = useToast();
+  const [showStatusConfirm, setShowStatusConfirm] = useState(false);
+  const [statusConfirmData, setStatusConfirmData] = useState<{ title: string; message: string; type: 'warning' | 'danger' | 'success' | 'info' } | null>(null);
 
   // Edit mode: skip step 1
   useEffect(() => {
@@ -195,7 +200,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     e.target.value = '';
   };
 
-  const handleDeploy = async () => {
+  const handleDeploy = async (force: boolean = false) => {
     const selectedApp = detectedApps[selectedAppIdx];
     if (!selectedApp || !selectedEnvironment) return;
     setLoading(true);
@@ -204,7 +209,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     const envMap: Record<string, string> = {};
     envVars.forEach(v => { if (v.key.trim()) envMap[v.key.trim()] = v.value; });
 
-    if (alreadyDeployed) {
+    if (alreadyDeployed && !force) {
       try {
         const checkRes = await api.post('/applications/check-running', {
           targetIp: targetNode,
@@ -213,19 +218,26 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         });
         
         if (!checkRes.data.isRunning) {
-          const proceed = window.confirm("The application was NOT detected running on the target node and port. \n\nClick 'OK' to register it anyway, or 'Cancel' to quit and deploy it properly.");
-          if (!proceed) {
-            setLoading(false);
-            return;
-          }
-        } else {
-          alert("Application found! The service is running on the node. Proceeding with registration.");
-        }
-      } catch (err) {
-        if (!window.confirm("Could not reach the target node to verify the application status. Register anyway?")) {
+          setStatusConfirmData({
+            title: "Application Not Detected",
+            message: "The application was NOT detected running on the target node and port. Do you want to register it anyway, or quit and deploy it properly?",
+            type: 'warning'
+          });
+          setShowStatusConfirm(true);
           setLoading(false);
           return;
+        } else {
+          showToast("Application found! The service is running on the node.", "success");
         }
+      } catch (err) {
+        setStatusConfirmData({
+          title: "Connection Error",
+          message: "Could not reach the target node to verify the application status. Do you want to register it anyway?",
+          type: 'danger'
+        });
+        setShowStatusConfirm(true);
+        setLoading(false);
+        return;
       }
     }
 
@@ -254,6 +266,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         alreadyDeployed
       });
       onClose();
+      showToast("Application registered successfully!", "success");
     } catch (err: any) {
       setLocalError(err.response?.data?.message || 'Deployment failed.');
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -549,6 +562,19 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
           </div>
         </div>
       </Card>
+      <ConfirmationModal
+        isOpen={showStatusConfirm}
+        onClose={() => setShowStatusConfirm(false)}
+        onConfirm={() => {
+          setShowStatusConfirm(false);
+          handleDeploy(true);
+        }}
+        title={statusConfirmData?.title || 'Confirmation'}
+        message={statusConfirmData?.message || ''}
+        type={statusConfirmData?.type || 'warning'}
+        confirmText="Register Anyway"
+        cancelText="Quit"
+      />
     </div>
   );
 };

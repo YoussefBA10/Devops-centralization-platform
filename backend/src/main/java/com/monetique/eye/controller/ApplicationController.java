@@ -130,6 +130,8 @@ public class ApplicationController {
 
         if (request.getAlreadyDeployed() != null && request.getAlreadyDeployed()) {
             app.setStatus("RUNNING");
+            // Important: set serviceNameKeyword so it can be matched in monitoring/operations
+            app.setServiceNameKeyword(app.getName());
             applicationRepository.save(app);
             activityLogService.logActivity("Application Registered (Already Deployed): " + app.getName(), "deployment", env.getName());
             return ResponseEntity.ok(Map.of("message", "Application registered successfully", "appId", app.getId()));
