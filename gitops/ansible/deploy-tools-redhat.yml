@@ -14,19 +14,25 @@
       ping:
     
     - name: Ensure EPEL repository is present
-      package:
-        name: epel-release
+      dnf:
+        name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
         state: present
+        disable_gpg_check: yes
       ignore_errors: yes
 
-    - name: Ensure common tools are installed
+    - name: Ensure critical common tools are installed
       package:
         name:
           - git
           - curl
           - wget
-          - htop
         state: present
+
+    - name: Ensure htop is installed (optional)
+      package:
+        name: htop
+        state: present
+      ignore_errors: yes
 
     # -----------------------------
     # Check if Docker exists
