@@ -293,8 +293,13 @@ const LogsPage: React.FC = () => {
                       {new Date(log.timestamp || Date.now()).toLocaleTimeString()}
                     </td>
                     <td className="px-4 py-4 align-top whitespace-nowrap">
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-secondary/50 text-muted-foreground group-hover:text-foreground transition-colors">
-                        {log.node || 'system'}
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-secondary/50 text-muted-foreground group-hover:text-foreground transition-colors" title={log.node || 'system'}>
+                        {(() => {
+                          const n = log.node || 'system';
+                          // If it looks like a container hash (long hex), show first 12 chars
+                          if (/^[a-f0-9]{20,}$/i.test(n)) return n.substring(0, 12);
+                          return n;
+                        })()}
                       </span>
                     </td>
                     <td className="px-4 py-4 align-top">
@@ -304,8 +309,8 @@ const LogsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-foreground/80 break-words">
                       <div className="flex flex-col gap-1.5 max-w-[800px]">
-                        <span className="font-bold text-[10px] text-primary/60 uppercase tracking-wider">[{log.errorType || log.category}]</span>
-                        <div className="text-[13px] font-medium leading-[1.6]">{log.normalizedSummary || log.rawMessage}</div>
+                        {log.category && <span className="font-bold text-[10px] text-primary/60 uppercase tracking-wider">[{log.category}]</span>}
+                        <div className="text-[13px] font-medium leading-[1.6] whitespace-pre-wrap">{log.rawMessage || log.normalizedSummary || log.message || '—'}</div>
                       </div>
                     </td>
                   </tr>

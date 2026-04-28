@@ -328,7 +328,7 @@ const DocumentationPage: React.FC = () => {
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">MONETIQUE_GITOPS_PATH</td>
                       <td className="px-6 py-4">Local filesystem path to the gitops directory.</td>
-                      <td className="px-6 py-4 text-xs italic">/opt/monetique/gitops</td>
+                      <td className="px-6 py-4 text-xs italic">/data/monetique/gitops</td>
                     </tr>
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">ELASTICSEARCH_URL</td>
@@ -353,7 +353,7 @@ const DocumentationPage: React.FC = () => {
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">MONETIQUE_PROJECT_PATH</td>
                       <td className="px-6 py-4">Root path of the Monetique Eye project on the backend host.</td>
-                      <td className="px-6 py-4 text-xs italic">/opt/monetique</td>
+                      <td className="px-6 py-4 text-xs italic">/data/monetique</td>
                     </tr>
                   </tbody>
                 </table>
@@ -560,7 +560,7 @@ const DocumentationPage: React.FC = () => {
 
               <section className="space-y-3">
                 <h2 className="text-2xl font-bold">Log Analysis</h2>
-                <p className="text-sm text-muted-foreground">The application logs are stored in: '/opt/monetique/backend/logs/app.log'. For infrastructure issues, check the systemd logs of the backend service.</p>
+                <p className="text-sm text-muted-foreground">The application logs are stored in: '/data/monetique/backend/logs/app.log'. For infrastructure issues, check the systemd logs of the backend service.</p>
                 <div className="bg-black p-4 rounded-lg font-mono text-xs text-emerald-500">
                   tail -f backend/logs/app.log | grep ERROR
                 </div>

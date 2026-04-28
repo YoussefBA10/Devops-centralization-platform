@@ -65,10 +65,6 @@ const DashboardPage: React.FC = () => {
           </p>
         </motion.div>
         <div className="flex items-center gap-3">
-          <Button variant="outline">
-            <BarChart3 className="w-4 h-4" />
-            Full Report
-          </Button>
           <Link to="/environments">
             <Button>
               <Plus className="w-4 h-4" />

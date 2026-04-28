@@ -22,6 +22,6 @@
 
     - name: Clean up app directory
       file:
-        path: "/opt/monetique/apps/{{ appName }}"
+        path: "/data/monetique/apps/{{ appName }}"
         state: absent
       ignore_errors: yes

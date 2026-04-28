@@ -42,11 +42,14 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, severity, from, to, pageable)).join();
+    public Page<LogEventDTO> searchLogs(String appName, String queryStr, String severity, LocalDateTime from,
+            LocalDateTime to, Pageable pageable) {
+        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, severity, from, to, pageable))
+                .join();
     }
 
-    private Page<LogEventDTO> executeSearch(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    private Page<LogEventDTO> executeSearch(String appName, String queryStr, String severity, LocalDateTime from,
+            LocalDateTime to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
@@ -55,8 +58,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     .term(t -> t.field("service.keyword").value(appName)))
                     .should(s -> s.term(t -> t.field("service_name.keyword").value(appName)))
                     .should(s -> s.term(t -> t.field("app.keyword").value(appName)))
-                    .minimumShouldMatch("1")
-            ));
+                    .minimumShouldMatch("1")));
 
             if (queryStr != null && !queryStr.isBlank()) {
                 // Ensure wildcards for partial matches if not provided
@@ -65,8 +67,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                         .query(finalQuery)
                         .fields("raw_message", "message", "normalized_summary", "error_type", "category")
                         .analyzeWildcard(true)
-                        .defaultOperator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
-                ));
+                        .defaultOperator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)));
             }
 
             if (severity != null && !severity.isBlank() && !"ALL".equalsIgnoreCase(severity)) {
@@ -76,8 +77,12 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             if (from != null || to != null) {
                 boolQuery.filter(f -> f.range(r -> {
                     var rangeBuilder = r.field("@timestamp");
-                    if (from != null) rangeBuilder.gte(co.elastic.clients.json.JsonData.of(from.format(DateTimeFormatter.ISO_DATE_TIME)));
-                    if (to != null) rangeBuilder.lte(co.elastic.clients.json.JsonData.of(to.format(DateTimeFormatter.ISO_DATE_TIME)));
+                    if (from != null)
+                        rangeBuilder
+                                .gte(co.elastic.clients.json.JsonData.of(from.format(DateTimeFormatter.ISO_DATE_TIME)));
+                    if (to != null)
+                        rangeBuilder
+                                .lte(co.elastic.clients.json.JsonData.of(to.format(DateTimeFormatter.ISO_DATE_TIME)));
                     return rangeBuilder;
                 }));
             }
@@ -112,8 +117,10 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable, Throwable t) {
-        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", appName, t.getMessage());
+    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, String severity, LocalDateTime from,
+            LocalDateTime to, Pageable pageable, Throwable t) {
+        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", appName,
+                t.getMessage());
         return new PageImpl<>(new ArrayList<>(), pageable, 0);
     }
 
@@ -151,7 +158,9 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     private LogEventDTO parseLog(String id, ObjectNode source) {
         return LogEventDTO.builder()
                 .id(id)
-                .timestamp(source.has("@timestamp") ? LocalDateTime.parse(source.get("@timestamp").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME) : LocalDateTime.now())
+                .timestamp(source.has("@timestamp")
+                        ? LocalDateTime.parse(source.get("@timestamp").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                        : LocalDateTime.now())
                 .node(source.has("node") ? source.get("node").asText() : "unknown")
                 .service(getField(source, "service", "service_name", "app"))
                 .severity(source.has("severity") ? source.get("severity").asText() : "INFO")
