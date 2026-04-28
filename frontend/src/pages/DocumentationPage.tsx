@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  Book, 
-  ChevronRight, 
-  Rocket, 
-  Layout, 
-  Settings as SettingsIcon, 
-  Cpu, 
-  Terminal, 
-  ShieldCheck, 
-  HelpCircle, 
+import {
+  Book,
+  ChevronRight,
+  Rocket,
+  Layout,
+  Settings as SettingsIcon,
+  Cpu,
+  Terminal,
+  ShieldCheck,
+  HelpCircle,
   History,
   Info,
   AlertCircle,
@@ -83,18 +83,18 @@ const DocumentationPage: React.FC = () => {
                 The platform follows a distributed agent-manager architecture. The **Management Node** (Central Node) orchestrates deployments and aggregates telemetry, while **Managed Nodes** run the business applications and telemetry agents (Node Exporter, cAdvisor, Promtail).
               </p>
               <div className="p-8 bg-secondary/20 rounded-2xl border border-white/5 flex items-center justify-center">
-                 <div className="text-center space-y-4">
-                    <div className="flex gap-4 justify-center">
-                        <div className="w-32 h-16 bg-primary/20 border border-primary/40 rounded flex items-center justify-center text-xs font-bold uppercase">Prometheus</div>
-                        <div className="w-32 h-16 bg-primary/20 border border-primary/40 rounded flex items-center justify-center text-xs font-bold uppercase">Elasticsearch</div>
-                    </div>
-                    <div className="w-64 h-20 bg-primary border-2 border-primary shadow-[0_0_20px_rgba(59,130,246,0.3)] rounded-xl mx-auto flex items-center justify-center font-bold text-white uppercase tracking-widest">Monetique Eye Core</div>
-                    <div className="flex gap-4 justify-center">
-                        <div className="w-24 h-12 bg-secondary border border-white/10 rounded flex items-center justify-center text-[10px] font-bold uppercase">Node 01</div>
-                        <div className="w-24 h-12 bg-secondary border border-white/10 rounded flex items-center justify-center text-[10px] font-bold uppercase">Node 02</div>
-                        <div className="w-24 h-12 bg-secondary border border-white/10 rounded flex items-center justify-center text-[10px] font-bold uppercase">Node 03</div>
-                    </div>
-                 </div>
+                <div className="text-center space-y-4">
+                  <div className="flex gap-4 justify-center">
+                    <div className="w-32 h-16 bg-primary/20 border border-primary/40 rounded flex items-center justify-center text-xs font-bold uppercase">Prometheus</div>
+                    <div className="w-32 h-16 bg-primary/20 border border-primary/40 rounded flex items-center justify-center text-xs font-bold uppercase">Elasticsearch</div>
+                  </div>
+                  <div className="w-64 h-20 bg-primary border-2 border-primary shadow-[0_0_20px_rgba(59,130,246,0.3)] rounded-xl mx-auto flex items-center justify-center font-bold text-white uppercase tracking-widest">Monetique Eye Core</div>
+                  <div className="flex gap-4 justify-center">
+                    <div className="w-24 h-12 bg-secondary border border-white/10 rounded flex items-center justify-center text-[10px] font-bold uppercase">Node 01</div>
+                    <div className="w-24 h-12 bg-secondary border border-white/10 rounded flex items-center justify-center text-[10px] font-bold uppercase">Node 02</div>
+                    <div className="w-24 h-12 bg-secondary border border-white/10 rounded flex items-center justify-center text-[10px] font-bold uppercase">Node 03</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -103,7 +103,7 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Getting Started</h1>
-            
+
             <div className="space-y-6">
               <section className="space-y-3">
                 <h2 className="text-2xl font-bold">1. First-Time Setup</h2>
@@ -148,7 +148,7 @@ const DocumentationPage: React.FC = () => {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Dashboards &amp; Insights</h1>
             <p className="text-xl text-muted-foreground">Monetique Eye provides five interconnected dashboards, each designed for a specific operational concern.</p>
-            
+
             <div className="space-y-12">
               {/* 1. Main Dashboard */}
               <div className="space-y-4">
@@ -280,11 +280,11 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Parameters & Configuration</h1>
-            
+
             <section className="space-y-4">
               <h2 className="text-2xl font-bold">System Configuration (.env)</h2>
               <p className="text-muted-foreground">Core system behavior is controlled via environment variables in the backend root.</p>
-              
+
               <div className="rounded-xl overflow-hidden border border-white/10 bg-black/40">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white/5 text-muted-foreground uppercase text-[10px] font-bold tracking-widest">
@@ -328,7 +328,7 @@ const DocumentationPage: React.FC = () => {
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">MONETIQUE_GITOPS_PATH</td>
                       <td className="px-6 py-4">Local filesystem path to the gitops directory.</td>
-                      <td className="px-6 py-4 text-xs italic">/data/monetique/gitops</td>
+                      <td className="px-6 py-4 text-xs italic">/data/monetique-eye/gitops</td>
                     </tr>
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">ELASTICSEARCH_URL</td>
@@ -387,7 +387,7 @@ const DocumentationPage: React.FC = () => {
                   Log Ingestion (Logstash)
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">Apps must send logs in JSON format to the Logstash ingestion port defined in your `.env`.</p>
-                
+
                 <div className="space-y-4">
                   <h4 className="text-sm font-bold text-[#6db33f]">Spring Boot (Java)</h4>
                   <p className="text-xs text-muted-foreground">Add the Logstash logback encoder to your `pom.xml` and update `logback-spring.xml`:</p>
@@ -421,7 +421,7 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Deployment &amp; Operations</h1>
-            
+
             <div className="space-y-6">
               <section className="space-y-3">
                 <h2 className="text-2xl font-bold">Deployment Lifecycle</h2>
@@ -430,7 +430,7 @@ const DocumentationPage: React.FC = () => {
                   {['Validate', 'Build', 'Ship', 'Audit'].map((step, i) => (
                     <React.Fragment key={step}>
                       <div className="flex-1 p-4 bg-secondary/30 border border-white/5 rounded-xl text-center">
-                        <span className="text-[10px] font-bold text-primary uppercase block mb-1">Step {i+1}</span>
+                        <span className="text-[10px] font-bold text-primary uppercase block mb-1">Step {i + 1}</span>
                         <span className="font-bold">{step}</span>
                       </div>
                       {i < 3 && <div className="hidden md:flex items-center"><ArrowRight className="w-4 h-4 text-muted-foreground" /></div>}
@@ -483,11 +483,11 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">How the System Works</h1>
-            
+
             <section className="space-y-4">
               <h2 className="text-2xl font-bold">Data Flow Architecture</h2>
               <p className="text-muted-foreground">Monetique Eye operates on a pull-based telemetry model with a push-based deployment model.</p>
-              
+
               <div className="space-y-6">
                 <div className="p-6 bg-secondary/10 border border-white/5 rounded-2xl">
                   <h4 className="font-bold mb-4 flex items-center gap-2">
@@ -495,13 +495,13 @@ const DocumentationPage: React.FC = () => {
                     Observability Pipeline
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
-                    <div className="p-3 border border-white/5 rounded bg-black/20 text-[10px]">Managed Node<br/><span className="text-muted-foreground">cAdvisor</span></div>
+                    <div className="p-3 border border-white/5 rounded bg-black/20 text-[10px]">Managed Node<br /><span className="text-muted-foreground">cAdvisor</span></div>
                     <div className="flex items-center justify-center">→</div>
-                    <div className="p-3 border border-white/5 rounded bg-black/20 text-[10px]">Central Node<br/><span className="text-muted-foreground">Prometheus</span></div>
+                    <div className="p-3 border border-white/5 rounded bg-black/20 text-[10px]">Central Node<br /><span className="text-muted-foreground">Prometheus</span></div>
                     <div className="flex items-center justify-center">→</div>
-                    <div className="p-3 border border-white/5 rounded bg-primary/10 text-[10px] font-bold">Backend API<br/><span className="text-muted-foreground">Spring Boot</span></div>
+                    <div className="p-3 border border-white/5 rounded bg-primary/10 text-[10px] font-bold">Backend API<br /><span className="text-muted-foreground">Spring Boot</span></div>
                     <div className="flex items-center justify-center">→</div>
-                    <div className="p-3 border border-white/5 rounded bg-emerald-500/10 text-[10px] font-bold">Frontend UI<br/><span className="text-muted-foreground">React</span></div>
+                    <div className="p-3 border border-white/5 rounded bg-emerald-500/10 text-[10px] font-bold">Frontend UI<br /><span className="text-muted-foreground">React</span></div>
                   </div>
                 </div>
 
@@ -525,7 +525,7 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Debugging & Troubleshooting</h1>
-            
+
             <div className="space-y-8">
               <section className="space-y-4">
                 <h2 className="text-2xl font-bold">Common Issues</h2>
@@ -572,7 +572,7 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Changelog & Release Notes</h1>
-            
+
             <div className="space-y-8">
               <div className="relative pl-8 border-l-2 border-primary/20 opacity-70">
                 <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-primary/40 border-4 border-background"></div>
@@ -582,9 +582,9 @@ const DocumentationPage: React.FC = () => {
                 </h3>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-4">Upcoming Release</p>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>• **Planned**: Horizontal scaling and replica management.</li>
-                    <li>• **Planned**: Advanced custom metric dashboards.</li>
-                    <li>• **Planned**: Enhanced automated incident response.</li>
+                  <li>• **Planned**: Horizontal scaling and replica management.</li>
+                  <li>• **Planned**: Advanced custom metric dashboards.</li>
+                  <li>• **Planned**: Enhanced automated incident response.</li>
                 </ul>
               </div>
 
@@ -593,19 +593,19 @@ const DocumentationPage: React.FC = () => {
                 <h3 className="text-lg font-bold">v1.0.0 - Current Release</h3>
                 <p className="text-[10px] text-primary uppercase font-bold tracking-widest mb-4">April 28, 2026</p>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>• <strong>Core</strong>: Multi-environment observability platform with real-time Prometheus and ELK integration.</li>
-                    <li>• <strong>Dashboard</strong>: System Overview with KPI cards, Health Stream, Pulse Feed, and System Load visualization.</li>
-                    <li>• <strong>Topology</strong>: Real-time Cluster Graph with equilateral triangle layout and per-node CPU/RAM metrics.</li>
-                    <li>• <strong>Operational Intelligence</strong>: Stability Gauge, Node Heatmap, Anomaly Detection, and Live Service Pulse table.</li>
-                    <li>• <strong>Deployments</strong>: Ansible-based GitOps engine with Deploy, Redeploy, Restart, and Undeploy lifecycle.</li>
-                    <li>• <strong>GitHub</strong>: Private repo integration with auto-analysis, Dockerfile generation, and Nginx config generation.</li>
-                    <li>• <strong>Logs</strong>: Centralized log console with LIVE mode, severity filtering, date ranges, and CSV export.</li>
-                    <li>• <strong>Incidents</strong>: Ticket management with priority levels, node/app linking, and OPEN→IN_PROGRESS→RESOLVED lifecycle.</li>
-                    <li>• <strong>Security</strong>: Dual-layered RBAC (Global roles + Environment scoping) with granular permission matrix.</li>
-                    <li>• <strong>Notifications</strong>: Real-time privilege change alerts via bell icon.</li>
-                    <li>• <strong>AI Assistant</strong>: Built-in chatbot powered by Groq LLaMA 3.3 70B.</li>
-                    <li>• <strong>Audit Log</strong>: Immutable system-wide activity log with filtering, search, and CSV export.</li>
-                    <li>• <strong>Documentation</strong>: Enterprise Documentation Hub (this page).</li>
+                  <li>• <strong>Core</strong>: Multi-environment observability platform with real-time Prometheus and ELK integration.</li>
+                  <li>• <strong>Dashboard</strong>: System Overview with KPI cards, Health Stream, Pulse Feed, and System Load visualization.</li>
+                  <li>• <strong>Topology</strong>: Real-time Cluster Graph with equilateral triangle layout and per-node CPU/RAM metrics.</li>
+                  <li>• <strong>Operational Intelligence</strong>: Stability Gauge, Node Heatmap, Anomaly Detection, and Live Service Pulse table.</li>
+                  <li>• <strong>Deployments</strong>: Ansible-based GitOps engine with Deploy, Redeploy, Restart, and Undeploy lifecycle.</li>
+                  <li>• <strong>GitHub</strong>: Private repo integration with auto-analysis, Dockerfile generation, and Nginx config generation.</li>
+                  <li>• <strong>Logs</strong>: Centralized log console with LIVE mode, severity filtering, date ranges, and CSV export.</li>
+                  <li>• <strong>Incidents</strong>: Ticket management with priority levels, node/app linking, and OPEN→IN_PROGRESS→RESOLVED lifecycle.</li>
+                  <li>• <strong>Security</strong>: Dual-layered RBAC (Global roles + Environment scoping) with granular permission matrix.</li>
+                  <li>• <strong>Notifications</strong>: Real-time privilege change alerts via bell icon.</li>
+                  <li>• <strong>AI Assistant</strong>: Built-in chatbot powered by Groq LLaMA 3.3 70B.</li>
+                  <li>• <strong>Audit Log</strong>: Immutable system-wide activity log with filtering, search, and CSV export.</li>
+                  <li>• <strong>Documentation</strong>: Enterprise Documentation Hub (this page).</li>
                 </ul>
               </div>
             </div>
@@ -753,11 +753,10 @@ const DocumentationPage: React.FC = () => {
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${
-                  activeSection === section.id
-                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                    : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-                }`}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${activeSection === section.id
+                  ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <section.icon className={`w-4 h-4 ${activeSection === section.id ? 'text-white' : 'text-muted-foreground group-hover:text-primary'}`} />
@@ -770,11 +769,11 @@ const DocumentationPage: React.FC = () => {
         </div>
 
         <div className="mt-auto p-8 pt-0">
-            <Card className="p-4 bg-primary/5 border-primary/10">
-                <p className="text-[10px] font-bold text-primary uppercase mb-2">Support</p>
-                <p className="text-xs text-muted-foreground leading-relaxed mb-3">Need help with a complex integration? Our team is available for enterprise support.</p>
-                <button className="w-full py-2 bg-primary/10 text-primary text-[10px] font-bold uppercase rounded-lg hover:bg-primary/20 transition-colors">Contact Support</button>
-            </Card>
+          <Card className="p-4 bg-primary/5 border-primary/10">
+            <p className="text-[10px] font-bold text-primary uppercase mb-2">Support</p>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">Need help with a complex integration? Our team is available for enterprise support.</p>
+            <button className="w-full py-2 bg-primary/10 text-primary text-[10px] font-bold uppercase rounded-lg hover:bg-primary/20 transition-colors">Contact Support</button>
+          </Card>
         </div>
       </aside>
 
@@ -782,13 +781,13 @@ const DocumentationPage: React.FC = () => {
       <main className="flex-1 overflow-y-auto scroll-smooth bg-gradient-to-br from-background to-[#0f0f12]">
         <div className="max-w-4xl mx-auto px-12 py-16">
           {renderContent()}
-          
+
           <div className="mt-20 pt-10 border-t border-white/5 flex items-center justify-between text-muted-foreground">
             <p className="text-xs">© 2026 Monetique Eye Enterprise. All rights reserved.</p>
             <div className="flex gap-6">
-                <button className="text-xs hover:text-foreground transition-colors">Legal</button>
-                <button className="text-xs hover:text-foreground transition-colors">Privacy</button>
-                <button className="text-xs hover:text-foreground transition-colors">SLA</button>
+              <button className="text-xs hover:text-foreground transition-colors">Legal</button>
+              <button className="text-xs hover:text-foreground transition-colors">Privacy</button>
+              <button className="text-xs hover:text-foreground transition-colors">SLA</button>
             </div>
           </div>
         </div>
