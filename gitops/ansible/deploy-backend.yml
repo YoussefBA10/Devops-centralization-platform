@@ -7,7 +7,7 @@
     appName: "backend"
     image_tag: "v1"
     central_ip: "192.168.126.130"
-    db_name: "devops_db"
+    db_name: "monetique-eye-db"
     db_user: "youss"
     db_pass: "youss123"
     jwt_secret: "PhcZW4LAR674QdgudEwzNvRdNkSncHA8Sx4tkF4pY9xT78Ght14z88OVdP9z7GUKiXjKhEyaZHI6aBsjqmAYAYWiVMVej5RSfzpCGQ4mvQ1zYJZBMLinlZv1NT3JDZWcnbRIWyu6UVqmwEp1T1QVZH37JsyJUuYVsA5dylNyjJLFMhZ"
