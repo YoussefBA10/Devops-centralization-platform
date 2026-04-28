@@ -16,5 +16,6 @@ public class StabilityResponse {
     private double trend; // e.g., 1.2 for +1.2%
     private int totalEnvironments;
     private int activeAgents;
+    private double networkLoad; // In Mbps
     private LocalDateTime calculationTimestamp;
 }

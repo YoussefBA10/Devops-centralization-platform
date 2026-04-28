@@ -58,6 +58,11 @@ public class InfrastructureService {
             Double avgCpu = prometheusClient.queryMetric("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100");
             Double avgRam = prometheusClient.queryMetric("avg((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)");
             Double avgDisk = prometheusClient.queryMetric("avg(max(1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) by (instance) * 100)");
+            
+            // Total Network Load in Mbps (Receive + Transmit)
+            Double totalNetRx = prometheusClient.queryMetric("sum(rate(node_network_receive_bytes_total{device!~\"lo\"}[5m]))");
+            Double totalNetTx = prometheusClient.queryMetric("sum(rate(node_network_transmit_bytes_total{device!~\"lo\"}[5m]))");
+            double netLoadMbps = ((totalNetRx != null ? totalNetRx : 0.0) + (totalNetTx != null ? totalNetTx : 0.0)) * 8 / 1000000.0;
 
             double cpuOver = Math.max(0, (avgCpu != null ? avgCpu : 0.0) - 80);
             double ramOver = Math.max(0, (avgRam != null ? avgRam : 0.0) - 85);
@@ -75,6 +80,7 @@ public class InfrastructureService {
                     .trend(trend)
                     .totalEnvironments(totalEnvs)
                     .activeAgents(activeNodes)
+                    .networkLoad(netLoadMbps)
                     .calculationTimestamp(LocalDateTime.now())
                     .build();
 
@@ -199,7 +205,7 @@ public class InfrastructureService {
 
             if (nodeLabel == null || nodeLabel.isEmpty()) {
                 if (isCentralNode) nodeLabel = env.getName();
-                else nodeLabel = "node-" + (agentCount++);
+                else nodeLabel = "node-" + ip.substring(ip.lastIndexOf('.') + 1);
             }
 
             nodes.add(TopologyData.TopologyNode.builder()

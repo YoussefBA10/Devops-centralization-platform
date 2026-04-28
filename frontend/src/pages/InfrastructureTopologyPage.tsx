@@ -20,7 +20,7 @@ import {
   Search,
   Activity
 } from 'lucide-react';
-import { getInfrastructureTopology, getAllInfrastructureTopology } from '../services/api';
+import { getInfrastructureTopology, getAllInfrastructureTopology, getGlobalInfrastructureStats } from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { useAuth } from '../context/AuthContext';
 import type { Node as TopologyNode } from '../types/index';
@@ -41,7 +41,7 @@ const ServerNode = ({ data }: { data: TopologyNode }) => {
   };
 
   return (
-    <div className={`px-4 py-3 shadow-2xl rounded-xl border-2 transition-all duration-300 w-64 bg-[#0c0c0e]/90 backdrop-blur-md ${isHealthy
+    <div className={`px-4 py-3 shadow-2xl rounded-xl border-2 transition-all duration-300 w-80 bg-[#0c0c0e]/90 backdrop-blur-md ${isHealthy
       ? 'border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] shadow-[0_0_10px_rgba(16,185,129,0.05)]'
       : data.status === 'WARNING'
         ? 'border-amber-500/30 hover:border-amber-500/60'
@@ -54,7 +54,7 @@ const ServerNode = ({ data }: { data: TopologyNode }) => {
           {data.type === 'db-server' ? <Database className="w-5 h-5" /> : <Server className="w-5 h-5" />}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold truncate">{data.label}</p>
+          <p className="text-lg font-bold">{data.label}</p>
           <div className="flex items-center gap-2">
             <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">{data.ip}</p>
             {data.environmentName && (
@@ -129,6 +129,7 @@ const InfrastructureTopologyPage: React.FC = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(false);
+  const [globalStats, setGlobalStats] = useState<any>(null);
 
   const fetchTopology = useCallback(async () => {
     if (!selectedEnvironment && !viewAllEnvs) return;
@@ -138,11 +139,13 @@ const InfrastructureTopologyPage: React.FC = () => {
         ? getAllInfrastructureTopology()
         : getInfrastructureTopology(selectedEnvironment!.id);
 
-      const [topoRes] = await Promise.all([
-        fetchCall
+      const [topoRes, statsRes] = await Promise.all([
+        fetchCall,
+        getGlobalInfrastructureStats()
       ]);
 
       const data = topoRes.data;
+      setGlobalStats(statsRes.data);
 
       // Transform backend nodes with spatial grouping by environment
       const envIds = Array.from(new Set(data.nodes.map((n: any) => n.environmentId?.toString())));
@@ -164,18 +167,21 @@ const InfrastructureTopologyPage: React.FC = () => {
         // Wider spacing per environment (e.g. 700px gap) to prevent bleeding
         const offsetX = (envIndex >= 0 ? envIndex : 0) * 800;
         
+        const spacingX = 450; 
+        const spacingY = 380; // Calculated for a balanced triangle
+
         let posX, posY;
         if (isCentral) {
-           // Place central node bottom center
-           let numAgents = Math.max(1, agents.length);
-           // Calculate width of the agent row to center this node
-           let totalRowWidth = (Math.min(numAgents, 3) - 1) * 350;
+           const numAgentsInRow = Math.min(agents.length, 3);
+           const totalRowWidth = (numAgentsInRow - 1) * spacingX;
+           
            posX = offsetX + totalRowWidth / 2; 
-           posY = 240 + Math.floor(Math.max(0, agents.length - 1) / 3) * 220; // Ensure it sits below all rows of agents
+           // If we have exactly 2 agents, calculate Y for an equilateral-ish feel
+           const verticalOffset = agents.length === 2 ? spacingX * 0.866 : spacingY;
+           posY = verticalOffset + Math.floor(Math.max(0, agents.length - 1) / 3) * spacingY;
         } else {
-           // Place agents in rows above the central node
-           posX = offsetX + (localIndex % 3) * 350; 
-           posY = Math.floor(localIndex / 3) * 220;
+           posX = offsetX + (localIndex % 3) * spacingX; 
+           posY = Math.floor(localIndex / 3) * spacingY;
         }
 
         return {
@@ -228,7 +234,7 @@ const InfrastructureTopologyPage: React.FC = () => {
               {/* Toggle removed for admins as Global view is now mandatory default */}
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Total Agents</span>
-                <span className="font-bold text-white">{nodes.length}</span>
+                <span className="font-bold text-white">{globalStats?.activeAgents || nodes.length}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Active Peers</span>
@@ -237,8 +243,10 @@ const InfrastructureTopologyPage: React.FC = () => {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Network Load</span>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="font-bold text-emerald-500">Nominal</span>
+                  <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${globalStats?.networkLoad > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}></div>
+                  <span className={`font-bold ${globalStats?.networkLoad > 50 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                    {globalStats?.networkLoad ? `${globalStats.networkLoad.toFixed(2)} Mbps` : 'Nominal'}
+                  </span>
                 </div>
               </div>
               <div className="h-px bg-white/5 my-2"></div>

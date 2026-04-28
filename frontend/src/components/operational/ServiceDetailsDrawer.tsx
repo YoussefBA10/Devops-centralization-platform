@@ -11,13 +11,9 @@ import {
   Server,
   Zap,
   BarChart3,
-  History,
-  RefreshCw
+  History
 } from 'lucide-react';
-import { restartApplication, getApplications, getEnvironmentNodes, restartContainer } from '../../services/api';
-import { useToast } from '../ui/Toast';
-import { useEnvironment } from '../../context/EnvironmentContext';
-import type { ServiceResource, Application, Node } from '../../types/index';
+import type { ServiceResource } from '../../types/index';
 
 interface Props {
   service: ServiceResource | null;
@@ -25,63 +21,7 @@ interface Props {
 }
 
 const ServiceDetailsDrawer: React.FC<Props> = ({ service, onClose }) => {
-  const { selectedEnvironment } = useEnvironment();
-  const { showToast } = useToast();
-  const [restarting, setRestarting] = React.useState(false);
-
   if (!service) return null;
-
-  const handleRestart = async () => {
-    if (!selectedEnvironment) return;
-    setRestarting(true);
-    try {
-      // 1. Fetch applications for this environment to find the ID
-      const appsRes = await getApplications(selectedEnvironment.id);
-      const apps: Application[] = appsRes.data;
-      
-      const normalize = (s: string) => s.toLowerCase().replace(/[-_ ]/g, '');
-      const searchName = normalize(service.serviceName);
-
-      // Match by serviceNameKeyword (which is what pulse uses) or name
-      const targetApp = apps.find(a => 
-        normalize(a.serviceNameKeyword || '') === searchName || 
-        normalize(a.name) === searchName
-      );
-
-      if (!targetApp) {
-        // 1b. Fallback: Generic restart for system/infra containers (like cadvisor)
-        const nodesRes = await getEnvironmentNodes(selectedEnvironment.id);
-        const nodes: Node[] = nodesRes.data;
-        
-        const targetNode = nodes.find(n => 
-          n.label === service.nodeName || 
-          n.ip === service.nodeName ||
-          n.id === service.nodeName ||
-          (n.id.includes('-') && n.id.split('-').pop()?.replace(/-/g, '.') === service.nodeName)
-        );
-
-        if (!targetNode || !targetNode.ip) {
-          showToast(`Could not find a managed application or node IP for "${service.serviceName}".`, 'warning');
-          return;
-        }
-
-        await restartContainer(targetNode.ip, service.serviceName);
-        showToast(`System container restart triggered for ${service.serviceName}.`, 'success');
-        onClose();
-        return;
-      }
-
-      // 2. Trigger restart
-      await restartApplication(targetApp.id);
-      showToast(`Restart command sent for ${targetApp.name}.`, 'success');
-      onClose();
-    } catch (err) {
-      console.error("Restart failed", err);
-      showToast("Failed to trigger restart.", 'error');
-    } finally {
-      setRestarting(false);
-    }
-  };
 
   return (
     <AnimatePresence>
@@ -236,17 +176,6 @@ const ServiceDetailsDrawer: React.FC<Props> = ({ service, onClose }) => {
             </div>
           </div>
 
-          {/* Footer Actions */}
-          <div className="p-6 border-t border-white/5 flex gap-4">
-            <button 
-              onClick={handleRestart}
-              disabled={restarting}
-              className="flex-1 py-3 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2"
-            >
-              {restarting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              {restarting ? 'Restarting...' : 'Restart Service'}
-            </button>
-          </div>
         </motion.div>
       </div>
     </AnimatePresence>
