@@ -65,8 +65,8 @@ public class DashboardService {
                         .build())
                 .collect(Collectors.toList());
         
-        // Calculate Stability Index (mocking aggregation across all apps for simplicity here)
-        double averageStability = 98.5; 
+        // Calculate Stability Index dynamically
+        double averageStability = infrastructureService.getGlobalStability().getAvgStability(); 
         
         if (healthStream.isEmpty()) {
             healthStream.add("> SYS-OK: all services operational [global]");
