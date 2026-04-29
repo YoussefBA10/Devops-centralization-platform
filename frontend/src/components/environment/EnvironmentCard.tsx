@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Input';
-import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw, Trash2, Terminal } from 'lucide-react';
 import { getDeploymentStatus } from '../../services/api';
 import type { Environment } from '../../types';
 
