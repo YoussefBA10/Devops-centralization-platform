@@ -26,6 +26,15 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Check if it's a network error (no response) or a 503 maintenance status
+    const isMaintenance = !error.response || error.response.status === 503;
+    const isAlreadyOnMaintenance = window.location.pathname === '/maintenance';
+
+    if (isMaintenance && !isAlreadyOnMaintenance) {
+      window.location.href = '/maintenance';
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');

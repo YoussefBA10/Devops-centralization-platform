@@ -18,6 +18,7 @@ import AuditLogPage from './pages/AuditLogPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AccessDeniedPage from './pages/AccessDeniedPage';
 import DocumentationPage from './pages/DocumentationPage';
+import MaintenancePage from './pages/MaintenancePage';
 import ChatWidget from './components/layout/ChatWidget';
 import { useEnvironment } from './context/EnvironmentContext';
 
@@ -80,6 +81,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/maintenance" element={<MaintenancePage />} />
       <Route path="/setup" element={
         <ProtectedRoute>
           <SetupWizard />
