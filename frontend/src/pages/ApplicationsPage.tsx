@@ -287,11 +287,14 @@ const ApplicationsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredApps.map((app) => {
             const statusColor = getStatusColor(app.status);
+            const cleanNode = (app.targetNode || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+            const endpointUrl = `http://${cleanNode}:${app.port}`;
+
             return (
               <div key={app.id} className="group relative pt-6">
                 <div className="absolute top-2 right-4 px-3 py-1 bg-primary border border-primary/50 shadow-[0_0_15px_rgba(59,130,246,0.4)] rounded-full z-10 flex items-center gap-1.5">
                   <Server className="w-3 h-3 text-white" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">{app.targetNode || 'Auto'}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">{cleanNode || 'Auto'}</span>
                 </div>
 
                 <div className={`p-5 rounded-xl border flex flex-col bg-[#0c0c0e]/80 backdrop-blur-md shadow-2xl transition-all duration-300 hover:-translate-y-1 ${
@@ -319,7 +322,7 @@ const ApplicationsPage: React.FC = () => {
                     <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
                       <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground"><span>Endpoint</span><Globe className="w-3 h-3" /></div>
                       <div className="flex items-center justify-between">
-                        <a href={`http://${app.targetNode}:${app.port}`} target="_blank" rel="noreferrer" className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}>http://{app.targetNode}:{app.port}</a>
+                        <a href={endpointUrl} target="_blank" rel="noreferrer" className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}>{endpointUrl}</a>
                         {app.status === 'RUNNING' && <ExternalLink className="w-3 h-3 text-primary/50" />}
                       </div>
                     </div>

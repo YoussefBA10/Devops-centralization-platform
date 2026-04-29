@@ -732,10 +732,10 @@ const DocumentationPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#0a0a0b]">
+    <div className="flex h-screen overflow-hidden bg-[#0a0a0b]">
       {/* Documentation Sidebar */}
       <aside className="w-80 border-r border-white/5 bg-[#0c0c0e]/50 backdrop-blur-xl flex flex-col">
-        <div className="p-8">
+        <div className="p-8 flex-1 overflow-y-auto">
           <div className="flex items-center gap-3 mb-8">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Book className="w-6 h-6 text-primary" />
