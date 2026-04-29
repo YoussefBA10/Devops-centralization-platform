@@ -55,8 +55,9 @@ public class DashboardService {
             }
         }
         
-        // Fetch from ActivityLogRepository
-        List<ActivityItem> activities = activityLogRepository.findTop10ByOrderByTimestampDesc().stream()
+        // Fetch all activities from the last 24 hours
+        LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+        List<ActivityItem> activities = activityLogRepository.findAllByTimestampAfterOrderByTimestampDesc(twentyFourHoursAgo).stream()
                 .map(log -> ActivityItem.builder()
                         .title(log.getTitle())
                         .type(log.getType())

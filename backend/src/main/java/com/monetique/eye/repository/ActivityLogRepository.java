@@ -10,4 +10,5 @@ import java.util.List;
 @Repository
 public interface ActivityLogRepository extends JpaRepository<ActivityLog, Long>, JpaSpecificationExecutor<ActivityLog> {
     List<ActivityLog> findTop10ByOrderByTimestampDesc();
+    List<ActivityLog> findAllByTimestampAfterOrderByTimestampDesc(java.time.LocalDateTime timestamp);
 }
