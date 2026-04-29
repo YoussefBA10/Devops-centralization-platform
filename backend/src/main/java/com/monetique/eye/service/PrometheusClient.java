@@ -86,7 +86,13 @@ public class PrometheusClient {
     }
 
     public Double getDiskUsagePercent(String envLabel) {
-        String query = String.format("max(1 - (node_filesystem_avail_bytes{mountpoint=\"/\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=\"/\", environment=\"%s\"})) * 100", envLabel, envLabel);
+        String query = String.format(
+            "max(1 - (" +
+            "(node_filesystem_avail_bytes{mountpoint=\"/data\", environment=\"%s\"} or node_filesystem_avail_bytes{mountpoint=\"/\", environment=\"%s\"}) / " +
+            "(node_filesystem_size_bytes{mountpoint=\"/data\", environment=\"%s\"} or node_filesystem_size_bytes{mountpoint=\"/\", environment=\"%s\"})" +
+            ")) * 100", 
+            envLabel, envLabel, envLabel, envLabel
+        );
         return queryMetric(query);
     }
 
