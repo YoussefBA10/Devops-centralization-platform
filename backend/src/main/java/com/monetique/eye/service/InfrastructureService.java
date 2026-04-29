@@ -57,7 +57,7 @@ public class InfrastructureService {
 
             Double avgCpu = prometheusClient.queryMetric("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100");
             Double avgRam = prometheusClient.queryMetric("avg((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)");
-            Double avgDisk = prometheusClient.queryMetric("avg(max(1 - ((node_filesystem_avail_bytes{mountpoint=\"/data\"} or node_filesystem_avail_bytes{mountpoint=\"/\"}) / (node_filesystem_size_bytes{mountpoint=\"/data\"} or node_filesystem_size_bytes{mountpoint=\"/\"}))) by (instance) * 100)");
+            Double avgDisk = prometheusClient.queryMetric("avg(max(1 - ((node_filesystem_avail_bytes{mountpoint=\"/data\"} or ignoring(mountpoint) node_filesystem_avail_bytes{mountpoint=\"/\"}) / (node_filesystem_size_bytes{mountpoint=\"/data\"} or ignoring(mountpoint) node_filesystem_size_bytes{mountpoint=\"/\"}))) by (instance) * 100)");
             
             // Total Network Load in Mbps (Receive + Transmit)
             Double totalNetRx = prometheusClient.queryMetric("sum(rate(node_network_receive_bytes_total{device!~\"lo\"}[5m]))");
