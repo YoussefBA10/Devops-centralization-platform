@@ -1,6 +1,5 @@
 - name: Undeploy Custom Application
   hosts: "{{ target_host }}"
-  become: yes
 
   vars:
     # Defaults in case not passed
@@ -22,6 +21,6 @@
 
     - name: Clean up app directory
       file:
-        path: "/opt/monetique/apps/{{ appName }}"
+        path: "/data/monetique/apps/{{ appName }}"
         state: absent
       ignore_errors: yes

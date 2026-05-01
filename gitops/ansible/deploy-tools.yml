@@ -1,7 +1,6 @@
 ---
 - name: Deploy Observability Tools to Agent Node
   hosts: "{{ target_host | default('all') }}"
-  become: yes
   any_errors_fatal: yes
 
   vars:
@@ -12,72 +11,8 @@
   pre_tasks:
     - name: Pre-flight Check - Verify connectivity
       ping:
-    
-    - name: Ensure common tools are installed
-      package:
-        name:
-          - git
-          - curl
-          - wget
-          - htop
-          - net-tools
-        state: present
 
-    # -----------------------------
-    # Cross-Platform Docker Check
-    # -----------------------------
-    - name: Check if Docker is installed
-      command: docker --version
-      register: docker_check
-      ignore_errors: yes
-      changed_when: false
-
-    # -----------------------------
-    # Install Docker (Distro Aware)
-    # -----------------------------
-    - name: Install Docker dependencies (Debian/Ubuntu)
-      apt:
-        name: [apt-transport-https, ca-certificates, gnupg, lsb-release]
-        update_cache: yes
-      when: 
-        - docker_check.failed
-        - ansible_os_family == "Debian"
-
-    - name: Add Docker Repo (RedHat/CentOS)
-      get_url:
-        url: https://download.docker.com/linux/centos/docker-ce.repo
-        dest: /etc/yum.repos.d/docker-ce.repo
-      when:
-        - docker_check.failed
-        - ansible_os_family == "RedHat"
-
-    - name: Install Docker (Universal)
-      package:
-        name: "{{ (ansible_os_family == 'Debian') | ternary('docker.io', 'docker-ce') }}"
-        state: present
-      when: docker_check.failed
-
-    - name: Start Docker
-      systemd:
-        name: docker
-        state: started
-        enabled: yes
-
-    # -----------------------------
-    # Firewall Management (RedHat)
-    # -----------------------------
-    - name: Open Monitoring Ports in FirewallD (RedHat)
-      firewalld:
-        port: "{{ item }}"
-        permanent: yes
-        state: enabled
-        immediate: yes
-      loop:
-        - 8081/tcp # cAdvisor
-        - 9100/tcp # Node Exporter
-      when: ansible_os_family == "RedHat"
-      ignore_errors: yes
-
+  tasks:
     # -----------------------------
     # Cleanup & Run Containers
     # -----------------------------

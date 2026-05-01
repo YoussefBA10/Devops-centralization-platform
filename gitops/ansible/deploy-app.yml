@@ -1,21 +1,15 @@
 ---
 - name: Deploy Custom Application Flow
   hosts: "{{ target_host }}"
-  become: yes
 
   vars:
-    app_dir: "/opt/monetique/apps/{{ appName }}"
+    app_dir: "/data/monetique/apps/{{ appName }}"
     image_name: "{{ appName | lower }}"
     # Task 2 & Canary logic
     container_name: "{{ (isCanary | default(false) | bool) | ternary(appName ~ '-canary', appName) }}"
     env_map: "{{ envVarsJson | default('{}') | from_json }}"
 
   tasks:
-    - name: Ensure git is installed (fast)
-      package:
-        name: git
-        state: present
-
     - name: Ensure app directory exists
       file:
         path: "{{ app_dir }}"

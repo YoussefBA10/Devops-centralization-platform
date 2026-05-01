@@ -1,6 +1,5 @@
 - name: Restart Custom Application
   hosts: "{{ target_host }}"
-  become: yes
 
   vars:
     # Defaults in case not passed

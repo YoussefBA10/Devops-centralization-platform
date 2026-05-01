@@ -88,12 +88,7 @@ public class DeploymentService {
                     deploymentLog, 300);
 
             // 3. Execute Ansible Playbook
-            String playbookFile = "deploy-tools.yml"; // default
-            if ("redhat".equalsIgnoreCase(osFamily)) {
-                playbookFile = "deploy-tools-redhat.yml";
-            } else if ("ubuntu".equalsIgnoreCase(osFamily)) {
-                playbookFile = "deploy-tools-ubuntu.yml";
-            }
+            String playbookFile = "deploy-tools.yml"; // Universal OS playbook
             
             String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
@@ -110,8 +105,6 @@ public class DeploymentService {
                     "-i", inventoryPath,
                     playbookPath,
                     "--limit", targetIp,
-                    "-b",
-                    "-e", "ansible_become_pass=" + sshPassword,
                     "-e", "ansible_ssh_pass=" + sshPassword,
                     "-e", "env_label=" + envLabel,
                     "-e", "ansible_user=" + sshUser,
@@ -177,9 +170,6 @@ public class DeploymentService {
                         "-e", "ssh_user=" + sshUser));
 
                 if (sshPassword != null && !sshPassword.isEmpty()) {
-                    commandList.add("-b");
-                    commandList.add("-e");
-                    commandList.add("ansible_become_pass=" + sshPassword);
                     commandList.add("-e");
                     commandList.add("ansible_ssh_pass=" + sshPassword);
                     executeProcessSecure(commandList.toArray(new String[0]), new DeploymentLog(), 300);
@@ -258,9 +248,6 @@ public class DeploymentService {
                     "-e", "nodename=" + nodeName));
 
             if (sshPass != null && !sshPass.isEmpty()) {
-                commandList.add("-b");
-                commandList.add("-e");
-                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
@@ -347,9 +334,6 @@ public class DeploymentService {
             }
 
             if (sshPass != null && !sshPass.isEmpty()) {
-                commandList.add("-b");
-                commandList.add("-e");
-                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 300);
@@ -430,9 +414,6 @@ public class DeploymentService {
             }
 
             if (sshPass != null && !sshPass.isEmpty()) {
-                commandList.add("-b");
-                commandList.add("-e");
-                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 120);
@@ -591,9 +572,6 @@ public class DeploymentService {
             }
 
             if (sshPass != null && !sshPass.isEmpty()) {
-                commandList.add("-b");
-                commandList.add("-e");
-                commandList.add("ansible_become_pass=" + sshPass);
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
