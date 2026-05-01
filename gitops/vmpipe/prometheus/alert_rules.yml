@@ -40,31 +40,31 @@ groups:
   - name: "application_alerts"
     rules:
       - alert: "ApplicationDown"
-        expr: "time() - container_last_seen{container_label_com_monetique_category!='', name!=''} > 60"
+        expr: "time() - container_last_seen{container_label_com_monetique_environment!='', name!=''} > 60"
         for: "1m"
         labels:
           severity: "critical"
         annotations:
-          summary: "Application {{ $labels.container_label_app }} ({{ $labels.container_label_com_monetique_category }}) is down"
-          description: "Container {{ $labels.name }} on {{ $labels.container_label_node }} has not been seen for over 60 seconds."
+          summary: "Application {{ $labels.container_label_app }} is down"
+          description: "Container {{ $labels.name }} (env: {{ $labels.container_label_com_monetique_environment }}) has not been seen for over 60 seconds."
 
       - alert: "FrontendDown"
-        expr: "time() - container_last_seen{container_label_com_monetique_category='frontend', name!=''} > 60"
+        expr: "(time() - container_last_seen{container_label_com_monetique_category='frontend', name!=''} > 60) or (time() - container_last_seen{container_label_com_monetique_environment!='', name=~'.*frontend.*'} > 60)"
         for: "1m"
         labels:
           severity: "critical"
         annotations:
           summary: "Frontend {{ $labels.container_label_app }} is down"
-          description: "Frontend container {{ $labels.name }} on {{ $labels.container_label_node }} is down."
+          description: "Frontend container {{ $labels.name }} is down."
 
       - alert: "BackendDown"
-        expr: "time() - container_last_seen{container_label_com_monetique_category='backend', name!=''} > 60"
+        expr: "(time() - container_last_seen{container_label_com_monetique_category='backend', name!=''} > 60) or (time() - container_last_seen{container_label_com_monetique_environment!='', name=~'.*backend.*'} > 60)"
         for: "1m"
         labels:
           severity: "critical"
         annotations:
           summary: "Backend {{ $labels.container_label_app }} is down"
-          description: "Backend container {{ $labels.name }} on {{ $labels.container_label_node }} is down."
+          description: "Backend container {{ $labels.name }} is down."
 
       - alert: "HighErrorRate"
         expr: "sum by (job, instance, nodename) (rate(http_server_requests_seconds_count{status=~\"5..\"}[2m])) / sum by (job, instance, nodename) (rate(http_server_requests_seconds_count[2m])) * 100 > 5"
