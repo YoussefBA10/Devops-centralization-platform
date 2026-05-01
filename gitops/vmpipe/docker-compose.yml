@@ -151,10 +151,26 @@ services:
       app: "monetique-eye"
       env: "central-node"
       node: "central-node"
+    environment:
+      SMTP_FROM: ${SMTP_FROM:-monetique.eye.alerts@gmail.com}
+      SMTP_USERNAME: ${SMTP_USERNAME:-monetique.eye.alerts@gmail.com}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-changeme}
+      ALERT_RECIPIENT: ${ALERT_RECIPIENT:-ops@monetique.tn}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cp /etc/alertmanager/alertmanager.yml /tmp/alertmanager.yml
+        sed -i "s|__SMTP_FROM__|$$SMTP_FROM|g" /tmp/alertmanager.yml
+        sed -i "s|__SMTP_USERNAME__|$$SMTP_USERNAME|g" /tmp/alertmanager.yml
+        sed -i "s|__SMTP_PASSWORD__|$$SMTP_PASSWORD|g" /tmp/alertmanager.yml
+        sed -i "s|__ALERT_RECIPIENT__|$$ALERT_RECIPIENT|g" /tmp/alertmanager.yml
+        exec /bin/alertmanager --config.file=/tmp/alertmanager.yml --storage.path=/alertmanager
     ports:
       - "9093:9093"
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.ym
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/templates:/etc/alertmanager/templates
     networks:
       - monetique-eye-net
   
