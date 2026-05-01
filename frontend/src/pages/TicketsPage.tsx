@@ -118,7 +118,7 @@ const TicketsPage: React.FC = () => {
     setNewTicket({
       title: ticket.title,
       description: ticket.description,
-      priority: ticket.priority,
+      priority: ticket.priority || 'LOW',
       node: ticket.node || '',
       applicationId: ticket.application?.id?.toString() || ''
     });

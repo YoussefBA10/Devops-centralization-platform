@@ -15,8 +15,6 @@ import {
   Lightbulb,
   ArrowRight,
   Code,
-  Copy,
-  Check,
   Activity
 } from 'lucide-react';
 import { Card } from '../components/ui/Card';
