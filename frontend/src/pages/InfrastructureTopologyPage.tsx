@@ -15,9 +15,8 @@ import {
   Box
 } from 'lucide-react';
 import { getAllInfrastructureTopology, getGlobalInfrastructureStats } from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import type { Node as TopologyNode, ClusterGroup, EnvironmentGroup } from '../types/index';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
+import { Card } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 
 // Custom Progress Bar with thresholds

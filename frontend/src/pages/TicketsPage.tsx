@@ -54,7 +54,7 @@ const TicketsPage: React.FC = () => {
             type: 'node'
           })),
           edges: [],
-          environmentId: selectedEnvironment.id
+          clusters: []
         });
       } catch (err) {
         console.error('Failed to fetch form data', err);
