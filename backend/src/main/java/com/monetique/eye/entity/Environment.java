@@ -24,6 +24,10 @@ public class Environment {
     @Column(nullable = false, unique = true)
     private String name;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cluster_id")
+    private Cluster cluster;
+
     private String description;
     private String prometheusLabel;
     private String centralNodeIp;

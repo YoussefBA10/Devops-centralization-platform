@@ -41,11 +41,16 @@ interface EnvResources {
 
 
 
+import { useCluster } from '../context/ClusterContext';
+
 const EnvironmentsPage: React.FC = () => {
   const { isAdmin, permissions } = useAuth();
+  const { clusters, createCluster, deleteCluster } = useCluster();
+  
   const canCreate = isAdmin || permissions?.envDeployment?.create;
   const canEdit = isAdmin || permissions?.envDeployment?.edit;
   const canDelete = isAdmin || permissions?.envDeployment?.delete;
+  
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteEnvModal, setShowDeleteEnvModal] = useState(false);
   const { environments, refreshEnvironments, createEnvironment, updateEnvironment, deleteEnvironment, loading: envLoading } = useEnvironment();
@@ -53,6 +58,7 @@ const EnvironmentsPage: React.FC = () => {
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showNodesModal, setShowNodesModal] = useState(false);
+  const [showClusterModal, setShowClusterModal] = useState(false);
   const [selectedEnv, setSelectedEnv] = useState<Environment | null>(null);
   
   const [stabilityInfo, setStabilityInfo] = useState<StabilityInfo | null>(null);
@@ -61,8 +67,9 @@ const EnvironmentsPage: React.FC = () => {
   const [nodesLoading, setNodesLoading] = useState(false);
 
   // Form States
-  const [newEnv, setNewEnv] = useState({ name: '', description: '', prometheusLabel: '' });
-  const [editEnvData, setEditEnvData] = useState({ name: '', description: '', prometheusLabel: '' });
+  const [newEnv, setNewEnv] = useState({ name: '', description: '', prometheusLabel: '', clusterId: '' });
+  const [editEnvData, setEditEnvData] = useState({ name: '', description: '', prometheusLabel: '', clusterId: '' });
+  const [newCluster, setNewCluster] = useState({ name: '', description: '' });
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deploymentLoading, setDeploymentLoading] = useState(false);
@@ -108,6 +115,20 @@ const EnvironmentsPage: React.FC = () => {
     }
   };
 
+  const handleCreateCluster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    try {
+      await createCluster(newCluster);
+      setShowClusterModal(false);
+      setNewCluster({ name: '', description: '' });
+    } catch (err: any) {
+      setCreateError(err.response?.data?.message || 'Cluster creation failed');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   const handleDeleteEnv = async () => {
     if (!selectedEnv) return;
     setCreateLoading(true);
@@ -127,7 +148,10 @@ const EnvironmentsPage: React.FC = () => {
     if (!selectedEnv) return;
     setCreateLoading(true);
     try {
-      await updateEnvironment(selectedEnv.id, editEnvData);
+      await updateEnvironment(selectedEnv.id, {
+        ...editEnvData,
+        clusterId: editEnvData.clusterId ? parseInt(editEnvData.clusterId) : null
+      });
       setShowEditModal(false);
     } catch (err: any) {
       setCreateError(err.response?.data?.message || 'Update failed');
@@ -231,13 +255,28 @@ const EnvironmentsPage: React.FC = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          {canCreate && <Button className="h-11 px-6 shadow-lg shadow-primary/20" onClick={() => {
-            setCreateError(null);
-            setShowCreateModal(true);
-          }}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create New
-          </Button>}
+          {canCreate && (
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                className="h-11 px-6 border-primary/20 hover:bg-primary/5" 
+                onClick={() => {
+                  setCreateError(null);
+                  setShowClusterModal(true);
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Cluster
+              </Button>
+              <Button className="h-11 px-6 shadow-lg shadow-primary/20" onClick={() => {
+                setCreateError(null);
+                setShowCreateModal(true);
+              }}>
+                <Plus className="w-4 h-4 mr-2" />
+                New Env
+              </Button>
+            </div>
+          )}
           <Button variant="outline" size="icon" className="h-11 w-11" onClick={() => { refreshEnvironments(); fetchData(); }} loading={envLoading}>
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -327,7 +366,12 @@ const EnvironmentsPage: React.FC = () => {
               }}
               onEdit={canEdit ? () => {
                 setSelectedEnv(env);
-                setEditEnvData({ name: env.name, description: env.description || '', prometheusLabel: env.prometheusLabel || '' });
+                setEditEnvData({ 
+                  name: env.name, 
+                  description: env.description || '', 
+                  prometheusLabel: env.prometheusLabel || '',
+                  clusterId: env.cluster?.id?.toString() || ''
+                });
                 setCreateError(null);
                 setShowEditModal(true);
               } : undefined}
@@ -497,6 +541,19 @@ const EnvironmentsPage: React.FC = () => {
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Prometheus Label</label>
                   <Input value={editEnvData.prometheusLabel} onChange={e => setEditEnvData({...editEnvData, prometheusLabel: e.target.value})} placeholder="e.g. staging" required />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Cluster (Optional)</label>
+                  <select 
+                    value={editEnvData.clusterId} 
+                    onChange={e => setEditEnvData({...editEnvData, clusterId: e.target.value})}
+                    className="w-full bg-secondary border border-border rounded-lg py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  >
+                    <option value="">No Cluster</option>
+                    {clusters.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
                 {createError && <p className="text-xs text-destructive bg-destructive/5 p-3 rounded-lg border border-destructive/10">{createError}</p>}
                 <div className="flex gap-4 pt-4">
                   <Button variant="ghost" className="flex-1" type="button" onClick={() => setShowEditModal(false)}>Cancel</Button>
@@ -522,9 +579,12 @@ const EnvironmentsPage: React.FC = () => {
                 e.preventDefault();
                 setCreateLoading(true);
                 try {
-                  await createEnvironment(newEnv);
+                  await createEnvironment({
+                    ...newEnv,
+                    clusterId: newEnv.clusterId ? parseInt(newEnv.clusterId) : null
+                  });
                   setShowCreateModal(false);
-                  setNewEnv({ name: '', description: '', prometheusLabel: '' });
+                  setNewEnv({ name: '', description: '', prometheusLabel: '', clusterId: '' });
                 } catch (err: any) {
                   setCreateError(err.response?.data?.message || 'Creation failed');
                 } finally {
@@ -542,6 +602,19 @@ const EnvironmentsPage: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Prometheus Label</label>
                   <Input value={newEnv.prometheusLabel} onChange={e => setNewEnv({...newEnv, prometheusLabel: e.target.value})} placeholder="e.g. staging" required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Cluster (Optional)</label>
+                  <select 
+                    value={newEnv.clusterId} 
+                    onChange={e => setNewEnv({...newEnv, clusterId: e.target.value})}
+                    className="w-full bg-secondary border border-border rounded-lg py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  >
+                    <option value="">No Cluster</option>
+                    {clusters.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                 </div>
                 {createError && <p className="text-xs text-destructive bg-destructive/5 p-3 rounded-lg border border-destructive/10">{createError}</p>}
                 <div className="flex gap-4 pt-4">
@@ -637,6 +710,112 @@ const EnvironmentsPage: React.FC = () => {
           </Card>
         </div>
       )}
+      {/* Cluster Management Modal */}
+      <ClusterManagementModal
+        show={showClusterModal}
+        onClose={() => setShowClusterModal(false)}
+        clusters={clusters}
+        onCreate={handleCreateCluster}
+        onDelete={deleteCluster}
+        newCluster={newCluster}
+        setNewCluster={setNewCluster}
+        loading={createLoading}
+        error={createError}
+      />
+    </div>
+  );
+};
+
+// ... at the end before export ...
+const ClusterManagementModal: React.FC<{
+  show: boolean;
+  onClose: () => void;
+  clusters: any[];
+  onCreate: (e: React.FormEvent) => void;
+  onDelete: (id: number) => void;
+  newCluster: any;
+  setNewCluster: any;
+  loading: boolean;
+  error: string | null;
+}> = ({ show, onClose, clusters, onCreate, onDelete, newCluster, setNewCluster, loading, error }) => {
+  if (!show) return null;
+  
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-background/95 backdrop-blur-xl" onClick={onClose}></div>
+      <Card className="w-full max-w-2xl relative z-10 shadow-3xl border-white/10 overflow-hidden max-h-[90vh] flex flex-col">
+        <CardHeader className="pb-4 border-b border-white/5">
+          <CardTitle className="text-2xl flex items-center gap-2">
+            <Server className="w-6 h-6 text-primary" />
+            Cluster Management
+          </CardTitle>
+          <CardDescription>Group your environments for better organization.</CardDescription>
+        </CardHeader>
+        
+        <CardContent className="p-6 overflow-y-auto space-y-6">
+          {/* Create Form */}
+          <form onSubmit={onCreate} className="space-y-4 bg-secondary/30 p-4 rounded-xl border border-white/5">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-primary">Add New Cluster</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Input 
+                  value={newCluster.name} 
+                  onChange={e => setNewCluster({...newCluster, name: e.target.value})} 
+                  placeholder="Cluster Name (e.g. Production)" 
+                  required 
+                />
+              </div>
+              <div className="space-y-2">
+                <Input 
+                  value={newCluster.description} 
+                  onChange={e => setNewCluster({...newCluster, description: e.target.value})} 
+                  placeholder="Description (Optional)" 
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" loading={loading} size="sm">Create Cluster</Button>
+            </div>
+          </form>
+
+          {/* List */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Existing Clusters</h4>
+            <div className="space-y-2">
+              {clusters.length > 0 ? clusters.map(cluster => (
+                <div key={cluster.id} className="flex items-center justify-between p-4 bg-card/50 border border-white/5 rounded-xl group hover:border-primary/30 transition-all">
+                  <div>
+                    <h5 className="font-bold text-white">{cluster.name}</h5>
+                    <p className="text-xs text-muted-foreground">{cluster.description || 'No description'}</p>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete cluster "${cluster.name}"? Environments will be unlinked but not deleted.`)) {
+                        onDelete(cluster.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              )) : (
+                <div className="text-center py-8 text-muted-foreground bg-secondary/10 rounded-xl border border-dashed border-white/10">
+                  No clusters created yet.
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </CardContent>
+        
+        <div className="p-4 border-t border-white/5 bg-[#08080a] flex justify-end">
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+        </div>
+      </Card>
     </div>
   );
 };

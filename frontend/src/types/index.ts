@@ -23,11 +23,19 @@ export interface User {
   environments?: Environment[];
 }
 
+export interface Cluster {
+  id: number;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+
 export interface Environment {
   id: number;
   name: string;
   description: string;
   prometheusLabel: string;
+  cluster?: Cluster;
   lastDeploymentStatus?: string;
   lastDeployedAt?: string;
   createdAt: string;

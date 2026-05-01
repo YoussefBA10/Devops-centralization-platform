@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Environment } from '../types/index';
 import api from '../services/api';
 import { useAuth } from './AuthContext';
+import { useCluster } from './ClusterContext';
 
 interface EnvironmentContextType {
   environments: Environment[];
@@ -10,8 +11,8 @@ interface EnvironmentContextType {
   loading: boolean;
   initialized: boolean;
   refreshEnvironments: () => Promise<void>;
-  createEnvironment: (env: Partial<Environment>) => Promise<void>;
-  updateEnvironment: (id: number, env: Partial<Environment>) => Promise<void>;
+  createEnvironment: (env: any) => Promise<void>;
+  updateEnvironment: (id: number, env: any) => Promise<void>;
   deleteEnvironment: (id: number) => Promise<void>;
 }
 
@@ -21,13 +22,15 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [selectedEnvironment, setSelectedEnvironment] = useState<Environment | null>(null);
   const { isAuthenticated } = useAuth();
+  const { selectedCluster } = useCluster();
   const [loading, setLoading] = useState(isAuthenticated);
 
   const refreshEnvironments = async () => {
     if (!isAuthenticated) return;
     setLoading(true);
     try {
-      const response = await api.get('/environments');
+      const url = selectedCluster ? `/environments?clusterId=${selectedCluster.id}` : '/environments';
+      const response = await api.get(url);
       const data = response.data as Environment[];
       setEnvironments(data);
       
@@ -41,10 +44,12 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
             setSelectedEnvironment(data[0]);
             localStorage.setItem('selectedEnvironmentId', data[0].id.toString());
           }
-        } else if (!selectedEnvironment) {
+        } else if (!selectedEnvironment || !data.find(e => e.id === selectedEnvironment.id)) {
           setSelectedEnvironment(data[0]);
           localStorage.setItem('selectedEnvironmentId', data[0].id.toString());
         }
+      } else {
+        setSelectedEnvironment(null);
       }
     } catch (error) {
       console.error('Failed to fetch environments', error);
@@ -59,7 +64,7 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
   
   
-  const createEnvironment = async (env: Partial<Environment>) => {
+  const createEnvironment = async (env: any) => {
     try {
       await api.post('/environments', env);
       await refreshEnvironments();
@@ -69,7 +74,7 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
-  const updateEnvironment = async (id: number, env: Partial<Environment>) => {
+  const updateEnvironment = async (id: number, env: any) => {
     try {
       await api.put(`/environments/${id}`, env);
       await refreshEnvironments();
@@ -91,7 +96,7 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   useEffect(() => {
     refreshEnvironments();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, selectedCluster]);
 
   return (
     <EnvironmentContext.Provider 
@@ -100,7 +105,7 @@ export const EnvironmentProvider: React.FC<{ children: React.ReactNode }> = ({ c
         selectedEnvironment, 
         setSelectedEnvironment: handleSetSelectedEnvironment, 
         loading, 
-        initialized: environments.length > 0,
+        initialized: environments.length > 0 || (selectedCluster !== null),
         refreshEnvironments,
         createEnvironment,
         updateEnvironment,

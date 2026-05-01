@@ -12,6 +12,8 @@ import {
 
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../services/api';
 
+import ClusterSelector from './ClusterSelector';
+
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
   const { environments, selectedEnvironment, setSelectedEnvironment } = useEnvironment();
@@ -52,14 +54,20 @@ const Header: React.FC = () => {
 
   return (
     <header className="h-16 bg-card/50 backdrop-blur-md border-b border-border px-8 flex items-center justify-between sticky top-0 z-10">
-      <div className="flex items-center gap-8 flex-1">
-        {/* Environment Selector */}
-        <div className="relative group">
-          <button className="flex items-center gap-3 px-4 py-2 bg-secondary rounded-lg border border-border hover:border-primary/50 transition-all text-sm font-medium">
-            <Globe className="w-4 h-4 text-primary" />
-            <span>{selectedEnvironment?.name || 'Select Environment'}</span>
-            <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-          </button>
+      <div className="flex items-center gap-4 flex-1">
+        {/* Selection Area */}
+        <div className="flex items-center gap-2">
+          <ClusterSelector />
+          
+          <div className="h-6 w-px bg-border mx-1"></div>
+
+          {/* Environment Selector */}
+          <div className="relative group">
+            <button className="flex items-center gap-3 px-4 py-2 bg-secondary/50 backdrop-blur-sm rounded-lg border border-border hover:border-primary/50 transition-all text-sm font-medium">
+              <Globe className="w-4 h-4 text-primary" />
+              <span className="max-w-[120px] truncate">{selectedEnvironment?.name || 'Select Environment'}</span>
+              <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+            </button>
 
           <div className="absolute top-full left-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top scale-95 group-hover:scale-100">
             <div className="p-2 space-y-1">
@@ -77,6 +85,7 @@ const Header: React.FC = () => {
                 </button>
               ))}
             </div>
+          </div>
           </div>
         </div>
 

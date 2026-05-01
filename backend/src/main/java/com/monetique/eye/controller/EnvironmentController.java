@@ -34,6 +34,7 @@ public class EnvironmentController {
     private final com.monetique.eye.repository.UserRepository userRepository;
     private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
     private final EnvironmentAccessRepository environmentAccessRepository;
+    private final com.monetique.eye.repository.ClusterRepository clusterRepository;
 
     private final com.monetique.eye.service.ActivityLogService activityLogService;
 
@@ -45,6 +46,7 @@ public class EnvironmentController {
             com.monetique.eye.repository.UserRepository userRepository,
             com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository,
             EnvironmentAccessRepository environmentAccessRepository,
+            com.monetique.eye.repository.ClusterRepository clusterRepository,
             com.monetique.eye.service.ActivityLogService activityLogService) {
         this.environmentRepository = environmentRepository;
         this.deploymentService = deploymentService;
@@ -54,6 +56,7 @@ public class EnvironmentController {
         this.userRepository = userRepository;
         this.managedNodeRepository = managedNodeRepository;
         this.environmentAccessRepository = environmentAccessRepository;
+        this.clusterRepository = clusterRepository;
         this.activityLogService = activityLogService;
     }
 
@@ -69,17 +72,29 @@ public class EnvironmentController {
 
     @GetMapping
     @RequiresPermission("ENV_DEPLOYMENT_VIEW")
-    public List<Environment> getAll() {
+    public List<Environment> getAll(@RequestParam(required = false) Long clusterId) {
         User user = securityService.getCurrentUser();
-        if (user.getRole() == Role.ADMIN) return environmentRepository.findAll();
+        List<Environment> all;
         
-        List<String> allowedIds = environmentAccessRepository.findByUserId(user.getUsername()).stream()
-                .map(EnvironmentAccess::getEnvironmentId)
-                .collect(Collectors.toList());
+        if (user.getRole() == Role.ADMIN) {
+            all = environmentRepository.findAll();
+        } else {
+            List<String> allowedIds = environmentAccessRepository.findByUserId(user.getUsername()).stream()
+                    .map(EnvironmentAccess::getEnvironmentId)
+                    .collect(Collectors.toList());
+            
+            all = environmentRepository.findAll().stream()
+                    .filter(env -> allowedIds.contains(env.getId().toString()))
+                    .collect(Collectors.toList());
+        }
+
+        if (clusterId != null) {
+            return all.stream()
+                    .filter(env -> env.getCluster() != null && env.getCluster().getId().equals(clusterId))
+                    .collect(Collectors.toList());
+        }
         
-        return environmentRepository.findAll().stream()
-                .filter(env -> allowedIds.contains(env.getId().toString()))
-                .collect(Collectors.toList());
+        return all;
     }
 
     @GetMapping("/stats")
@@ -229,7 +244,19 @@ public class EnvironmentController {
 
     @PostMapping
     @RequiresPermission("ENV_DEPLOYMENT_CREATE")
-    public Environment create(@RequestBody Environment env) {
+    public Environment create(@RequestBody Map<String, Object> payload) {
+        Environment env = Environment.builder()
+                .name((String) payload.get("name"))
+                .description((String) payload.get("description"))
+                .prometheusLabel((String) payload.get("prometheusLabel"))
+                .centralNodeIp((String) payload.get("centralNodeIp"))
+                .build();
+        
+        if (payload.get("clusterId") != null) {
+            clusterRepository.findById(Long.valueOf(payload.get("clusterId").toString()))
+                    .ifPresent(env::setCluster);
+        }
+
         Environment saved = environmentRepository.save(env);
         activityLogService.logActivity("Environment Created: " + env.getName(), "environment", env.getName());
         
@@ -248,15 +275,24 @@ public class EnvironmentController {
 
     @PutMapping("/{id}")
     @RequiresPermission("ENV_DEPLOYMENT_EDIT")
-    public Environment update(@PathVariable Long id, @RequestBody Environment env) {
+    public Environment update(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         Environment existing = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
         
         // Update only metadata fields
-        existing.setName(env.getName());
-        existing.setDescription(env.getDescription());
-        existing.setPrometheusLabel(env.getPrometheusLabel());
-        existing.setCentralNodeIp(env.getCentralNodeIp());
+        existing.setName((String) payload.get("name"));
+        existing.setDescription((String) payload.get("description"));
+        existing.setPrometheusLabel((String) payload.get("prometheusLabel"));
+        existing.setCentralNodeIp((String) payload.get("centralNodeIp"));
+        
+        if (payload.containsKey("clusterId")) {
+            if (payload.get("clusterId") != null) {
+                clusterRepository.findById(Long.valueOf(payload.get("clusterId").toString()))
+                        .ifPresent(existing::setCluster);
+            } else {
+                existing.setCluster(null);
+            }
+        }
         
         Environment saved = environmentRepository.save(existing);
         activityLogService.logActivity("Environment Updated: " + saved.getName(), "environment", saved.getName());
