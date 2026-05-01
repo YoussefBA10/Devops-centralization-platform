@@ -96,7 +96,7 @@ groups:
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} was killed due to out of memory."
 
       - alert: "ContainerHighMemory"
-        expr: "(container_memory_usage_bytes{name!=\"\"} / container_spec_memory_limit_bytes{name!=\"\", container_spec_memory_limit_bytes>0}) * 100 > 90"
+        expr: "(container_memory_usage_bytes{name!=\"\"} / (container_spec_memory_limit_bytes{name!=\"\"} > 0)) * 100 > 90"
         for: "5m"
         labels:
           severity: "warning"
