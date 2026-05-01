@@ -113,11 +113,14 @@ public class EnvironmentController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         String label = getLabelValue(env.getPrometheusLabel());
+        long totalNodes = managedNodeRepository.countByEnvironment(env);
+        
         return ResponseEntity.ok(Map.of(
                 "cpuUsage", prometheusClient.getCpuUsage(label),
                 "ramUsagePercent", prometheusClient.getMemoryUsagePercent(label),
                 "diskUsagePercent", prometheusClient.getDiskUsagePercent(label),
-                "nodeCount", prometheusClient.getActiveNodeCount(label)));
+                "nodeCount", prometheusClient.getActiveNodeCount(label),
+                "totalNodes", totalNodes));
     }
 
     @GetMapping("/{id}/nodes")

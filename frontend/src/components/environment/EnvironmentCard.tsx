@@ -10,6 +10,7 @@ interface EnvResources {
   ramUsagePercent: number;
   diskUsagePercent: number;
   nodeCount: number;
+  totalNodes: number;
 }
 
 const ResourceMetric: React.FC<{ label: string; value: number; icon: React.ReactNode; color: string }> = ({ label, value, icon, color }) => (
@@ -147,6 +148,10 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
                   <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">
                     Active
                   </span>
+                ) : resources.totalNodes > 0 ? (
+                  <span className="px-2.5 py-1 rounded-lg bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-widest border border-border">
+                    Idle
+                  </span>
                 ) : (
                   <span className="px-2.5 py-1 rounded-lg bg-muted text-muted-foreground text-[10px] font-bold uppercase tracking-widest border border-border">
                     Idle
@@ -196,7 +201,23 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
           </div>
         </div>
 
-        {resources.nodeCount > 0 ? (
+        {resources.totalNodes === 0 ? (
+          <div className="mt-8 py-8 px-4 bg-muted/10 border border-dashed border-white/10 rounded-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
+               <AlertCircle className="w-6 h-6 text-muted-foreground opacity-30" />
+            </div>
+            <p className="text-sm font-semibold text-muted-foreground">No nodes deployed yet</p>
+            <p className="text-xs text-muted-foreground/50 mt-1 max-w-[200px]">Kickstart observation by provisioning a target node.</p>
+          </div>
+        ) : resources.nodeCount === 0 ? (
+          <div className="mt-8 py-8 px-4 bg-destructive/5 border border-dashed border-destructive/20 rounded-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
+            <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+               <AlertCircle className="w-6 h-6 text-destructive opacity-70" />
+            </div>
+            <p className="text-sm font-semibold text-destructive">All nodes offline</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Nodes are provisioned but currently unreachable.</p>
+          </div>
+        ) : (
           <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-8">
             <ResourceMetric 
               label="CPU Load" 
@@ -217,14 +238,6 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
               color="bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)]" 
             />
           </div>
-        ) : (
-          <div className="mt-8 py-8 px-4 bg-muted/10 border border-dashed border-white/10 rounded-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-500">
-            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mb-4">
-               <AlertCircle className="w-6 h-6 text-muted-foreground opacity-30" />
-            </div>
-            <p className="text-sm font-semibold text-muted-foreground">No nodes deployed yet</p>
-            <p className="text-xs text-muted-foreground/50 mt-1 max-w-[200px]">Kickstart observation by provisioning a target node.</p>
-          </div>
         )}
 
         <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
@@ -240,7 +253,7 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
               <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest opacity-60">Node Count</p>
               <div className="text-xs font-bold flex items-center gap-2">
                 <div className={`w-1.5 h-1.5 rounded-full ${resources.nodeCount > 0 ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-muted'}`}></div>
-                {resources.nodeCount} / 255
+                {resources.nodeCount} / {Math.max(resources.totalNodes || 0, resources.nodeCount)}
               </div>
             </div>
           </div>

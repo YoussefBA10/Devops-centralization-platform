@@ -37,6 +37,7 @@ interface EnvResources {
   ramUsagePercent: number;
   diskUsagePercent: number;
   nodeCount: number;
+  totalNodes: number;
 }
 
 
@@ -174,7 +175,7 @@ const EnvironmentsPage: React.FC = () => {
           const res = await getEnvironmentResources(env.id);
           return { id: env.id, data: res.data };
         } catch (e) {
-          return { id: env.id, data: { cpuUsage: 0, ramUsagePercent: 0, diskUsagePercent: 0, nodeCount: 0 } };
+          return { id: env.id, data: { cpuUsage: 0, ramUsagePercent: 0, diskUsagePercent: 0, nodeCount: 0, totalNodes: 0 } };
         }
       });
 
@@ -351,7 +352,7 @@ const EnvironmentsPage: React.FC = () => {
       {/* Environments Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {filteredEnvs.map((env) => {
-          const res = resources[env.id] || { cpuUsage: 0, ramUsagePercent: 0, diskUsagePercent: 0, nodeCount: 0 };
+          const res = resources[env.id] || { cpuUsage: 0, ramUsagePercent: 0, diskUsagePercent: 0, nodeCount: 0, totalNodes: 0 };
           return (
             <EnvironmentCard
               key={env.id}
