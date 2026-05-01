@@ -58,7 +58,7 @@ groups:
           description: "Frontend container {{ $labels.name }} is down."
 
       - alert: "BackendDown"
-        expr: "(time() - container_last_seen{container_label_com_monetique_category='backend', name!=''} > 60) or (time() - container_last_seen{container_label_com_monetique_environment!='', name=~'.*backend.*'} > 60)"
+        expr: "(time() - container_last_seen{container_label_com_monetique_category='backend', name!=''} > 60) or (time() - container_last_seen{name=~'.*backend.*'} > 60)"
         for: "1m"
         labels:
           severity: "critical"
