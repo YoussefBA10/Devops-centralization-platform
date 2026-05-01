@@ -519,10 +519,15 @@ public class InfrastructureService {
                         activeAt = ZonedDateTime.parse(activeAtStr).toLocalDateTime();
                     } catch (Exception e) {}
 
+                    String instance = labels.get("instance");
+                    if (instance != null && instance.endsWith(":8081")) {
+                        instance = instance.substring(0, instance.lastIndexOf(":"));
+                    }
+
                     return IncidentDTO.builder()
                             .alertName(labels.get("alertname"))
                             .severity(labels.getOrDefault("severity", "warning"))
-                            .instance(labels.get("instance"))
+                            .instance(instance)
                             .state((String) alert.get("state"))
                             .summary(annotations != null ? annotations.get("summary") : "No summary available")
                             .description(annotations != null ? annotations.get("description") : "")
