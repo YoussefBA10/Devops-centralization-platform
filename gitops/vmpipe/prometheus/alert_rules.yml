@@ -40,7 +40,7 @@ groups:
   - name: "application_alerts"
     rules:
       - alert: "FrontendDown"
-        expr: "(time() - container_last_seen{container_label_com_monetique_category='frontend', name!=''} > 60) or (time() - container_last_seen{container_label_com_monetique_environment!='', name=~'.*frontend.*'} > 60)"
+        expr: "(time() - container_last_seen{container_label_com_monetique_category='frontend', container_label_is_canary!='true', name!=''} > 60) or (time() - container_last_seen{container_label_com_monetique_environment!='', container_label_is_canary!='true', name=~'.*frontend.*'} > 60)"
         for: "1m"
         labels:
           severity: "critical"
@@ -49,7 +49,7 @@ groups:
           description: "Frontend container {{ $labels.name }} is down."
 
       - alert: "BackendDown"
-        expr: "(time() - container_last_seen{container_label_com_monetique_category='backend', name!=''} > 60) or (time() - container_last_seen{name=~'.*backend.*'} > 60) or (up{job='monetique-backend'} == 0)"
+        expr: "(time() - container_last_seen{container_label_com_monetique_category='backend', container_label_is_canary!='true', name!=''} > 60) or (time() - container_last_seen{container_label_is_canary!='true', name=~'.*backend.*'} > 60) or (up{job='monetique-backend'} == 0)"
         for: "1m"
         labels:
           severity: "critical"
@@ -78,7 +78,7 @@ groups:
   - name: "container_alerts"
     rules:
       - alert: "ContainerOOMKilled"
-        expr: "rate(container_oom_events_total{name!=\"\"}[5m]) > 0"
+        expr: "rate(container_oom_events_total{container_label_is_canary!='true', name!=''}[5m]) > 0"
         for: "1m"
         labels:
           severity: "critical"
@@ -87,7 +87,7 @@ groups:
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} was killed due to out of memory."
 
       - alert: "ContainerHighMemory"
-        expr: "(container_memory_usage_bytes{name!=\"\"} / (container_spec_memory_limit_bytes{name!=\"\"} > 0)) * 100 > 90"
+        expr: "(container_memory_usage_bytes{container_label_is_canary!='true', name!=\"\"} / (container_spec_memory_limit_bytes{container_label_is_canary!='true', name!=\"\"} > 0)) * 100 > 90"
         for: "5m"
         labels:
           severity: "warning"
@@ -96,7 +96,7 @@ groups:
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} is using >90% of its memory limit."
 
       - alert: "ContainerHighCPU"
-        expr: "(sum by(name, nodename) (rate(container_cpu_usage_seconds_total{name!=\"\"}[2m])) / sum by(name, nodename) (container_spec_cpu_quota / container_spec_cpu_period)) * 100 > 90 or rate(container_cpu_usage_seconds_total{name!=\"\"}[2m]) * 100 > 90"
+        expr: "(sum by(name, nodename) (rate(container_cpu_usage_seconds_total{container_label_is_canary!='true', name!=\"\"}[2m])) / sum by(name, nodename) (container_spec_cpu_quota / container_spec_cpu_period)) * 100 > 90 or rate(container_cpu_usage_seconds_total{container_label_is_canary!='true', name!=\"\"}[2m]) * 100 > 90"
         for: "5m"
         labels:
           severity: "warning"
@@ -105,7 +105,7 @@ groups:
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} is using high CPU."
 
       - alert: "ContainerCPUFreeze"
-        expr: "rate(container_cpu_cfs_throttled_seconds_total{name!=\"\"}[5m]) > 0.5"
+        expr: "rate(container_cpu_cfs_throttled_seconds_total{container_label_is_canary!='true', name!=\"\"}[5m]) > 0.5"
         for: "5m"
         labels:
           severity: "warning"
@@ -114,7 +114,7 @@ groups:
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} is being heavily CPU throttled."
 
       - alert: "ContainerRestartLoop"
-        expr: "changes(container_start_time_seconds{name!=\"\"}[15m]) > 2"
+        expr: "changes(container_start_time_seconds{container_label_is_canary!='true', name!=\"\"}[15m]) > 2"
         for: "15m"
         labels:
           severity: "critical"
