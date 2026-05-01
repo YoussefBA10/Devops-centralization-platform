@@ -59,6 +59,10 @@ scrape_configs:
       - source_labels: [job]
         regex: 'node-exporter'
         action: keep
+      - source_labels: [instance]
+        regex: '([^:]+):.*'
+        target_label: instance
+        replacement: '${1}'
 
   # 5. cAdvisor (Container metrics) - scraped from all agents
   - job_name: 'cadvisor'
@@ -72,6 +76,10 @@ scrape_configs:
       - source_labels: [job]
         regex: 'cadvisor'
         action: keep
+      - source_labels: [instance]
+        regex: '([^:]+):.*'
+        target_label: instance
+        replacement: '${1}'
 
   # 6. Filebeat (Log agent metrics)
   - job_name: 'filebeat'
