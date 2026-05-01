@@ -1,26 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
+  ReactFlow,
+  Background,
+  Controls,
+  Panel,
+  useNodesState,
+  useEdgesState,
+  Handle,
+  Position,
+  type Node as FlowNode,
+  type Edge as FlowEdge
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import {
   Server,
   Database,
   Cpu,
-  Zap,
   Shield,
   RefreshCw,
   Search,
   Activity,
   HardDrive,
   Layers,
-  LayoutGrid,
   Network,
-  Box
+  Box,
+  Maximize2
 } from 'lucide-react';
 import { getAllInfrastructureTopology, getGlobalInfrastructureStats } from '../services/api';
-import type { Node as TopologyNode, ClusterGroup, EnvironmentGroup } from '../types/index';
+import type { Node as TopologyNode, ClusterGroup } from '../types/index';
 import { Card } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 
-// Custom Progress Bar with thresholds
-const MetricProgress: React.FC<{ label: string; value: number; icon: React.ReactNode; unit?: string }> = ({ label, value, icon, unit = '%' }) => {
+// --- Custom Progress Bar ---
+const MetricProgress: React.FC<{ label: string; value: number; icon: React.ReactNode }> = ({ label, value, icon }) => {
   const getProgressColor = (val: number) => {
     if (val < 70) return 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]';
     if (val < 85) return 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]';
@@ -28,15 +40,12 @@ const MetricProgress: React.FC<{ label: string; value: number; icon: React.React
   };
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-[9px] uppercase tracking-[0.15em] font-bold">
-        <span className="flex items-center gap-1.5 text-muted-foreground">
-          {icon}
-          {label}
-        </span>
-        <span className={value > 85 ? 'text-destructive' : 'text-foreground'}>{value}{unit}</span>
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[8px] uppercase tracking-widest font-bold">
+        <span className="flex items-center gap-1 text-muted-foreground">{icon}{label}</span>
+        <span className={value > 85 ? 'text-destructive' : 'text-foreground'}>{value}%</span>
       </div>
-      <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-1000 ${getProgressColor(value)}`}
           style={{ width: `${Math.min(value, 100)}%` }}
@@ -46,93 +55,154 @@ const MetricProgress: React.FC<{ label: string; value: number; icon: React.React
   );
 };
 
-// Node Card Component
-const NodeCard = ({ node }: { node: TopologyNode }) => {
-  const isHealthy = node.status === 'HEALTHY';
+// --- Custom Node Components ---
 
+const ClusterGroupNode = ({ data }: any) => (
+  <div className="w-full h-full border-2 border-dashed border-primary/20 bg-primary/5 rounded-[2.5rem] p-8 backdrop-blur-xl pointer-events-none">
+    <div className="flex items-center gap-4 mb-4 opacity-100">
+      <Layers className="w-8 h-8 text-primary" />
+      <span className="text-2xl font-black uppercase tracking-[0.4em] text-white">{data.label}</span>
+    </div>
+  </div>
+);
+
+const EnvironmentGroupNode = ({ data }: any) => (
+  <div className="w-full h-full border-2 border-white/5 bg-white/[0.02] rounded-[2rem] p-6 backdrop-blur-md pointer-events-none">
+    <div className="flex items-center gap-3 mb-3 opacity-100">
+      <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></div>
+      <span className="text-sm font-bold uppercase tracking-[0.2em] text-white">{data.label}</span>
+    </div>
+  </div>
+);
+
+const ServerNode = ({ data }: { data: TopologyNode }) => {
+  const isHealthy = data.status === 'HEALTHY';
+  
   return (
-    <Card className={`group relative overflow-hidden transition-all duration-300 border-white/5 hover:border-primary/30 bg-[#0c0c0e]/60 backdrop-blur-md ${
-      !isHealthy ? 'ring-1 ring-destructive/20' : ''
+    <div className={`p-5 shadow-2xl rounded-[1.5rem] border-2 transition-all duration-300 w-72 bg-[#0c0c0e]/95 backdrop-blur-xl ${
+      isHealthy 
+      ? 'border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_40px_rgba(16,185,129,0.15)]' 
+      : 'border-destructive/40 hover:border-destructive shadow-[0_0_40px_rgba(239,68,68,0.15)]'
     }`}>
-      <div className="p-4 space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${isHealthy ? 'bg-emerald-500/10 text-emerald-500' : 'bg-destructive/10 text-destructive'} group-hover:scale-110 transition-transform`}>
-              {node.type === 'db-server' ? <Database className="w-5 h-5" /> : <Server className="w-5 h-5" />}
-            </div>
-            <div className="min-w-0">
-              <h4 className="text-sm font-bold truncate tracking-tight">{node.label}</h4>
-              <p className="text-[10px] font-mono text-muted-foreground tracking-widest">{node.ip}</p>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${
-              isHealthy ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' : 'border-destructive/30 text-destructive bg-destructive/5'
-            }`}>
-              {node.status}
-            </span>
-          </div>
+      <Handle type="target" position={Position.Top} className="!bg-primary/50" />
+      
+      <div className="flex items-center gap-4 mb-5">
+        <div className={`p-2.5 rounded-xl ${isHealthy ? 'bg-emerald-500/10 text-emerald-500' : 'bg-destructive/10 text-destructive'}`}>
+          {data.type === 'db-server' ? <Database className="w-6 h-6" /> : <Server className="w-6 h-6" />}
         </div>
-
-        <div className="grid grid-cols-1 gap-3 pt-2">
-          <MetricProgress label="CPU" value={node.cpu || 0} icon={<Cpu className="w-3 h-3" />} />
-          <MetricProgress label="Memory" value={node.ram || 0} icon={<Activity className="w-3 h-3" />} />
-          <MetricProgress label="Storage" value={node.disk || 0} icon={<HardDrive className="w-3 h-3" />} />
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <div className="flex items-center gap-1.5 text-[8px] text-muted-foreground uppercase font-bold tracking-tighter">
-            <Shield className="w-2.5 h-2.5 opacity-30" />
-            VLSecure Layer
-          </div>
-          <Zap className={`w-3 h-3 ${isHealthy ? 'text-emerald-500 animate-pulse' : 'text-muted-foreground opacity-20'}`} />
+        <div className="min-w-0">
+          <p className="text-base font-black truncate tracking-tight">{data.label}</p>
+          <p className="text-[10px] font-mono text-muted-foreground/60 tracking-wider uppercase">{data.ip}</p>
         </div>
       </div>
-    </Card>
+
+      <div className="space-y-4">
+        <MetricProgress label="Compute" value={data.cpu || 0} icon={<Cpu className="w-3 h-3" />} />
+        <MetricProgress label="Memory" value={data.ram || 0} icon={<Activity className="w-3 h-3" />} />
+        <MetricProgress label="Storage" value={data.disk || 0} icon={<HardDrive className="w-3 h-3" />} />
+      </div>
+
+      <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2 opacity-30 grayscale group">
+          <Shield className="w-3 h-3 group-hover:text-primary transition-colors" />
+          <span className="text-[9px] font-bold uppercase tracking-widest">Secured</span>
+        </div>
+        <span className={`text-[10px] font-black uppercase tracking-widest ${isHealthy ? 'text-emerald-500' : 'text-destructive animate-pulse'}`}>
+          {data.status}
+        </span>
+      </div>
+
+      <Handle type="source" position={Position.Bottom} className="!bg-primary/50" />
+    </div>
   );
 };
 
-// Environment Box
-const EnvironmentBox = ({ env }: { env: EnvironmentGroup }) => (
-  <div className="space-y-4 p-5 rounded-2xl bg-white/[0.02] border border-white/5">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-        <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground/80">{env.name}</h3>
-      </div>
-      <span className="text-[10px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-        {env.nodes.length} Nodes
-      </span>
-    </div>
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {env.nodes.map(node => <NodeCard key={node.id} node={node} />)}
-    </div>
-  </div>
-);
+const nodeTypes = {
+  cluster: ClusterGroupNode,
+  environment: EnvironmentGroupNode,
+  server: ServerNode,
+};
 
-// Cluster Box
-const ClusterBox = ({ cluster }: { cluster: ClusterGroup }) => (
-  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-    <div className="flex items-center gap-4">
-      <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20">
-        <Layers className="w-6 h-6 text-primary" />
-      </div>
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">{cluster.name}</h2>
-        <p className="text-sm text-muted-foreground italic">{cluster.description}</p>
-      </div>
-    </div>
-    <div className="grid grid-cols-1 gap-8 pl-4 border-l-2 border-primary/10">
-      {cluster.environments.map(env => <EnvironmentBox key={env.id} env={env} />)}
-    </div>
-  </div>
-);
-
-const InfrastructureOverview: React.FC = () => {
-  const [data, setData] = useState<ClusterGroup[]>([]);
-  const [globalStats, setGlobalStats] = useState<any>(null);
+const InfrastructureTopologyPage: React.FC = () => {
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(true);
+  const [globalStats, setGlobalStats] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const transformToFlow = useCallback((clusters: ClusterGroup[]) => {
+    const newNodes: FlowNode[] = [];
+    const newEdges: FlowEdge[] = [];
+
+    let currentX = 0;
+
+    clusters.forEach((cluster) => {
+      const clusterId = `cluster-${cluster.id}`;
+      
+      const envCount = cluster.environments.length;
+      const clusterWidth = Math.max(1200, envCount * 450 + 100);
+      const clusterHeight = 1100;
+
+      newNodes.push({
+        id: clusterId,
+        type: 'cluster',
+        data: { label: cluster.name },
+        position: { x: currentX, y: 0 },
+        style: { width: clusterWidth, height: clusterHeight },
+        selectable: false,
+        draggable: true,
+      });
+
+      let envX = 50;
+      cluster.environments.forEach((env) => {
+        const envId = `env-${env.id}`;
+        const envWidth = 400;
+        const envHeight = 900;
+
+        newNodes.push({
+          id: envId,
+          parentId: clusterId,
+          type: 'environment',
+          data: { label: env.name },
+          position: { x: envX, y: 100 },
+          style: { width: envWidth, height: envHeight },
+          extent: 'parent',
+          draggable: false,
+        });
+
+        env.nodes.forEach((node, nodeIdx) => {
+          const nodeId = node.id;
+          newNodes.push({
+            id: nodeId,
+            parentId: envId,
+            type: 'server',
+            data: { ...node },
+            position: { x: 60, y: 80 + nodeIdx * 270 },
+            extent: 'parent',
+          });
+
+          if (!node.id.includes('central')) {
+             const centralNode = env.nodes.find(n => n.id.includes('central'));
+             if (centralNode) {
+               newEdges.push({
+                 id: `e-${node.id}-${centralNode.id}`,
+                 source: node.id,
+                 target: centralNode.id,
+                 animated: true,
+                 style: { stroke: '#3b82f6', strokeWidth: 2, opacity: 0.2 },
+               });
+             }
+          }
+        });
+
+        envX += envWidth + 50;
+      });
+
+      currentX += clusterWidth + 300;
+    });
+
+    return { newNodes, newEdges };
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -140,116 +210,140 @@ const InfrastructureOverview: React.FC = () => {
         getAllInfrastructureTopology(),
         getGlobalInfrastructureStats()
       ]);
-      setData(topoRes.data.clusters || []);
+      
+      const { newNodes, newEdges } = transformToFlow(topoRes.data.clusters || []);
+      setNodes(newNodes);
+      setEdges(newEdges);
       setGlobalStats(statsRes.data);
     } catch (error) {
       console.error('Failed to fetch global infrastructure', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [transformToFlow, setNodes, setEdges]);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 20000);
+    const interval = setInterval(fetchData, 30000); 
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const filteredClusters = data.map(cluster => ({
-    ...cluster,
-    environments: cluster.environments.filter(env => 
-      env.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      env.nodes.some(n => n.label?.toLowerCase().includes(searchQuery.toLowerCase()) || n.ip?.includes(searchQuery))
-    )
-  })).filter(cluster => cluster.environments.length > 0);
+  const onSearch = (query: string) => {
+    setSearchQuery(query);
+    setNodes((nds) => nds.map((node) => {
+      if (node.type !== 'server') return node;
+      const match = node.data.label?.toLowerCase().includes(query.toLowerCase()) || 
+                    node.data.ip?.includes(query);
+      return {
+        ...node,
+        style: { ...node.style, opacity: query && !match ? 0.2 : 1 }
+      };
+    }));
+  };
 
   return (
-    <div className="p-8 space-y-12 animate-in fade-in duration-700 min-h-screen bg-[#0a0a0b]">
-      {/* Header Panel */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3 text-primary mb-2">
-            <LayoutGrid className="w-5 h-5" />
-            <span className="text-xs font-bold uppercase tracking-[0.3em] font-mono">Infrastructure Core</span>
+    <div className="h-full flex flex-col relative animate-in fade-in duration-700 bg-[#0a0a0b]">
+      {/* Top Overlay UI */}
+      <div className="absolute top-8 left-8 z-10 w-96 space-y-4">
+        <Card className="bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5 shadow-3xl p-6">
+          <div className="flex items-center gap-3 text-primary mb-3">
+             <Network className="w-5 h-5" />
+             <span className="text-xs font-black uppercase tracking-[0.3em]">Core Topology</span>
           </div>
-          <h1 className="text-5xl font-black tracking-tighter text-white">Global Topology</h1>
-          <p className="text-muted-foreground text-lg max-w-2xl">
-            Hierarchical mapping of distributed compute clusters and micro-environments.
+          <h1 className="text-4xl font-black tracking-tighter">Global Graph</h1>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed opacity-60 font-medium">
+            Interactive neural map of distributed clusters. Zoom to inspect metrics, drag clusters to re-organize your perspective.
           </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4 items-center">
-           <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <Input 
-              placeholder="Filter by environment or IP..." 
-              className="w-72 pl-10 h-12 bg-card/30 border-white/5 focus:border-primary/50 transition-all rounded-xl"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          
+          <div className="mt-8 grid grid-cols-2 gap-4">
+             <div className="space-y-1 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Agents</p>
+                <p className="text-2xl font-black">{globalStats?.activeAgents || 0}</p>
+             </div>
+             <div className="space-y-1 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Avg Health</p>
+                <p className="text-2xl font-black text-emerald-500">{globalStats?.avgStability?.toFixed(1) || 99.9}%</p>
+             </div>
           </div>
-          <Button variant="outline" className="h-12 px-6 rounded-xl border-white/5 hover:bg-white/5 gap-2" onClick={fetchData} loading={loading}>
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+
+          <div className="mt-6 flex gap-2">
+            <div className="relative flex-1 group">
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+               <Input 
+                 placeholder="Find node by IP or label..." 
+                 className="pl-10 h-12 bg-white/5 border-white/5 focus:border-primary/40 rounded-xl transition-all font-medium"
+                 value={searchQuery}
+                 onChange={(e) => onSearch(e.target.value)}
+               />
+            </div>
+            <Button variant="outline" className="h-12 w-12 p-0 border-white/5 rounded-xl hover:bg-white/5" onClick={fetchData}>
+               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        </Card>
       </div>
 
-      {/* Global Metrics Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Compute Clusters', value: data.length, icon: Layers, color: 'text-primary' },
-          { label: 'Active Agents', value: globalStats?.activeAgents || 0, icon: Network, color: 'text-emerald-500' },
-          { label: 'System Health', value: globalStats?.avgStability ? `${globalStats.avgStability.toFixed(1)}%` : '99.9%', icon: Shield, color: 'text-blue-500' },
-          { label: 'Network Load', value: globalStats?.networkLoad ? `${globalStats.networkLoad.toFixed(1)} Mbps` : 'Nominal', icon: Zap, color: 'text-amber-500' }
-        ].map((stat, i) => (
-          <Card key={i} className="bg-white/[0.02] border-white/5 overflow-hidden group hover:border-primary/20 transition-all">
-            <div className="p-4 flex items-center gap-4">
-              <div className={`p-3 rounded-xl bg-white/[0.03] ${stat.color} group-hover:scale-110 transition-transform`}>
-                <stat.icon className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{stat.label}</p>
-                <p className="text-xl font-bold">{stat.value}</p>
-              </div>
+      {/* Legend & Controls Overlay */}
+      <Panel position="bottom-right" className="m-8">
+        <div className="flex flex-col gap-4">
+          <div className="glass-panel p-5 flex gap-8 items-center rounded-2xl shadow-3xl">
+            <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em]">
+              <div className="w-3.5 h-3.5 bg-primary rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+              <span>Cluster Core</span>
             </div>
-          </Card>
-        ))}
+            <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em]">
+              <div className="w-3.5 h-3.5 bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+              <span>Healthy Link</span>
+            </div>
+            <div className="flex items-center gap-2.5 text-[10px] font-black uppercase tracking-[0.2em] text-destructive">
+              <div className="w-3.5 h-3.5 bg-destructive rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.5)]"></div>
+              <span>Critical Node</span>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      {/* Main Graph Canvas */}
+      <div className="flex-1 relative overflow-hidden">
+        {loading && nodes.length === 0 && (
+           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-[#0a0a0b]">
+              <div className="w-20 h-20 border-4 border-primary/10 border-t-primary rounded-full animate-spin"></div>
+              <p className="text-[10px] font-black uppercase tracking-[0.6em] text-primary/60 animate-pulse">Synchronizing Neural Infrastructure...</p>
+           </div>
+        )}
+        
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.15 }}
+          minZoom={0.05}
+          maxZoom={2}
+          colorMode="dark"
+          suppressHydrationWarning
+        >
+          <Background color="#1e1e20" gap={40} size={1} />
+          <Controls className="!bg-card !border-white/10 !fill-white shadow-3xl !rounded-xl overflow-hidden" />
+        </ReactFlow>
       </div>
 
-      {/* Main Content Area */}
-      {loading && data.length === 0 ? (
-        <div className="h-[50vh] flex flex-col items-center justify-center gap-4">
-          <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-          <p className="text-muted-foreground animate-pulse font-mono uppercase tracking-widest text-xs">Initializing Neural Map...</p>
-        </div>
-      ) : (
-        <div className="space-y-16">
-          {filteredClusters.length > 0 ? (
-            filteredClusters.map(cluster => <ClusterBox key={cluster.id} cluster={cluster} />)
-          ) : (
-            <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01]">
-              <Box className="w-12 h-12 text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground font-medium">No infrastructure matches your search criteria.</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Footer Info */}
-      <div className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-700">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-primary" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Monetique Eye Core v4.2.0</span>
-        </div>
-        <div className="flex gap-6 text-[10px] font-bold uppercase tracking-widest">
-          <span>Real-time Stream: Active</span>
-          <span>Latency: 14ms</span>
-          <span>Region: Global</span>
-        </div>
+      {/* Status Footer */}
+      <div className="absolute bottom-10 left-10 z-10 flex items-center gap-8 opacity-20 hover:opacity-100 transition-all duration-700">
+         <div className="flex items-center gap-3">
+            <Shield className="w-5 h-5 text-primary" />
+            <span className="text-[11px] font-black uppercase tracking-[0.5em] text-white/60">Monetique Eye Core v4.2.0</span>
+         </div>
+         <div className="h-6 w-px bg-white/10"></div>
+         <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="flex items-center gap-2"><Maximize2 className="w-4 h-4" /> Scroll to Zoom</span>
+            <span className="flex items-center gap-2"><Box className="w-4 h-4" /> Drag Clusters to Organize</span>
+         </div>
       </div>
     </div>
   );
 };
 
-export default InfrastructureOverview;
+export default InfrastructureTopologyPage;

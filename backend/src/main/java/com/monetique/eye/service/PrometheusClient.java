@@ -186,5 +186,23 @@ public class PrometheusClient {
         String query = String.format("node_memory_MemTotal_bytes{environment=~\"%s\"}", envFilter);
         return queryList(query);
     }
+
+    public List<Map<String, Object>> getActiveAlerts() {
+        try {
+            Map result = webClient.get()
+                    .uri("/api/v1/alerts")
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            if (result != null && "success".equals(result.get("status"))) {
+                Map data = (Map) result.get("data");
+                return (List<Map<String, Object>>) data.get("alerts");
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch alerts from Prometheus", e);
+        }
+        return new ArrayList<>();
+    }
 }
 

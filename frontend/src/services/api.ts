@@ -26,6 +26,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (!error.response) {
+      // Network error or backend down
+      if (window.location.pathname !== '/service-unavailable') {
+        window.location.href = '/service-unavailable';
+      }
+      return Promise.reject(error);
+    }
+
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');

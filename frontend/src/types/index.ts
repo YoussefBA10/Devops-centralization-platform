@@ -129,6 +129,17 @@ export interface TopologyData {
   clusters: ClusterGroup[];
 }
 
+export interface Incident {
+  alertName: string;
+  severity: string;
+  summary: string;
+  description: string;
+  instance: string;
+  state: string;
+  activeAt: string;
+  labels: Record<string, string>;
+}
+
 export interface Anomaly {
   description: string;
   node: string;

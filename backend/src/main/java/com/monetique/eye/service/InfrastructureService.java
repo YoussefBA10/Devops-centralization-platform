@@ -12,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import com.monetique.eye.dto.IncidentDTO;
 import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -493,5 +495,41 @@ public class InfrastructureService {
     private String metricToKey(Map<String, Object> m) {
         Map<String, String> metric = (Map<String, String>) m.get("metric");
         return resolveServiceName(metric) + "@" + metric.get("instance");
+    }
+
+    public List<IncidentDTO> getEnvironmentIncidents(Long environmentId) {
+        Environment env = environmentRepository.findById(environmentId)
+                .orElseThrow(() -> new RuntimeException("Environment not found"));
+
+        String envLabel = env.getPrometheusLabel();
+        List<Map<String, Object>> rawAlerts = prometheusClient.getActiveAlerts();
+
+        return rawAlerts.stream()
+                .filter(alert -> {
+                    Map<String, String> labels = (Map<String, String>) alert.get("labels");
+                    return labels != null && (envLabel.equals(labels.get("environment")) || envLabel.equals(labels.get("container_label_env")));
+                })
+                .map(alert -> {
+                    Map<String, String> labels = (Map<String, String>) alert.get("labels");
+                    Map<String, String> annotations = (Map<String, String>) alert.get("annotations");
+                    
+                    String activeAtStr = (String) alert.get("activeAt");
+                    LocalDateTime activeAt = LocalDateTime.now();
+                    try {
+                        activeAt = ZonedDateTime.parse(activeAtStr).toLocalDateTime();
+                    } catch (Exception e) {}
+
+                    return IncidentDTO.builder()
+                            .alertName(labels.get("alertname"))
+                            .severity(labels.getOrDefault("severity", "warning"))
+                            .instance(labels.get("instance"))
+                            .state((String) alert.get("state"))
+                            .summary(annotations != null ? annotations.get("summary") : "No summary available")
+                            .description(annotations != null ? annotations.get("description") : "")
+                            .activeAt(activeAt)
+                            .labels(labels)
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 }

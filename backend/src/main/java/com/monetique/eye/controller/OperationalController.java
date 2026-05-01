@@ -77,4 +77,9 @@ public class OperationalController {
     public List<com.monetique.eye.dto.AnomalyResponse> getAnomalies(@RequestParam Long environmentId) {
         return anomalyService.getRecentAnomalies(environmentId);
     }
+
+    @GetMapping("/incidents")
+    public List<com.monetique.eye.dto.IncidentDTO> getIncidents(@RequestParam Long environmentId) {
+        return infrastructureService.getEnvironmentIncidents(environmentId);
+    }
 }

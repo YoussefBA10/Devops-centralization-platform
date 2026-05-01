@@ -4,11 +4,13 @@ import com.monetique.eye.entity.Environment;
 import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.User;
 import com.monetique.eye.entity.ManagedNode;
+import com.monetique.eye.entity.Cluster;
 import com.monetique.eye.entity.enums.Role;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.UserRepository;
 import com.monetique.eye.repository.ManagedNodeRepository;
+import com.monetique.eye.repository.ClusterRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
@@ -27,17 +29,20 @@ public class DataInitializer {
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
     private final ManagedNodeRepository managedNodeRepository;
+    private final ClusterRepository clusterRepository;
     private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(UserRepository userRepository, 
                            EnvironmentRepository environmentRepository, 
                            ApplicationRepository applicationRepository,
                            ManagedNodeRepository managedNodeRepository,
+                           ClusterRepository clusterRepository,
                            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.managedNodeRepository = managedNodeRepository;
+        this.clusterRepository = clusterRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -45,11 +50,18 @@ public class DataInitializer {
         String finalName = (environmentName == null || environmentName.isEmpty()) ? "central-node" : environmentName;
         log.info("Performing manual initialization for environment: {}", finalName);
         
+        // 0. Create Cluster
+        Cluster cluster = new Cluster();
+        cluster.setName("central-node");
+        cluster.setDescription("Primary management and telemetry cluster");
+        cluster = clusterRepository.save(cluster);
+
         // 1. Create Environment
         Environment env = new Environment();
         env.setName(finalName);
         env.setPrometheusLabel(finalName);
         env.setCentralNodeIp(centralIp);
+        env.setCluster(cluster);
         env.setCreatedAt(java.time.LocalDateTime.now());
         env = environmentRepository.save(env);
 
