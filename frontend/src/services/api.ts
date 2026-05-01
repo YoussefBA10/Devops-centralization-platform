@@ -31,8 +31,14 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     } else if (error.response?.status === 403) {
-      const message = error.response?.data?.message || 'You do not have permission to perform this action.';
+      const message = error.response?.data?.message || 'Session expired or insufficient permissions. Please login again.';
       showPermissionError(message);
+      // Force logout and redirect on 403 as well, to ensure user is redirected if token expired/invalidated
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 2000); // Give time for the toast to be seen
     }
     return Promise.reject(error);
   }

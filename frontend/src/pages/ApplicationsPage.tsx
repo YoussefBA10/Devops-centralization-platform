@@ -78,10 +78,14 @@ const ApplicationsPage: React.FC = () => {
               delete pollingRefs.current[app.id];
               fetchApps();
             }
-          } catch (e) {
-            clearInterval(pollingRefs.current[app.id]);
-            delete pollingRefs.current[app.id];
-          }
+            } catch (e: any) {
+              // If the application was deleted (atomic cleanup on failure), stop polling
+              if (e.response?.status === 404) {
+                clearInterval(pollingRefs.current[app.id]);
+                delete pollingRefs.current[app.id];
+                fetchApps();
+              }
+            }
         }, 3000);
       } else if (app.status !== 'DEPLOYING' && pollingRefs.current[app.id]) {
         clearInterval(pollingRefs.current[app.id]);

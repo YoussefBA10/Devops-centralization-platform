@@ -266,7 +266,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
         alreadyDeployed
       });
       onClose();
-      showToast("Application registered successfully!", "success");
+      showToast("Application deployment started!", "success");
     } catch (err: any) {
       setLocalError(err.response?.data?.message || 'Deployment failed.');
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });

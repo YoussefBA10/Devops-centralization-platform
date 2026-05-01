@@ -151,7 +151,7 @@ public class ApplicationController {
         applicationRepository.save(app);
 
         // Async deployment
-        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName, authentication.getName());
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName, authentication.getName(), id == null);
 
         activityLogService.logActivity("Deployment Started: " + app.getName(), "deployment", env.getName());
         return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
@@ -262,7 +262,7 @@ public class ApplicationController {
         app.setLastDeployedAt(LocalDateTime.now());
         applicationRepository.save(app);
 
-        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), null, authentication.getName());
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), null, authentication.getName(), false);
 
         activityLogService.logActivity("Redeployment Started: " + app.getName(), "deployment", env.getName());
         return ResponseEntity.ok(Map.of("message", "Redeployment triggered successfully", "appId", app.getId()));

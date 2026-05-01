@@ -80,6 +80,6 @@ public class Environment {
 
     public String getSafeName() {
         if (name == null) return "unknown";
-        return name.toLowerCase().replaceAll("[^a-z0-9]", "-");
+        return name.toLowerCase().replaceAll("[^a-z0-9]", "-").replaceAll("-+", "-").replaceAll("^-|-$", "");
     }
 }

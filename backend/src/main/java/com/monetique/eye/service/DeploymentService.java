@@ -140,6 +140,11 @@ public class DeploymentService {
         } catch (Exception e) {
             log.error("Deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");
+            
+            // Cleanup technical artifacts on failure
+            removeFromInventory(targetIp);
+            deregisterNodeFromPrometheus(targetIp);
+            
             environment.setLastDeploymentStatus(DeploymentStatus.FAILED);
             environmentRepository.save(environment);
             deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
@@ -449,7 +454,7 @@ public class DeploymentService {
     @Async
     @Transactional
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
-            Long applicationId, String previousName, String userId) {
+            Long applicationId, String previousName, String userId, boolean isNew) {
 
         Environment environment = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found: " + environmentId));
@@ -610,10 +615,16 @@ public class DeploymentService {
             String simpleError = extractSimpleErrorMessage(fullLog);
             deploymentLog.setShortError(simpleError);
 
-            // Update application status and store the error summary
-            app.setStatus("FAILED");
-            app.setLastErrorMessage(simpleError);
-            applicationRepository.save(app);
+            if (isNew) {
+                // Remove application record if it was a new deployment that failed
+                applicationRepository.delete(app);
+                log.info("Deleted failed NEW application record: {}", app.getName());
+            } else {
+                // Update application status and store the error summary for existing apps
+                app.setStatus("FAILED");
+                app.setLastErrorMessage(simpleError);
+                applicationRepository.save(app);
+            }
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
@@ -629,6 +640,16 @@ public class DeploymentService {
             List<String> lines = inventoryFile.exists()
                     ? Files.readAllLines(inventoryFile.toPath())
                     : new ArrayList<>();
+
+            // 0. Proactively remove any "bad" headers (containing spaces) that break Ansible
+            lines.removeIf(line -> {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                    String groupName = trimmed.substring(1, trimmed.length() - 1);
+                    return groupName.contains(" ");
+                }
+                return false;
+            });
 
             // 1. Ensure [agents:children] group exists at the top
             int childrenIdx = -1;
@@ -736,6 +757,17 @@ public class DeploymentService {
                 return;
 
             List<String> lines = Files.readAllLines(inventoryFile.toPath());
+            
+            // Proactively remove any "bad" headers (containing spaces)
+            lines.removeIf(line -> {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                    String groupName = trimmed.substring(1, trimmed.length() - 1);
+                    return groupName.contains(" ");
+                }
+                return false;
+            });
+
             List<String> newLines = new ArrayList<>();
             boolean inTargetSection = false;
 
@@ -971,6 +1003,11 @@ public class DeploymentService {
             logEntry.setLogOutput(currentLog + "\n\n--- COMMAND: " + cmdStr + " ---\n" + output.toString());
         }
 
+        if (output.toString().contains("Could not match supplied host pattern") || 
+            output.toString().contains("provided hosts list is empty")) {
+            throw new RuntimeException("Ansible failed: No target hosts matched the inventory. Ensure the target IP is correctly configured and accessible.");
+        }
+
         if (process.exitValue() != 0) {
             throw new RuntimeException("Process exited with code " + process.exitValue());
         }
@@ -1000,7 +1037,7 @@ public class DeploymentService {
         // Map env vars if possible (currently not persistent in DB, but we could add them if needed)
         // For now, we assume promotion uses the last configuration.
 
-        deployApplicationFull(environmentId, request, applicationId, app.getName(), userId);
+        deployApplicationFull(environmentId, request, applicationId, app.getName(), userId, false);
     }
 
     /**
@@ -1038,7 +1075,12 @@ public class DeploymentService {
             return "Access Denied: Invalid SSH credentials or insufficient permissions on the node.";
         }
 
-        // 5. Generic Exception message
+        // 5. Check for No hosts matched
+        if (fullLog.contains("No target hosts matched the inventory")) {
+            return "Infrastructure Error: The target IP was not found in the Ansible inventory or could not be matched. Ensure the node is correctly added to the environment.";
+        }
+
+        // 6. Generic Exception message
         if (fullLog.contains("ERROR: ")) {
             int idx = fullLog.lastIndexOf("ERROR: ");
             return "Internal Error: " + fullLog.substring(idx + 7).split("\n")[0];
