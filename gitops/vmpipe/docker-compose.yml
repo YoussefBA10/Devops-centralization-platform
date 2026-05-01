@@ -245,6 +245,8 @@ services:
       app: "monetique-eye"
       env: "central-node"
       node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "backend"
     volumes:
       - ../:/app/gitops
     environment:
@@ -293,6 +295,8 @@ services:
       app: "monetique-eye"
       env: "central-node"
       node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "frontend"
     ports:
       - "80:80"
     depends_on:
