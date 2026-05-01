@@ -97,6 +97,7 @@ export interface Node {
   ip?: string;
   cpu?: number;
   ram?: number;
+  disk?: number;
   riskScore?: number;
   status?: string;
   label?: string;
@@ -108,10 +109,24 @@ export interface Edge {
   target: string;
 }
 
+export interface ClusterGroup {
+  id: number;
+  name: string;
+  description: string;
+  environments: EnvironmentGroup[];
+}
+
+export interface EnvironmentGroup {
+  id: number;
+  name: string;
+  prometheusLabel: string;
+  nodes: Node[];
+}
+
 export interface TopologyData {
-  environmentId: number;
   nodes: Node[];
   edges: Edge[];
+  clusters: ClusterGroup[];
 }
 
 export interface Anomaly {

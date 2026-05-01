@@ -28,6 +28,7 @@ public class InfrastructureService {
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
     private final LogAggregationWindowRepository aggregationRepository;
+    private final com.monetique.eye.repository.ClusterRepository clusterRepository;
 
     private final AtomicReference<Double> lastStabilityScore = new AtomicReference<>(99.6);
 
@@ -103,28 +104,64 @@ public class InfrastructureService {
     }
 
     public TopologyData getAllEnvironmentsTopology() {
-        List<Environment> environments = environmentRepository.findAll();
-        List<TopologyData.TopologyNode> allNodes = new ArrayList<>();
-        List<TopologyData.TopologyEdge> allEdges = new ArrayList<>();
+        List<com.monetique.eye.entity.Cluster> clusters = clusterRepository.findAll();
+        List<TopologyData.ClusterGroup> clusterGroups = new ArrayList<>();
+        List<TopologyData.TopologyNode> allNodesFlat = new ArrayList<>();
+        List<TopologyData.TopologyEdge> allEdgesFlat = new ArrayList<>();
 
-        for (Environment env : environments) {
-            TopologyData data = getTopologyForEnvironment(env);
-            if (data.getNodes() != null) allNodes.addAll(data.getNodes());
-            if (data.getEdges() != null) allEdges.addAll(data.getEdges());
+        for (com.monetique.eye.entity.Cluster cluster : clusters) {
+            List<TopologyData.EnvironmentGroup> envGroups = new ArrayList<>();
+            for (Environment env : cluster.getEnvironments()) {
+                TopologyData envTopology = getTopologyForEnvironment(env);
+                envGroups.add(TopologyData.EnvironmentGroup.builder()
+                        .id(env.getId())
+                        .name(env.getName())
+                        .prometheusLabel(env.getPrometheusLabel())
+                        .nodes(envTopology.getNodes())
+                        .build());
+                
+                allNodesFlat.addAll(envTopology.getNodes());
+                allEdgesFlat.addAll(envTopology.getEdges());
+            }
+            
+            clusterGroups.add(TopologyData.ClusterGroup.builder()
+                    .id(cluster.getId())
+                    .name(cluster.getName())
+                    .description(cluster.getDescription())
+                    .environments(envGroups)
+                    .build());
         }
 
-        Map<String, TopologyData.TopologyNode> uniqueNodes = new java.util.HashMap<>();
-        for (TopologyData.TopologyNode node : allNodes) {
-            if (!uniqueNodes.containsKey(node.getId())) {
-                uniqueNodes.put(node.getId(), node);
-            } else if ("central-node".equalsIgnoreCase(node.getEnvironmentName())) {
-                uniqueNodes.put(node.getId(), node);
+        // Handle environments without a cluster (Orphan environments)
+        List<Environment> orphanEnvs = environmentRepository.findAll().stream()
+                .filter(env -> env.getCluster() == null)
+                .collect(Collectors.toList());
+        
+        if (!orphanEnvs.isEmpty()) {
+            List<TopologyData.EnvironmentGroup> orphanEnvGroups = new ArrayList<>();
+            for (Environment env : orphanEnvs) {
+                TopologyData envTopology = getTopologyForEnvironment(env);
+                orphanEnvGroups.add(TopologyData.EnvironmentGroup.builder()
+                        .id(env.getId())
+                        .name(env.getName())
+                        .prometheusLabel(env.getPrometheusLabel())
+                        .nodes(envTopology.getNodes())
+                        .build());
+                allNodesFlat.addAll(envTopology.getNodes());
+                allEdgesFlat.addAll(envTopology.getEdges());
             }
+            clusterGroups.add(TopologyData.ClusterGroup.builder()
+                    .id(0L)
+                    .name("Ungrouped Environments")
+                    .description("Environments not assigned to any cluster")
+                    .environments(orphanEnvGroups)
+                    .build());
         }
 
         return TopologyData.builder()
-                .nodes(new ArrayList<>(uniqueNodes.values()))
-                .edges(allEdges)
+                .clusters(clusterGroups)
+                .nodes(allNodesFlat)
+                .edges(allEdgesFlat)
                 .build();
     }
 
@@ -189,6 +226,8 @@ public class InfrastructureService {
 
             Double cpu = isUp ? prometheusClient.getCpuUsageForInstance(nodeInstance) : 0.0;
             Double ram = isUp ? prometheusClient.getMemoryUsagePercentForInstance(nodeInstance) : 0.0;
+            Double disk = isUp ? prometheusClient.queryMetric(String.format("max(1 - (node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/\"} / node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/\"})) * 100", ip, ip)) : 0.0;
+            if (disk == null) disk = 0.0;
 
             if (isUp && (cpu == 0.0 || ram == 0.0)) {
                 cpu = prometheusClient.queryMetric(String.format("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\", instance=~\"%s.*\"}[5m])) * 100", ip));
@@ -220,6 +259,7 @@ public class InfrastructureService {
                     .type(isCentralNode ? "db-server" : "server")
                     .cpu(cpu.intValue())
                     .ram(ram.intValue())
+                    .disk(disk.intValue())
                     .status(status)
                     .environmentId(env.getId())
                     .environmentName(env.getName())
