@@ -242,6 +242,7 @@
           app: "{{ appName }}"
           env: "{{ envLabel }}"
           com.monetique.environment: "{{ envLabel }}"
+          com.monetique.category: "{{ appType | default('unknown') | lower }}"
           node: "{{ nodename }}"
           is_canary: "{{ isCanary | default(false) | bool | string }}"
         env: "{{ env_map | combine({'NODE_ENV': 'production'}) }}"

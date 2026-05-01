@@ -40,31 +40,31 @@ groups:
   - name: "application_alerts"
     rules:
       - alert: "ApplicationDown"
-        expr: "time() - container_last_seen{name!~\"cadvisor|node-exporter|filebeat|.*prometheus.*|.*alertmanager.*|.*elasticsearch.*|.*grafana.*\", name!=\"\"} > 60"
+        expr: "time() - container_last_seen{container_label_com_monetique_category!='', name!=''} > 60"
         for: "1m"
         labels:
           severity: "critical"
         annotations:
-          summary: "Application container {{ $labels.name }} is down"
-          description: "The container {{ $labels.name }} on {{ $labels.nodename }} has not been seen for over 60 seconds."
+          summary: "Application {{ $labels.container_label_app }} ({{ $labels.container_label_com_monetique_category }}) is down"
+          description: "Container {{ $labels.name }} on {{ $labels.container_label_node }} has not been seen for over 60 seconds."
 
       - alert: "FrontendDown"
-        expr: "time() - container_last_seen{name=~\".*frontend.*\"} > 60"
+        expr: "time() - container_last_seen{container_label_com_monetique_category='frontend', name!=''} > 60"
         for: "1m"
         labels:
           severity: "critical"
         annotations:
-          summary: "Frontend application {{ $labels.name }} is down"
-          description: "The frontend container {{ $labels.name }} on {{ $labels.nodename }} is down."
+          summary: "Frontend {{ $labels.container_label_app }} is down"
+          description: "Frontend container {{ $labels.name }} on {{ $labels.container_label_node }} is down."
 
       - alert: "BackendDown"
-        expr: "time() - container_last_seen{name=~\".*backend.*\"} > 60"
+        expr: "time() - container_last_seen{container_label_com_monetique_category='backend', name!=''} > 60"
         for: "1m"
         labels:
           severity: "critical"
         annotations:
-          summary: "Backend application {{ $labels.name }} is down"
-          description: "The backend container {{ $labels.name }} on {{ $labels.nodename }} is down."
+          summary: "Backend {{ $labels.container_label_app }} is down"
+          description: "Backend container {{ $labels.name }} on {{ $labels.container_label_node }} is down."
 
       - alert: "HighErrorRate"
         expr: "sum by (job, instance, nodename) (rate(http_server_requests_seconds_count{status=~\"5..\"}[2m])) / sum by (job, instance, nodename) (rate(http_server_requests_seconds_count[2m])) * 100 > 5"
