@@ -151,7 +151,7 @@ public class ApplicationController {
         applicationRepository.save(app);
 
         // Async deployment
-        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName, authentication.getName(), id == null);
+        deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName, authentication.getName(), request.getId() == null);
 
         activityLogService.logActivity("Deployment Started: " + app.getName(), "deployment", env.getName());
         return ResponseEntity.ok(Map.of("message", "Deployment triggered successfully", "appId", app.getId()));
