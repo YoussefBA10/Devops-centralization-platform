@@ -128,7 +128,7 @@ public class EnvironmentController {
 
         String label = getLabelValue(env.getPrometheusLabel());
         if (label == null || label.isBlank()) {
-            label = env.getName().toLowerCase().replaceAll("\\s+", "-");
+            label = env.getSafeName();
         }
         
         List<Map<String, Object>> resultNodes = new ArrayList<>();
@@ -311,7 +311,10 @@ public class EnvironmentController {
                 deploymentService.undeployAgentAsync(env, node.getIp(), node.getSshUser(), node.getSshPassword());
             }
 
-            // 2. Delete the environment record (and related records via cascade)
+            // 2. Clean up inventory group
+            deploymentService.removeEnvironmentFromInventory(env.getName());
+            
+            // 3. Delete the environment record (and related records via cascade)
             environmentRepository.deleteById(id);
         });
     }

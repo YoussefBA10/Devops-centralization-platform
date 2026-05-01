@@ -77,4 +77,9 @@ public class Environment {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
     }
+
+    public String getSafeName() {
+        if (name == null) return "unknown";
+        return name.toLowerCase().replaceAll("[^a-z0-9]", "-");
+    }
 }

@@ -45,6 +45,11 @@ public class DeploymentService {
 
     private final com.monetique.eye.service.ActivityLogService activityLogService;
 
+    private String getSafeGroupName(String name) {
+        if (name == null) return "unknown";
+        return name.toLowerCase().replaceAll("[^a-z0-9]", "-");
+    }
+
     public DeploymentService(DeploymentLogRepository deploymentLogRepository,
             EnvironmentRepository environmentRepository,
             ApplicationRepository applicationRepository,
@@ -93,7 +98,7 @@ public class DeploymentService {
             String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
-            String envLabel = environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
+            String envLabel = environment.getSafeName();
             String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
                     : "192.168.126.130";
 
@@ -527,7 +532,7 @@ public class DeploymentService {
                             + (request.getAutoGenerateConfig() != null && request.getAutoGenerateConfig() ? "true"
                                     : "false"),
                     "-e", "dockerBuildArgs='" + buildArgsStr + "'",
-                    "-e", "envLabel=" + environment.getName().toLowerCase().replaceAll("[^a-z0-9]", "-"),
+                    "-e", "envLabel=" + environment.getSafeName(),
                     "-e", "nodename=" + nodeName,
                     "-e", "srcPath=" + (request.getSrcPath() != null ? request.getSrcPath() : "."),
                     "-e", "oldAppName=" + oldAppName,
@@ -615,6 +620,7 @@ public class DeploymentService {
     }
 
     public void updateInventory(String envName, String targetIp, String sshUser) {
+        envName = getSafeGroupName(envName);
         log.info("Updating Ansible inventory for env group: {}, host: {}, User: {}", envName, targetIp, sshUser);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
@@ -722,6 +728,7 @@ public class DeploymentService {
     }
 
     public void removeEnvironmentFromInventory(String envName) {
+        envName = getSafeGroupName(envName);
         log.info("Removing environment group from inventory: {}", envName);
         try {
             File inventoryFile = new File(gitopsPath + "/ansible/inventory.ini");
@@ -811,7 +818,7 @@ public class DeploymentService {
                 targets = new java.util.ArrayList<>();
             }
 
-            String envLabel = environment.getName().toLowerCase().replace(" ", "-");
+            String envLabel = environment.getSafeName();
             String nodeName = ip.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
 
             // Determine targets based on whether the IP matches the central node
