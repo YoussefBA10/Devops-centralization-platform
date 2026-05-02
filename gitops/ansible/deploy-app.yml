@@ -50,7 +50,11 @@
 
     - name: Set Source Directory Fact
       set_fact:
-        final_src_dir: "{{ (app_dir + '/' + (srcPath | default('.') | trim('/'))) | replace('//', '/') | trim('/') }}"
+        final_src_dir: "{{ app_dir }}/{{ srcPath | default('.') | trim('/') }}"
+
+    - name: Normalize Final Source Directory
+      set_fact:
+        final_src_dir: "{{ final_src_dir | replace('//', '/') | regex_replace('/$', '') }}"
 
     - name: Debug Final Source Directory
       debug:
