@@ -208,18 +208,18 @@ const ServiceResourceTable: React.FC<Props> = ({ data, onRowClick, lastUpdated, 
                   </td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex flex-col items-end">
-                      <span className={`text-sm font-bold ${getResourceColor(service.cpuUsagePercent)}`}>
-                        {service.cpuUsageCores.toFixed(1)} cores
+                      <span className={`text-base font-black tracking-tight ${getResourceColor(service.cpuUsagePercent)}`}>
+                        {service.cpuUsageCores.toFixed(2)} <span className="text-[10px] uppercase opacity-70">cores</span>
                       </span>
-                      <span className="text-[10px] text-muted-foreground">({service.cpuUsagePercent.toFixed(0)}%)</span>
+                      <span className="text-[10px] font-bold text-muted-foreground/60">{service.cpuUsagePercent.toFixed(1)}% Load</span>
                     </div>
                   </td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex flex-col items-end">
-                      <span className={`text-sm font-bold ${getResourceColor(service.memoryUsagePercent)}`}>
+                      <span className={`text-base font-black tracking-tight ${getResourceColor(service.memoryUsagePercent)}`}>
                         {formatBytes(service.memoryUsageBytes)}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">({service.memoryUsagePercent.toFixed(0)}%)</span>
+                      <span className="text-[10px] font-bold text-muted-foreground/60">{service.memoryUsagePercent.toFixed(1)}% Used</span>
                     </div>
                   </td>
                   <td className="px-4 py-4 text-right">

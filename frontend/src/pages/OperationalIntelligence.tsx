@@ -25,6 +25,8 @@ import type { StabilityRecord, OperationalDigest, Node, Anomaly, ServiceResource
 import StabilityGauge from '../components/operational/StabilityGauge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
+import ServiceResourceTable from '../components/operational/ServiceResourceTable';
+import ServiceDetailsDrawer from '../components/operational/ServiceDetailsDrawer';
 
 const OperationalIntelligence: React.FC = () => {
   const { environments, selectedEnvironment, setSelectedEnvironment } = useEnvironment();
@@ -34,6 +36,7 @@ const OperationalIntelligence: React.FC = () => {
   const [heatmap, setHeatmap] = useState<Node[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [services, setServices] = useState<ServiceResource[]>([]);
+  const [selectedService, setSelectedService] = useState<ServiceResource | null>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchData = async () => {
@@ -338,122 +341,20 @@ const OperationalIntelligence: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.4 }}
       >
-        <Card className="bg-[#0c0c0e] border-white/5 overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between border-b border-white/5 pb-6">
-             <div className="flex items-center gap-4">
-                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                  <Zap className="w-5 h-5 text-emerald-500" />
-                </div>
-                <div>
-                   <CardTitle className="text-xl font-black tracking-tight">Live Service Resource Pulse</CardTitle>
-                   <CardDescription className="text-[10px] font-bold uppercase tracking-widest opacity-60">Real-time container orchestration telemetry</CardDescription>
-                </div>
-             </div>
-             <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Active Services</p>
-                  <p className="text-sm font-black text-white">{services.length}</p>
-                </div>
-                <div className="h-8 w-px bg-white/10"></div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">System Health</p>
-                  <p className="text-sm font-black text-emerald-500">100%</p>
-                </div>
-             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/5 bg-white/[0.01]">
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Service Name</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Node Instance</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Status</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">CPU Usage</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Memory</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Network (R/T)</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">Restarts</th>
-                    <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground text-right">Uptime</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {services.map((service, i) => (
-                    <tr key={i} className="group hover:bg-white/[0.02] transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-1.5 h-1.5 rounded-full ${service.status === 'HEALTHY' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : service.status === 'WARNING' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`}></div>
-                          <span className="font-bold text-sm tracking-tight text-white group-hover:text-primary transition-colors">{service.serviceName}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-[10px] font-mono font-black text-muted-foreground uppercase">{service.nodeName}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded border ${
-                          service.status === 'HEALTHY' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
-                          service.status === 'WARNING' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 
-                          'bg-destructive/10 text-destructive border-destructive/20'
-                        }`}>
-                          {service.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1 w-24">
-                          <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest">
-                            <span className="text-muted-foreground">CPU</span>
-                            <span>{service.cpuUsagePercent.toFixed(1)}%</span>
-                          </div>
-                          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                             <div className={`h-full ${service.cpuUsagePercent > 80 ? 'bg-destructive' : 'bg-primary'} transition-all duration-1000`} style={{ width: `${Math.min(service.cpuUsagePercent, 100)}%` }}></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1 w-24">
-                          <div className="flex justify-between text-[9px] font-bold uppercase tracking-widest">
-                            <span className="text-muted-foreground">RAM</span>
-                            <span>{service.memoryUsagePercent.toFixed(1)}%</span>
-                          </div>
-                          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                             <div className={`h-full ${service.memoryUsagePercent > 85 ? 'bg-destructive' : 'bg-emerald-500'} transition-all duration-1000`} style={{ width: `${Math.min(service.memoryUsagePercent, 100)}%` }}></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                           <div className="flex flex-col">
-                              <span className="text-[9px] font-black text-emerald-500 uppercase tracking-tighter">↑ {(service.networkTxBytesPerSec / 1024).toFixed(1)} KB/s</span>
-                              <span className="text-[9px] font-black text-primary uppercase tracking-tighter">↓ {(service.networkRxBytesPerSec / 1024).toFixed(1)} KB/s</span>
-                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                         <span className={`text-[10px] font-mono font-black ${service.restartCount > 5 ? 'text-destructive animate-pulse' : 'text-white'}`}>
-                           {service.restartCount}
-                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                         <span className="text-[10px] font-mono font-black text-muted-foreground">
-                            {service.uptimeSeconds > 86400 ? `${(service.uptimeSeconds / 86400).toFixed(1)}d` : 
-                             service.uptimeSeconds > 3600 ? `${(service.uptimeSeconds / 3600).toFixed(1)}h` : 
-                             `${(service.uptimeSeconds / 60).toFixed(0)}m`}
-                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {services.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground italic text-sm font-medium opacity-50">
-                        Zero active containers detected in this environment.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <ServiceResourceTable 
+          data={services} 
+          onRowClick={(s) => setSelectedService(s)}
+          lastUpdated={new Date().toLocaleTimeString()}
+          onRefresh={fetchData}
+          loading={loading}
+        />
       </motion.div>
+
+      {/* Service Details Drawer */}
+      <ServiceDetailsDrawer 
+        service={selectedService} 
+        onClose={() => setSelectedService(null)} 
+      />
 
       {/* Page Footer */}
       <div className="pt-8 opacity-20 hover:opacity-100 transition-opacity duration-700 flex flex-col md:flex-row justify-between items-center gap-4 grayscale hover:grayscale-0">

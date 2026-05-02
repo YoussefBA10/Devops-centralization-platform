@@ -48,6 +48,7 @@ const ApplicationsPage: React.FC = () => {
 
   // Polling refs for DEPLOYING apps
   const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
+  const newlyDeployedAppIds = useRef<Set<number>>(new Set());
 
   const fetchApps = useCallback(async () => {
     if (!selectedEnvironment) return;
@@ -79,6 +80,15 @@ const ApplicationsPage: React.FC = () => {
             if (newStatus !== 'DEPLOYING') {
               clearInterval(pollingRefs.current[app.id]);
               delete pollingRefs.current[app.id];
+              
+              if (newStatus === 'RUNNING' && newlyDeployedAppIds.current.has(app.id)) {
+                newlyDeployedAppIds.current.delete(app.id);
+                // Fetch the updated app object to ensure we have latest data for the modal
+                getApplicationStatus(app.id).then(res => {
+                   setPostDeployApp(res.data);
+                });
+              }
+              
               fetchApps();
             }
             } catch (e: any) {
@@ -110,7 +120,7 @@ const ApplicationsPage: React.FC = () => {
       await fetchApps();
       
       if (isNew && res.data) {
-        setPostDeployApp(res.data);
+        newlyDeployedAppIds.current.add(res.data.id);
       }
     } catch (e: any) {
       throw e;
@@ -473,8 +483,8 @@ const ApplicationsPage: React.FC = () => {
 
       <ConfirmationModal
         isOpen={!!postDeployApp}
-        title="Deployment Started"
-        message="The application deployment has been initiated. Would you like to configure Application Observability metrics (Golden Signals) for this service now?"
+        title="Deployment Successful"
+        message={`The application "${postDeployApp?.name}" is now running. Would you like to configure Application Observability metrics (Golden Signals) for this service now?`}
         type="info"
         onClose={() => setPostDeployApp(null)}
         onConfirm={() => {
