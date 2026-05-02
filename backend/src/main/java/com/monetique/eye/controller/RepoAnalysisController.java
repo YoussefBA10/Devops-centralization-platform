@@ -127,22 +127,34 @@ public class RepoAnalysisController {
     }
 
     private List<RepoAnalysisDTO.DetectedApp> scanDirectory(File root, String parentPath) {
+        return scanDirectoryRecursive(root, parentPath, 0);
+    }
+
+    private List<RepoAnalysisDTO.DetectedApp> scanDirectoryRecursive(File dir, String parentPath, int depth) {
         List<RepoAnalysisDTO.DetectedApp> apps = new ArrayList<>();
-        File[] children = root.listFiles();
+        if (depth > 2) return apps; // Max depth to avoid infinite loops/heavy scanning
+
+        File[] children = dir.listFiles();
         if (children == null) return apps;
+
+        // Try to detect an app in the CURRENT directory first
+        RepoAnalysisDTO.DetectedApp currentApp = detectApp(dir, parentPath.isEmpty() ? "." : parentPath);
+        if (currentApp != null) {
+            apps.add(currentApp);
+            // If an app is found here, we don't scan its children to avoid detecting sub-modules as separate apps
+            // unless it's the root directory
+            if (!parentPath.isEmpty()) return apps;
+        }
 
         for (File child : children) {
             if (!child.isDirectory()) continue;
-            if (child.getName().startsWith(".")) continue; // Skip hidden dirs
-            if (child.getName().equals("node_modules") || child.getName().equals("target") ||
-                child.getName().equals("build") || child.getName().equals("dist") ||
-                child.getName().equals("__pycache__") || child.getName().equals("venv")) continue;
+            String name = child.getName();
+            if (name.startsWith(".") || name.equals("node_modules") || name.equals("target") ||
+                name.equals("build") || name.equals("dist") || name.equals("__pycache__") || 
+                name.equals("venv") || name.equals("env") || name.equals("out")) continue;
 
-            String relativePath = parentPath.isEmpty() ? child.getName() + "/" : parentPath + child.getName() + "/";
-            RepoAnalysisDTO.DetectedApp app = detectApp(child, relativePath);
-            if (app != null) {
-                apps.add(app);
-            }
+            String relativePath = parentPath.isEmpty() ? name + "/" : parentPath + name + "/";
+            apps.addAll(scanDirectoryRecursive(child, relativePath, depth + 1));
         }
         return apps;
     }
@@ -152,18 +164,21 @@ public class RepoAnalysisController {
         boolean hasGradle = new File(dir, "build.gradle").exists() || new File(dir, "build.gradle.kts").exists();
         boolean hasPackageJson = new File(dir, "package.json").exists();
         boolean hasRequirements = new File(dir, "requirements.txt").exists();
+        boolean hasManagePy = new File(dir, "manage.py").exists();
+        boolean hasSetupPy = new File(dir, "setup.py").exists();
         boolean hasPyproject = new File(dir, "pyproject.toml").exists();
         boolean hasGoMod = new File(dir, "go.mod").exists();
         boolean hasDockerfile = new File(dir, "Dockerfile").exists();
         boolean hasNginxConf = new File(dir, "nginx.conf").exists() ||
                                new File(dir, "nginx").exists() ||
                                new File(dir, "default.conf").exists();
+        boolean hasSrcMainJava = new File(dir, "src/main/java").exists() || new File(dir, "src/main/kotlin").exists();
 
         String name = dir.getName(); // fallback
         String type = null;
         String framework = null;
 
-        if (hasPom || hasGradle) {
+        if (hasPom || hasGradle || hasSrcMainJava) {
             type = "BACKEND";
             framework = "Java Spring Boot";
             if (hasPom) {
@@ -182,9 +197,9 @@ public class RepoAnalysisController {
                 type = "BACKEND";
                 if (framework == null) framework = "Node.js";
             }
-        } else if (hasRequirements || hasPyproject) {
+        } else if (hasRequirements || hasPyproject || hasManagePy || hasSetupPy) {
             type = "BACKEND";
-            framework = "Python";
+            framework = hasManagePy ? "Django Python" : "Python";
             if (hasPyproject) {
                 String projName = extractTomlProjectName(new File(dir, "pyproject.toml"));
                 if (projName != null) name = projName;
