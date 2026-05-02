@@ -38,14 +38,36 @@
         version: "{{ branch | default('main') }}"
         force: yes
 
+    - name: Debug Deployment Variables
+      debug:
+        msg: 
+          - "app_dir: {{ app_dir }}"
+          - "srcPath: {{ srcPath | default('.') }}"
+          - "appType: {{ appType }}"
+          - "appLanguage: {{ appLanguage }}"
+          - "autoGenerateConfig: {{ autoGenerateConfig }}"
+          - "autoGenerateConfig_bool: {{ autoGenerateConfig | default(false) | bool }}"
+
+    - name: Set Source Directory Fact
+      set_fact:
+        final_src_dir: "{{ (app_dir + '/' + (srcPath | default('.') | trim('/'))) | replace('//', '/') | trim('/') }}"
+
+    - name: Debug Final Source Directory
+      debug:
+        msg: "Target Source Directory: {{ final_src_dir }}"
+
     - name: Check if Dockerfile exists
       stat:
-        path: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        path: "{{ final_src_dir }}/Dockerfile"
       register: dockerfile_stat
+
+    - name: Debug Dockerfile Stat
+      debug:
+        msg: "Dockerfile exists: {{ dockerfile_stat.stat.exists }}"
 
     - name: Generate Frontend Dockerfile (Vite/React)
       copy:
-        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        dest: "{{ final_src_dir }}/Dockerfile"
         content: |
           FROM node:18-alpine as build
           WORKDIR /app
@@ -73,7 +95,7 @@
 
     - name: Generate Frontend Dockerfile (Generic Node based)
       copy:
-        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        dest: "{{ final_src_dir }}/Dockerfile"
         content: |
           FROM node:18-alpine
           WORKDIR /app
@@ -95,7 +117,7 @@
 
     - name: Generate Backend Dockerfile (Spring Boot)
       copy:
-        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        dest: "{{ final_src_dir }}/Dockerfile"
         content: |
           FROM eclipse-temurin:21-jdk-alpine as build
           WORKDIR /app
@@ -117,7 +139,7 @@
 
     - name: Generate Backend Dockerfile (Django / Python)
       copy:
-        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        dest: "{{ final_src_dir }}/Dockerfile"
         content: |
           FROM python:3.11-slim
           WORKDIR /app
@@ -142,7 +164,7 @@
 
     - name: Generate Backend Dockerfile (Generic Node based)
       copy:
-        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        dest: "{{ final_src_dir }}/Dockerfile"
         content: |
           FROM node:18-alpine
           WORKDIR /app
@@ -164,12 +186,12 @@
 
     - name: Check if nginx.conf exists
       stat:
-        path: "{{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
+        path: "{{ final_src_dir }}/nginx.conf"
       register: nginx_stat
 
     - name: Generate nginx.conf
       copy:
-        dest: "{{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
+        dest: "{{ final_src_dir }}/nginx.conf"
         content: |
           server {
             listen {{ containerPort | default(80) }};
@@ -180,15 +202,19 @@
               try_files $uri $uri/ /index.html;
             }
           }
-      when: not nginx_stat.stat.exists and autoGenerateConfig == 'true' and appType == 'FRONTEND' and appLanguage == 'React'
+      when: 
+        - not nginx_stat.stat.exists
+        - autoGenerateConfig | default(false) | bool
+        - appType == 'FRONTEND'
+        - appLanguage is search('React')
 
     - name: Patch existing nginx.conf to use requested containerPort
-      shell: "sed -i -E 's/listen\\s+[0-9]+/listen {{ containerPort | default(80) }}/g' {{ app_dir }}/{{ srcPath | default('.') }}/nginx.conf"
+      shell: "sed -i -E 's/listen\\s+[0-9]+/listen {{ containerPort | default(80) }}/g' {{ final_src_dir }}/nginx.conf"
       when: nginx_stat.stat.exists and appType == 'FRONTEND'
 
     - name: Inject build-time ARGs into existing Dockerfile
       blockinfile:
-        path: "{{ app_dir }}/{{ srcPath | default('.') }}/Dockerfile"
+        path: "{{ final_src_dir }}/Dockerfile"
         insertbefore: "RUN (npm|yarn|pnpm) run build|RUN (npm|yarn|pnpm) build"
         marker: "# {mark} ANSIBLE MANAGED BLOCK: BUILD ARGS"
         block: |
@@ -264,7 +290,7 @@
         {{ dockerBuildArgs | default('') }}
         .
       args:
-        chdir: "{{ app_dir }}/{{ srcPath | default('.') }}"
+        chdir: "{{ final_src_dir }}"
 
     - name: Stop and remove existing container
       docker_container:
