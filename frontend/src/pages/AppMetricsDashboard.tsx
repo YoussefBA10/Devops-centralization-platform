@@ -15,7 +15,8 @@ const AppMetricsDashboard: React.FC = () => {
     latency: [],
     traffic: [],
     errors: [],
-    saturation: []
+    saturation: [],
+    health: { status: 'UNKNOWN', message: '' }
   });
 
   const fetchMetrics = async () => {
@@ -26,15 +27,34 @@ const AppMetricsDashboard: React.FC = () => {
     const step = '60s';
 
     const queries = {
-      latency: `histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{app_id="${appId}"}[5m])) by (le))`,
-      traffic: `sum(rate(http_requests_total{app_id="${appId}"}[5m]))`,
-      errors: `sum(rate(http_requests_total{app_id="${appId}", status=~"5.."}[5m])) / sum(rate(http_requests_total{app_id="${appId}"}[5m])) * 100`,
-      saturation: `sum(rate(process_cpu_seconds_total{app_id="${appId}"}[5m])) * 100`
+      latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket", app_id="${appId}"}[5m])) by (le))`,
+      traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count", app_id="${appId}"}[5m]))`,
+      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}", status=~"5.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}"}[5m]))) * 100`,
+      saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage", app_id="${appId}"}[5m])) * 100`
     };
 
-    const newData: any = { latency: [], traffic: [], errors: [], saturation: [] };
+    const newData: any = { latency: [], traffic: [], errors: [], saturation: [], health: { status: 'UNKNOWN', message: '' } };
 
     try {
+      // 1. Check Scrape Health first
+      try {
+        const healthRes = await api.get(`/applications/${appId}/metrics`, {
+          params: { query: `up{app_id="${appId}"}` }
+        });
+        if (healthRes.data?.result?.length > 0) {
+          const val = parseInt(healthRes.data.result[0].value[1]);
+          newData.health = { 
+            status: val === 1 ? 'UP' : 'DOWN',
+            message: val === 1 ? 'Prometheus is successfully scraping this app.' : 'Prometheus cannot reach the metrics endpoint.'
+          };
+        } else {
+          newData.health = { status: 'NOT_FOUND', message: 'Prometheus has not discovered this target yet.' };
+        }
+      } catch (e) {
+        console.error('Failed to fetch health status', e);
+      }
+
+      // 2. Fetch all Golden Signals
       await Promise.all(
         Object.entries(queries).map(async ([key, query]) => {
           try {
@@ -105,6 +125,35 @@ const AppMetricsDashboard: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh Data
           </Button>
+        </div>
+
+        {/* Scrape Health Status */}
+        <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+          metricsData.health.status === 'UP' ? 'bg-emerald-500/5 border-emerald-500/20' : 
+          metricsData.health.status === 'DOWN' ? 'bg-rose-500/5 border-rose-500/20' : 
+          'bg-amber-500/5 border-amber-500/20'
+        }`}>
+          <div className="flex items-center gap-4">
+            <div className={`p-2 rounded-lg ${
+              metricsData.health.status === 'UP' ? 'bg-emerald-500/20 text-emerald-400' : 
+              metricsData.health.status === 'DOWN' ? 'bg-rose-500/20 text-rose-400' : 
+              'bg-amber-500/20 text-amber-400'
+            }`}>
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Scrape Connectivity</p>
+              <p className="text-sm font-medium text-white">{metricsData.health.message}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
+              metricsData.health.status === 'UP' ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+              metricsData.health.status === 'DOWN' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 
+              'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
+            }`} />
+            <span className="text-[10px] font-black uppercase tracking-widest">{metricsData.health.status}</span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
