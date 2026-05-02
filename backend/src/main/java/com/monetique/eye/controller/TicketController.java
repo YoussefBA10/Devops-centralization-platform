@@ -25,24 +25,57 @@ public class TicketController {
     private final ActivityLogService activityLogService;
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
+    private final com.monetique.eye.service.PermissionService permissionService;
 
     public TicketController(TicketRepository ticketRepository, SecurityService securityService,
                             ActivityLogService activityLogService,
-                            EnvironmentRepository environmentRepository, ApplicationRepository applicationRepository) {
+                            EnvironmentRepository environmentRepository, ApplicationRepository applicationRepository,
+                            com.monetique.eye.service.PermissionService permissionService) {
         this.ticketRepository = ticketRepository;
         this.securityService = securityService;
         this.activityLogService = activityLogService;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
+        this.permissionService = permissionService;
     }
 
     @GetMapping
     @RequiresPermission("INCIDENTS_VIEW")
-    public List<Ticket> getAll(@RequestParam(required = false) Long environmentId) {
-        if (environmentId != null) {
-            return ticketRepository.findByEnvironmentId(environmentId);
+    public List<Ticket> getAll(@RequestParam(required = false) Long environmentId,
+                               @RequestParam(required = false) String clusters,
+                               @RequestParam(required = false) String status) {
+        List<Ticket> tickets;
+
+        if ("all".equalsIgnoreCase(clusters)) {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            com.monetique.eye.entity.User currentUser = securityService.getCurrentUser();
+            boolean isAdmin = currentUser != null && currentUser.getRole() == com.monetique.eye.entity.enums.Role.ADMIN;
+            
+            if (isAdmin) {
+                tickets = ticketRepository.findAll();
+            } else {
+                List<String> allowedEnvIdsStr = permissionService.getAllowedEnvironmentIds(auth.getName());
+                List<Long> envIds = allowedEnvIdsStr.stream().map(Long::valueOf).collect(java.util.stream.Collectors.toList());
+                if (envIds.isEmpty()) {
+                    tickets = java.util.Collections.emptyList();
+                } else {
+                    tickets = ticketRepository.findByEnvironmentIdIn(envIds);
+                }
+            }
+        } else if (environmentId != null) {
+            tickets = ticketRepository.findByEnvironmentId(environmentId);
+        } else {
+            tickets = ticketRepository.findAll();
         }
-        return ticketRepository.findAll();
+
+        if (status != null && !status.isEmpty()) {
+            List<String> statuses = java.util.Arrays.asList(status.toLowerCase().split(","));
+            tickets = tickets.stream()
+                .filter(t -> statuses.contains(t.getStatus().name().toLowerCase()))
+                .collect(java.util.stream.Collectors.toList());
+        }
+
+        return tickets;
     }
 
     @PostMapping

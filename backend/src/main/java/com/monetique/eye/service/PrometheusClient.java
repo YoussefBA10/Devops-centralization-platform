@@ -75,6 +75,28 @@ public class PrometheusClient {
         return list;
     }
 
+    public Map<String, Object> queryRange(String query, String start, String end, String step) {
+        try {
+            Map result = webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query_range")
+                            .queryParam("query", "{query}")
+                            .queryParam("start", start)
+                            .queryParam("end", end)
+                            .queryParam("step", step)
+                            .build(query))
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+
+            if (result != null && "success".equals(result.get("status"))) {
+                return (Map<String, Object>) result.get("data");
+            }
+        } catch (Exception e) {
+            log.error("Prometheus range query failed: {}", query, e);
+        }
+        return new HashMap<>();
+    }
+
     public Double getCpuUsage(String envLabel) {
         String query = String.format("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\", environment=\"%s\"}[5m])) * 100", envLabel);
         return queryMetric(query);

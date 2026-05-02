@@ -65,6 +65,10 @@ public class Application {
     @Column(columnDefinition = "TEXT")
     private String envVarsJson; // Environment variables stored as JSON
 
+    private Integer metricsPort;
+    private String metricsTestStatus; // PENDING, SUCCESS, FAILED, SKIPPED
+    private java.time.LocalDateTime metricsTestedAt;
+
     private java.time.LocalDateTime createdAt;
 
     @PrePersist

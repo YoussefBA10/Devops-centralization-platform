@@ -10,7 +10,10 @@ import {
   Activity,
   Server,
   Terminal,
-  ChevronRight
+  ChevronRight,
+  Flame,
+  ShieldAlert,
+  Clock
 } from 'lucide-react';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +28,7 @@ const DashboardPage: React.FC = () => {
   const { user } = useAuth();
 
   const [overview, setOverview] = React.useState<DashboardOverview | null>(null);
+  const [incidents, setIncidents] = React.useState<any[]>([]);
 
   React.useEffect(() => {
     const fetchOverview = async () => {
@@ -35,8 +39,20 @@ const DashboardPage: React.FC = () => {
         console.error('Failed to fetch dashboard overview', error);
       }
     };
+    const fetchIncidents = async () => {
+      try {
+        const response = await api.get('/tickets?clusters=all&status=open,acknowledged');
+        setIncidents(response.data);
+      } catch (error) {
+        console.error('Failed to fetch incidents', error);
+      }
+    };
     fetchOverview();
-    const interval = setInterval(fetchOverview, 30000);
+    fetchIncidents();
+    const interval = setInterval(() => {
+      fetchOverview();
+      fetchIncidents();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -171,6 +187,76 @@ const DashboardPage: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Cross-Cluster Incidents */}
+          <Card className="bg-[#0c0c0e] border-white/5">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-3 text-sm uppercase tracking-[0.2em] font-black text-muted-foreground">
+                <Flame className="w-5 h-5 text-destructive" />
+                Cross-Cluster Active Incidents
+              </div>
+              <span className="text-[10px] font-mono font-black text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 uppercase">
+                {incidents.length} Active
+              </span>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-[300px] overflow-y-auto">
+                {incidents.length > 0 ? (
+                  <div className="divide-y divide-white/5">
+                    {incidents.map((incident, i) => (
+                      <motion.div 
+                        key={i} 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }}
+                        className="p-4 hover:bg-white/[0.02] transition-colors group relative"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex gap-4">
+                            <div className={`p-2 rounded-xl ${incident.status === 'OPEN' ? 'bg-destructive/10 text-destructive' : 'bg-amber-500/10 text-amber-500'} border border-current/20`}>
+                              <ShieldAlert className="w-4 h-4" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-bold tracking-tight flex items-center gap-2 text-white">
+                                {incident.title}
+                                <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${incident.status === 'OPEN' ? 'border-destructive/30 text-destructive' : 'border-amber-500/30 text-amber-500'}`}>
+                                  {incident.status}
+                                </span>
+                              </h4>
+                              <p className="text-xs text-muted-foreground font-medium leading-relaxed max-w-xl truncate">
+                                {incident.description}
+                              </p>
+                              <div className="flex items-center gap-4 pt-1">
+                                 <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/40">
+                                    <Clock className="w-3 h-3" />
+                                    {new Date(incident.createdAt).toLocaleString()}
+                                 </div>
+                                 {incident.environment && (
+                                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-primary/70">
+                                      <Server className="w-3 h-3" />
+                                      {incident.environment.name}
+                                   </div>
+                                 )}
+                              </div>
+                            </div>
+                          </div>
+                          <Link to="/tickets">
+                            <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-all rounded-xl h-8 px-3 gap-2 border-white/10 hover:bg-white/5 text-[10px]">
+                               View
+                            </Button>
+                          </Link>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">
+                     <ShieldAlert className="w-8 h-8 text-emerald-500 mb-3" />
+                     <p className="text-[10px] font-black uppercase tracking-[0.2em]">Zero Active Incidents</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Recent Activity Sidebar */}

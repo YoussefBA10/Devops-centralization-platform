@@ -6,8 +6,7 @@ import {
   Search, 
   LogOut, 
   User as UserIcon,
-  ChevronDown,
-  Globe
+  ChevronDown
 } from 'lucide-react';
 
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../services/api';
@@ -16,7 +15,6 @@ import ClusterSelector from './ClusterSelector';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
-  const { environments, selectedEnvironment, setSelectedEnvironment } = useEnvironment();
   const [notifications, setNotifications] = React.useState<any[]>([]);
 
   const fetchNotifications = React.useCallback(async () => {
@@ -58,35 +56,6 @@ const Header: React.FC = () => {
         {/* Selection Area */}
         <div className="flex items-center gap-2">
           <ClusterSelector />
-          
-          <div className="h-6 w-px bg-border mx-1"></div>
-
-          {/* Environment Selector */}
-          <div className="relative group">
-            <button className="flex items-center gap-3 px-4 py-2 bg-secondary/50 backdrop-blur-sm rounded-lg border border-border hover:border-primary/50 transition-all text-sm font-medium">
-              <Globe className="w-4 h-4 text-primary" />
-              <span className="max-w-[120px] truncate">{selectedEnvironment?.name || 'Select Environment'}</span>
-              <ChevronDown className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </button>
-
-          <div className="absolute top-full left-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top scale-95 group-hover:scale-100">
-            <div className="p-2 space-y-1">
-              {environments.map((env) => (
-                <button
-                  key={env.id}
-                  onClick={() => setSelectedEnvironment(env)}
-                  className={`w-full text-left px-4 py-2 rounded-lg text-sm transition-colors ${
-                    selectedEnvironment?.id === env.id 
-                      ? 'bg-primary/10 text-primary' 
-                      : 'hover:bg-secondary text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {env.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          </div>
         </div>
 
         {/* Search Bar */}

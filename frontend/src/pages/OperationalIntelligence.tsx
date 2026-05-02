@@ -16,63 +16,42 @@ import {
   ExternalLink,
   Search
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useEnvironment } from '../context/EnvironmentContext';
-import type { StabilityRecord, OperationalDigest, Node, ServiceResource, Anomaly, Incident } from '../types/index';
+import type { StabilityRecord, OperationalDigest, Node, Anomaly } from '../types/index';
 import StabilityGauge from '../components/operational/StabilityGauge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
-import ServiceResourceTable from '../components/operational/ServiceResourceTable';
-import ServiceDetailsDrawer from '../components/operational/ServiceDetailsDrawer';
 
 const OperationalIntelligence: React.FC = () => {
-  const { selectedEnvironment } = useEnvironment();
+  const { environments, selectedEnvironment, setSelectedEnvironment } = useEnvironment();
+  const navigate = useNavigate();
   const [stability, setStability] = useState<StabilityRecord[]>([]);
   const [digest, setDigest] = useState<OperationalDigest | null>(null);
   const [heatmap, setHeatmap] = useState<Node[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
-  const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(false);
-  const [pulseData, setPulseData] = useState<ServiceResource[]>([]);
-  const [pulseLoading, setPulseLoading] = useState(false);
-  const [selectedPulseService, setSelectedPulseService] = useState<ServiceResource | null>(null);
-  const [lastPulseUpdate, setLastPulseUpdate] = useState<string>('Never');
 
   const fetchData = async () => {
     if (!selectedEnvironment) return;
     setLoading(true);
     try {
-      const [stabilityResp, digestResp, heatmapResp, anomaliesResp, incidentsResp] = await Promise.all([
+      const [stabilityResp, digestResp, heatmapResp, anomaliesResp] = await Promise.all([
         api.get(`/operational/stability?environmentId=${selectedEnvironment.id}`),
         api.get(`/operational/digest?environmentId=${selectedEnvironment.id}`).catch(() => ({ data: null })),
         api.get(`/operational/heatmap?environmentId=${selectedEnvironment.id}`),
-        api.get(`/operational/anomalies?environmentId=${selectedEnvironment.id}`),
-        api.get(`/operational/incidents?environmentId=${selectedEnvironment.id}`)
+        api.get(`/operational/anomalies?environmentId=${selectedEnvironment.id}`)
       ]);
       
       setStability(stabilityResp.data);
       setDigest(digestResp.data);
       setHeatmap(heatmapResp.data.nodes);
       setAnomalies(anomaliesResp.data);
-      setIncidents(incidentsResp.data);
     } catch (error) {
       console.error('Failed to fetch operational data', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchPulseData = async (silent = false) => {
-    if (!selectedEnvironment) return;
-    if (!silent) setPulseLoading(true);
-    try {
-      const resp = await api.get(`/infrastructure/services/resources?environmentId=${selectedEnvironment.id}`);
-      setPulseData(resp.data);
-      setLastPulseUpdate(new Date().toLocaleTimeString());
-    } catch (error) {
-      console.error('Failed to fetch pulse data', error);
-    } finally {
-      if (!silent) setPulseLoading(false);
     }
   };
 
@@ -82,18 +61,29 @@ const OperationalIntelligence: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedEnvironment]);
 
-  useEffect(() => {
-    fetchPulseData();
-    const interval = setInterval(() => fetchPulseData(true), 10000); // 10s auto-refresh pulse
-    return () => clearInterval(interval);
-  }, [selectedEnvironment]);
-
   const avgStability = stability.length > 0 
     ? Math.round(stability.reduce((acc, curr) => acc + curr.stabilityScore, 0) / stability.length) 
     : 0;
 
   return (
     <div className="p-8 space-y-8 min-h-full bg-[#0a0a0b]">
+      {/* Environment Segmented Control */}
+      <div className="flex gap-2 p-1 bg-[#0c0c0e] border border-white/5 rounded-xl w-fit">
+        {environments.map((env) => (
+          <button
+            key={env.id}
+            onClick={() => setSelectedEnvironment(env)}
+            className={`px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${
+              selectedEnvironment?.id === env.id 
+                ? 'bg-primary/20 text-primary border border-primary/30' 
+                : 'text-muted-foreground hover:bg-white/5 hover:text-white border border-transparent'
+            }`}
+          >
+            {env.name}
+          </button>
+        ))}
+      </div>
+
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="space-y-2">
@@ -257,75 +247,30 @@ const OperationalIntelligence: React.FC = () => {
             </Card>
           </motion.div>
 
-          {/* Active Prometheus Incidents */}
-          <div className="grid grid-cols-1 lg:grid-cols-1 gap-8">
-            <Card className="bg-[#0c0c0e] border-white/5">
-              <CardHeader className="flex flex-row items-center justify-between border-b border-white/5">
-                <CardTitle className="flex items-center gap-3 text-sm uppercase tracking-[0.2em] font-black text-muted-foreground">
-                  <Flame className="w-5 h-5 text-destructive" />
-                  Active System Incidents
-                </CardTitle>
-                <span className="text-[10px] font-mono font-black text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 uppercase">
-                  {incidents.length} Active
-                </span>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="max-h-[400px] overflow-y-auto">
-                  {incidents.length > 0 ? (
-                    <div className="divide-y divide-white/5">
-                      {incidents.map((incident, i) => (
-                        <motion.div 
-                          key={i} 
-                          initial={{ opacity: 0 }} 
-                          animate={{ opacity: 1 }}
-                          className="p-6 hover:bg-white/[0.02] transition-colors group relative"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex gap-4">
-                              <div className={`p-3 rounded-2xl ${incident.severity === 'critical' ? 'bg-destructive/10 text-destructive' : 'bg-amber-500/10 text-amber-500'} border border-current/20`}>
-                                <ShieldAlert className="w-5 h-5" />
-                              </div>
-                              <div className="space-y-1">
-                                <h4 className="text-base font-black tracking-tight flex items-center gap-2">
-                                  {incident.alertName}
-                                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full border ${incident.severity === 'critical' ? 'border-destructive/30 text-destructive' : 'border-amber-500/30 text-amber-500'}`}>
-                                    {incident.severity.toUpperCase()}
-                                  </span>
-                                </h4>
-                                <p className="text-sm text-muted-foreground font-medium leading-relaxed max-w-xl">
-                                  {incident.summary}
-                                </p>
-                                <div className="flex items-center gap-4 pt-2">
-                                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/40">
-                                      <Clock className="w-3 h-3" />
-                                      {new Date(incident.activeAt).toLocaleString()}
-                                   </div>
-                                   <div className="flex items-center gap-1.5 text-[10px] font-mono text-white/40">
-                                      <Search className="w-3 h-3" />
-                                      Instance: {incident.instance}
-                                   </div>
-                                </div>
-                              </div>
-                            </div>
-                            <Button variant="outline" size="sm" className="opacity-0 group-hover:opacity-100 transition-all rounded-xl h-9 px-4 gap-2 border-white/10 hover:bg-white/5">
-                               <ExternalLink className="w-3 h-3" />
-                               Trace
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-20 text-center opacity-40">
-                       <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
-                       <p className="text-xs font-black uppercase tracking-[0.4em]">All Systems Nominal</p>
-                       <p className="text-[10px] mt-1 font-medium">No active alerts detected in current environment.</p>
-                    </div>
-                  )}
+          {/* App Observability CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="w-full"
+          >
+            <Card className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border-indigo-500/20 hover:border-indigo-500/40 transition-all cursor-pointer group" onClick={() => navigate('/observability/apps')}>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-indigo-500/20 rounded-xl border border-indigo-500/30">
+                    <Activity className="w-6 h-6 text-indigo-400 group-hover:scale-110 transition-transform" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl font-black text-indigo-100 mb-1">Application Observability</CardTitle>
+                    <CardDescription className="text-indigo-200/60 font-medium">Monitor your deployed applications via Prometheus /metrics — Golden Signals per app.</CardDescription>
+                  </div>
                 </div>
-              </CardContent>
+                <div className="p-2 bg-indigo-500/20 rounded-full group-hover:bg-indigo-500/40 transition-colors">
+                  <ChevronRight className="w-5 h-5 text-indigo-300" />
+                </div>
+              </CardHeader>
             </Card>
-          </div>
+          </motion.div>
 
           {/* Secondary Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -381,22 +326,6 @@ const OperationalIntelligence: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Live Service Resource Pulse Section */}
-      <div className="pt-8 border-t border-white/5">
-         <ServiceResourceTable 
-            data={pulseData} 
-            loading={pulseLoading}
-            lastUpdated={lastPulseUpdate}
-            onRefresh={() => fetchPulseData()}
-            onRowClick={(s) => setSelectedPulseService(s)}
-         />
-      </div>
-
-      <ServiceDetailsDrawer 
-        service={selectedPulseService}
-        onClose={() => setSelectedPulseService(null)}
-      />
 
       {/* Page Footer */}
       <div className="pt-8 opacity-20 hover:opacity-100 transition-opacity duration-700 flex flex-col md:flex-row justify-between items-center gap-4 grayscale hover:grayscale-0">

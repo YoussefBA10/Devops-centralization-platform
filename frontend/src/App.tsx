@@ -14,6 +14,8 @@ import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
 import SetupWizard from './pages/SetupWizard';
 import ApplicationsPage from './pages/ApplicationsPage';
+import ApplicationObservabilityPage from './pages/ApplicationObservabilityPage';
+import AppMetricsDashboard from './pages/AppMetricsDashboard';
 import AuditLogPage from './pages/AuditLogPage';
 import UserManagementPage from './pages/UserManagementPage';
 import AccessDeniedPage from './pages/AccessDeniedPage';
@@ -100,6 +102,8 @@ function App() {
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/environments" element={<EnvironmentsPage />} />
                     <Route path="/applications" element={<ApplicationsPage />} />
+                    <Route path="/observability/apps" element={<ApplicationObservabilityPage />} />
+                    <Route path="/observability/apps/:appId/dashboard" element={<AppMetricsDashboard />} />
                     <Route path="/operational" element={<OperationalIntelligence />} />
                     <Route path="/infrastructure" element={<InfrastructureTopologyPage />} />
                     <Route path="/logs" element={<LogsPage />} />

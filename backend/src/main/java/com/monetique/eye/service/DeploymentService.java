@@ -896,6 +896,45 @@ public class DeploymentService {
         }
     }
 
+    @Async
+    public void registerAppInPrometheus(Application app, String ip, Integer metricsPort) {
+        log.info("Registering app {} in Prometheus for environment {}", app.getName(), app.getEnvironment().getName());
+        try {
+            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/app_targets.yml");
+            configFile.getParentFile().mkdirs();
+
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
+                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+            java.util.List<java.util.Map<String, Object>> targets;
+
+            if (configFile.exists() && configFile.length() > 0) {
+                targets = mapper.readValue(configFile,
+                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
+                        });
+            } else {
+                targets = new java.util.ArrayList<>();
+            }
+
+            String envLabel = app.getEnvironment().getSafeName();
+            String nodeName = ip.equals(app.getEnvironment().getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
+            String targetStr = ip + ":" + metricsPort;
+
+            java.util.Map<String, Object> appTarget = new java.util.HashMap<>();
+            appTarget.put("targets", java.util.List.of(targetStr));
+            appTarget.put("labels",
+                    java.util.Map.of("job", app.getServiceNameKeyword(), "environment", envLabel, "nodename", nodeName, "app_id", String.valueOf(app.getId())));
+
+            updateOrAdd(targets, appTarget);
+
+            mapper.writeValue(configFile, targets);
+            log.info("Updated Prometheus app targets in {}", configFile.getAbsolutePath());
+
+            triggerPrometheusReload();
+        } catch (Exception e) {
+            log.error("Failed to register app in Prometheus: {}", e.getMessage(), e);
+        }
+    }
+
     private void deregisterNodeFromPrometheus(String ip) {
         log.info("Deregistering node {} from Prometheus", ip);
         try {

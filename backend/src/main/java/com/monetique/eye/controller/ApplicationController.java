@@ -29,6 +29,7 @@ public class ApplicationController {
     private final DeploymentLogRepository deploymentLogRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final com.monetique.eye.service.ActivityLogService activityLogService;
+    private final com.monetique.eye.service.PrometheusClient prometheusClient;
 
     @GetMapping
     @RequiresPermission("APP_DEPLOYMENT_VIEW")
@@ -298,5 +299,89 @@ public class ApplicationController {
 
         boolean isRunning = deploymentService.isApplicationRunning(targetIp, appName, port);
         return ResponseEntity.ok(Map.of("isRunning", isRunning));
+    }
+
+    @PostMapping("/{id}/metrics/test")
+    @RequiresPermission("APP_DEPLOYMENT_EDIT")
+    public ResponseEntity<?> testMetricsEndpoint(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        Application app = applicationRepository.findById(id).orElse(null);
+        if (app == null) return ResponseEntity.notFound().build();
+
+        Integer port = request.get("port") != null ? Integer.valueOf(request.get("port").toString()) : null;
+        if (port == null) return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Port is required"));
+
+        String url = "http://" + app.getTargetNode() + ":" + port + "/metrics";
+        try {
+            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(3000);
+            factory.setReadTimeout(5000);
+            restTemplate.setRequestFactory(factory);
+
+            org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && 
+                (response.getBody().contains("# HELP") || response.getBody().contains("# TYPE"))) {
+                return ResponseEntity.ok(Map.of("success", true, "message", "Metrics endpoint reachable. Application monitoring is now active."));
+            } else {
+                return ResponseEntity.ok(Map.of("success", false, "message", "Could not reach metrics endpoint or invalid Prometheus format."));
+            }
+        } catch (org.springframework.web.client.ResourceAccessException e) {
+            if (e.getCause() instanceof java.net.SocketTimeoutException || e.getCause() instanceof java.net.ConnectException) {
+                return ResponseEntity.ok(Map.of("success", false, "message", "Could not reach host within timeout"));
+            }
+            return ResponseEntity.ok(Map.of("success", false, "message", "Connection failed: " + e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("success", false, "message", "Error testing endpoint: " + e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/{id}/metrics/config")
+    @RequiresPermission("APP_DEPLOYMENT_EDIT")
+    public ResponseEntity<?> updateMetricsConfig(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        Application app = applicationRepository.findById(id).orElse(null);
+        if (app == null) return ResponseEntity.notFound().build();
+
+        if (request.containsKey("metricsPort")) {
+            Object portObj = request.get("metricsPort");
+            app.setMetricsPort(portObj != null ? Integer.valueOf(portObj.toString()) : null);
+        }
+        if (request.containsKey("testStatus")) {
+            app.setMetricsTestStatus((String) request.get("testStatus"));
+        }
+        app.setMetricsTestedAt(java.time.LocalDateTime.now());
+        
+        applicationRepository.save(app);
+
+        if ("SUCCESS".equals(app.getMetricsTestStatus()) && app.getMetricsPort() != null) {
+            deploymentService.registerAppInPrometheus(app, app.getTargetNode(), app.getMetricsPort());
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Metrics configuration updated successfully"));
+    }
+
+    @GetMapping("/{id}/metrics")
+    @RequiresPermission("APP_DEPLOYMENT_VIEW")
+    public ResponseEntity<?> getAppMetrics(@PathVariable Long id, 
+                                           @RequestParam String query,
+                                           @RequestParam(required = false) String start,
+                                           @RequestParam(required = false) String end,
+                                           @RequestParam(required = false) String step) {
+        Application app = applicationRepository.findById(id).orElse(null);
+        if (app == null) return ResponseEntity.notFound().build();
+
+        if (app.getMetricsPort() == null || !"SUCCESS".equals(app.getMetricsTestStatus())) {
+            return ResponseEntity.status(404).body(Map.of("error", "metrics_unavailable", "message", "Metrics endpoint not configured for this application."));
+        }
+
+        // The query should already include the job label filter injected by the frontend,
+        // e.g., {job="service-name"}. We pass it directly to PrometheusClient.
+        Object result;
+        if (start != null && end != null && step != null) {
+            result = prometheusClient.queryRange(query, start, end, step);
+        } else {
+            result = prometheusClient.queryList(query);
+        }
+
+        return ResponseEntity.ok(result);
     }
 }

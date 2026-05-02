@@ -7,6 +7,7 @@ import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
 import ConfirmationModal from '../components/ConfirmationModal';
+import MetricsConfigModal from '../components/applications/MetricsConfigModal';
 
 const ApplicationsPage: React.FC = () => {
   const { isAdmin, permissions } = useAuth();
@@ -20,6 +21,8 @@ const ApplicationsPage: React.FC = () => {
   const [editingApp, setEditingApp] = useState<any>(null);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [postDeployApp, setPostDeployApp] = useState<any>(null);
+  const [configModalApp, setConfigModalApp] = useState<any>(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -100,10 +103,15 @@ const ApplicationsPage: React.FC = () => {
 
   const handleDeploy = async (payload: any) => {
     try {
-      await deployApplication(payload);
+      const res = await deployApplication(payload);
+      const isNew = !editingApp;
       setEditingApp(null);
       setIsDeployModalOpen(false);
       await fetchApps();
+      
+      if (isNew && res.data) {
+        setPostDeployApp(res.data);
+      }
     } catch (e: any) {
       throw e;
     }
@@ -327,6 +335,27 @@ const ApplicationsPage: React.FC = () => {
                         {app.status === 'RUNNING' && <ExternalLink className="w-3 h-3 text-primary/50" />}
                       </div>
                     </div>
+                    <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Monitoring</span>
+                        {app.metricsTestStatus === 'SUCCESS' ? (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                            <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400">
+                            <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
+                          </div>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => setConfigModalApp(app)}
+                        className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"
+                        title="Configure Metrics"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     {app.isCanary && <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20"><Zap className="w-3 h-3 text-amber-500 animate-pulse" /><span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Canary active on port {app.canaryPort}</span></div>}
                   </div>
 
@@ -424,6 +453,29 @@ const ApplicationsPage: React.FC = () => {
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
       />
+
+      <ConfirmationModal
+        isOpen={!!postDeployApp}
+        title="Deployment Started"
+        message="The application deployment has been initiated. Would you like to configure Application Observability metrics (Golden Signals) for this service now?"
+        type="info"
+        onClose={() => setPostDeployApp(null)}
+        onConfirm={() => {
+          setConfigModalApp(postDeployApp);
+          setPostDeployApp(null);
+        }}
+      />
+
+      {configModalApp && (
+        <MetricsConfigModal
+          app={configModalApp}
+          onClose={() => setConfigModalApp(null)}
+          onSuccess={() => {
+            setConfigModalApp(null);
+            fetchApps();
+          }}
+        />
+      )}
     </div>
   );
 };
