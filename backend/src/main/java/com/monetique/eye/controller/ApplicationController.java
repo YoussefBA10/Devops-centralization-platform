@@ -60,6 +60,7 @@ public class ApplicationController {
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
                 .metricsPort(app.getMetricsPort())
                 .metricsTestStatus(app.getMetricsTestStatus())
+                .metricsPath(app.getMetricsPath())
                 .environmentName(app.getEnvironment() != null ? app.getEnvironment().getName() : null)
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
@@ -93,6 +94,7 @@ public class ApplicationController {
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
                 .metricsPort(app.getMetricsPort())
                 .metricsTestStatus(app.getMetricsTestStatus())
+                .metricsPath(app.getMetricsPath())
                 .build();
         return ResponseEntity.ok(dto);
     }
@@ -348,28 +350,52 @@ public class ApplicationController {
         Integer port = request.get("port") != null ? Integer.valueOf(request.get("port").toString()) : null;
         if (port == null) return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Port is required"));
 
-        String url = "http://" + app.getTargetNode() + ":" + port + "/metrics";
-        try {
-            org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
-            org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(3000);
-            factory.setReadTimeout(5000);
-            restTemplate.setRequestFactory(factory);
+        // Determine potential paths to try
+        java.util.List<String> pathsToTry = new java.util.ArrayList<>();
+        String lang = app.getAppLanguage() != null ? app.getAppLanguage().toLowerCase() : "";
+        
+        // Prioritize paths based on language
+        if (lang.contains("java") || lang.contains("spring")) {
+            pathsToTry.add("/actuator/prometheus");
+            pathsToTry.add("/metrics");
+        } else {
+            pathsToTry.add("/metrics");
+            pathsToTry.add("/actuator/prometheus");
+        }
 
-            org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && 
-                (response.getBody().contains("# HELP") || response.getBody().contains("# TYPE"))) {
-                return ResponseEntity.ok(Map.of("success", true, "message", "Metrics endpoint reachable. Application monitoring is now active."));
-            } else {
-                return ResponseEntity.ok(Map.of("success", false, "message", "Could not reach metrics endpoint or invalid Prometheus format."));
+        String successfulPath = null;
+        String errorMessage = "Could not reach metrics endpoint on any common path.";
+
+        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(2000);
+        factory.setReadTimeout(3000);
+        restTemplate.setRequestFactory(factory);
+
+        for (String path : pathsToTry) {
+            String url = "http://" + app.getTargetNode() + ":" + port + path;
+            try {
+                org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && 
+                    (response.getBody().contains("# HELP") || response.getBody().contains("# TYPE"))) {
+                    successfulPath = path;
+                    break;
+                }
+            } catch (Exception e) {
+                log.warn("Path test failed for {}: {}", path, e.getMessage());
+                errorMessage = "Connection failed for " + path + ": " + e.getMessage();
             }
-        } catch (org.springframework.web.client.ResourceAccessException e) {
-            if (e.getCause() instanceof java.net.SocketTimeoutException || e.getCause() instanceof java.net.ConnectException) {
-                return ResponseEntity.ok(Map.of("success", false, "message", "Could not reach host within timeout"));
-            }
-            return ResponseEntity.ok(Map.of("success", false, "message", "Connection failed: " + e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("success", false, "message", "Error testing endpoint: " + e.getMessage()));
+        }
+
+        if (successfulPath != null) {
+            app.setMetricsPort(port);
+            app.setMetricsPath(successfulPath);
+            app.setMetricsTestStatus("SUCCESS");
+            app.setMetricsTestedAt(java.time.LocalDateTime.now());
+            applicationRepository.save(app);
+            return ResponseEntity.ok(Map.of("success", true, "message", "Successfully connected via " + successfulPath + ". Application monitoring is now active.", "path", successfulPath));
+        } else {
+            return ResponseEntity.ok(Map.of("success", false, "message", errorMessage));
         }
     }
 
@@ -387,6 +413,9 @@ public class ApplicationController {
         }
         if (request.containsKey("testStatus")) {
             app.setMetricsTestStatus((String) request.get("testStatus"));
+        }
+        if (request.containsKey("metricsPath")) {
+            app.setMetricsPath((String) request.get("metricsPath"));
         }
         app.setMetricsTestedAt(java.time.LocalDateTime.now());
         

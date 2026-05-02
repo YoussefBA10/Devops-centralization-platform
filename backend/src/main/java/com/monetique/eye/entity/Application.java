@@ -68,6 +68,7 @@ public class Application {
     private Integer metricsPort;
     private String metricsTestStatus; // PENDING, SUCCESS, FAILED, SKIPPED
     private java.time.LocalDateTime metricsTestedAt;
+    private String metricsPath;
 
     private java.time.LocalDateTime createdAt;
 

@@ -125,6 +125,9 @@ scrape_configs:
       - files:
           - '/etc/prometheus/file_sd/app_targets.yml'
         refresh_interval: 15s
+    relabel_configs:
+      - source_labels: [metrics_path]
+        target_label: __metrics_path__
 
   # 11. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'

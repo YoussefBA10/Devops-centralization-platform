@@ -36,4 +36,5 @@ public class ApplicationDTO {
     private Integer metricsPort;
     private String metricsTestStatus;
     private String environmentName;
+    private String metricsPath;
 }

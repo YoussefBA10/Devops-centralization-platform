@@ -938,10 +938,18 @@ public class DeploymentService {
             String targetStr = ip + ":" + metricsPort;
             String jobName = app.getServiceNameKeyword() != null ? app.getServiceNameKeyword() : app.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
 
+            java.util.Map<String, String> labels = new java.util.HashMap<>();
+            labels.put("job", jobName);
+            labels.put("environment", envLabel);
+            labels.put("nodename", nodeName);
+            labels.put("app_id", String.valueOf(app.getId()));
+            if (app.getMetricsPath() != null) {
+                labels.put("metrics_path", app.getMetricsPath());
+            }
+
             java.util.Map<String, Object> appTarget = new java.util.HashMap<>();
             appTarget.put("targets", java.util.List.of(targetStr));
-            appTarget.put("labels",
-                    java.util.Map.of("job", jobName, "environment", envLabel, "nodename", nodeName, "app_id", String.valueOf(app.getId())));
+            appTarget.put("labels", labels);
 
             updateOrAdd(targets, appTarget);
 
