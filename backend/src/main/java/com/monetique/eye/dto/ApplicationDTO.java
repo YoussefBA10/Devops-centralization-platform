@@ -35,4 +35,5 @@ public class ApplicationDTO {
     private java.util.Map<String, String> envVars;
     private Integer metricsPort;
     private String metricsTestStatus;
+    private String environmentName;
 }

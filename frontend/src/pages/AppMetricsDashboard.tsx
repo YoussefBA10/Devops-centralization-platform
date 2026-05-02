@@ -11,6 +11,7 @@ const AppMetricsDashboard: React.FC = () => {
   const { appId } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [appInfo, setAppInfo] = useState<any>(null);
   const [metricsData, setMetricsData] = useState<any>({
     latency: [],
     traffic: [],
@@ -18,6 +19,16 @@ const AppMetricsDashboard: React.FC = () => {
     saturation: [],
     health: { status: 'UNKNOWN', message: '' }
   });
+
+  const fetchAppInfo = async () => {
+    if (!appId) return;
+    try {
+      const res = await api.get(`/applications/${appId}`);
+      setAppInfo(res.data);
+    } catch (e) {
+      console.error('Failed to fetch app info', e);
+    }
+  };
 
   const fetchMetrics = async () => {
     if (!appId) return;
@@ -29,7 +40,7 @@ const AppMetricsDashboard: React.FC = () => {
     const queries = {
       latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket", app_id="${appId}"}[5m])) by (le))`,
       traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count", app_id="${appId}"}[5m]))`,
-      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}", status=~"5.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}"}[5m]))) * 100`,
+      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}", status_code!~"2..|3..", status!~"2..|3.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}"}[5m]))) * 100`,
       saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage", app_id="${appId}"}[5m])) * 100`
     };
 
@@ -41,14 +52,24 @@ const AppMetricsDashboard: React.FC = () => {
         const healthRes = await api.get(`/applications/${appId}/metrics`, {
           params: { query: `up{app_id="${appId}"}` }
         });
-        if (healthRes.data?.result?.length > 0) {
-          const val = parseInt(healthRes.data.result[0].value[1]);
+        
+        // healthRes.data is a direct list from queryList
+        if (Array.isArray(healthRes.data) && healthRes.data.length > 0) {
+          const val = parseFloat(healthRes.data[0].value);
           newData.health = { 
             status: val === 1 ? 'UP' : 'DOWN',
-            message: val === 1 ? 'Prometheus is successfully scraping this app.' : 'Prometheus cannot reach the metrics endpoint.'
+            message: val === 1 ? 'Prometheus is successfully scraping this app.' : 'Prometheus cannot reach the metrics endpoint (Check port/firewall).'
           };
         } else {
-          newData.health = { status: 'NOT_FOUND', message: 'Prometheus has not discovered this target yet.' };
+          // If we have any metrics at all, it means it's discovered
+          const anyMetrics = await api.get(`/applications/${appId}/metrics`, {
+            params: { query: `count({app_id="${appId}"})` }
+          });
+          if (Array.isArray(anyMetrics.data) && anyMetrics.data.length > 0) {
+             newData.health = { status: 'UP', message: 'Prometheus is scraping, but the health signal is still stabilizing.' };
+          } else {
+             newData.health = { status: 'NOT_FOUND', message: 'Prometheus has not discovered this target yet.' };
+          }
         }
       } catch (e) {
         console.error('Failed to fetch health status', e);
@@ -66,12 +87,21 @@ const AppMetricsDashboard: React.FC = () => {
                 x: new Date(v[0] * 1000),
                 y: parseFloat(v[1]) || 0
               }));
+            } else if (key === 'errors' || key === 'traffic') {
+              // For errors/traffic, if the result is empty but the app is UP, it's 0
+              newData[key] = [];
             }
           } catch (e) {
             console.error(`Failed to fetch ${key} metrics`, e);
           }
         })
       );
+
+      // Final polish: If we have traffic but no errors, errors = 0
+      if (newData.traffic.length > 0 && newData.errors.length === 0) {
+        newData.errors = newData.traffic.map(d => ({ ...d, y: 0 }));
+      }
+
       setMetricsData(newData);
     } finally {
       setLoading(false);
@@ -79,34 +109,70 @@ const AppMetricsDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    fetchAppInfo();
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 60000); // refresh every minute
     return () => clearInterval(interval);
   }, [appId]);
 
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'index' as const,
+      intersect: false,
+    },
+    plugins: { 
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleFont: { size: 12, weight: 'bold' as const },
+        bodyFont: { size: 12 },
+        padding: 12,
+        cornerRadius: 8,
+        displayColors: false,
+      }
+    },
+    scales: {
+      x: { 
+        grid: { display: false }, 
+        ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } 
+      },
+      y: { 
+        grid: { color: 'rgba(255,255,255,0.05)' }, 
+        ticks: { 
+          color: 'rgba(255,255,255,0.4)', 
+          font: { size: 10 },
+          callback: (value: any) => value.toLocaleString()
+        }, 
+        beginAtZero: true 
+      }
+    }
+  };
+
   const createChartData = (data: any[], label: string, color: string) => ({
-    labels: data.map(d => d.x.toLocaleTimeString()),
+    labels: data.map(d => d.x.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
     datasets: [{
       label,
       data: data.map(d => d.y),
       borderColor: color,
-      backgroundColor: `${color}33`,
+      backgroundColor: (context: any) => {
+        const ctx = context.chart.ctx;
+        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, `${color}44`);
+        gradient.addColorStop(1, 'transparent');
+        return gradient;
+      },
       borderWidth: 2,
       fill: true,
       tension: 0.4,
-      pointRadius: 0
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      pointBackgroundColor: color,
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
     }]
   });
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: {
-      x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.5)' } },
-      y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.5)' }, beginAtZero: true }
-    }
-  };
 
   return (
     <div className="flex-1 p-8 overflow-y-auto animate-in fade-in duration-500 bg-[#0a0a0b] min-h-full">
@@ -117,8 +183,17 @@ const AppMetricsDashboard: React.FC = () => {
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
             </Button>
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-white">Golden Signals</h1>
-              <p className="text-sm text-muted-foreground mt-1">Application Observability Dashboard</p>
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-3xl font-black tracking-tight text-white">Golden Signals</h1>
+                {appInfo && (
+                  <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{appInfo.environmentName}</span>
+                    <div className="w-1 h-1 rounded-full bg-indigo-500/30" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white">{appInfo.name}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">Application Observability Dashboard</p>
             </div>
           </div>
           <Button variant="outline" className="h-11 px-6 rounded-xl border-white/10 hover:bg-white/5 gap-2" onClick={fetchMetrics} loading={loading}>

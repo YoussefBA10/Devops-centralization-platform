@@ -60,8 +60,41 @@ public class ApplicationController {
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
                 .metricsPort(app.getMetricsPort())
                 .metricsTestStatus(app.getMetricsTestStatus())
+                .environmentName(app.getEnvironment() != null ? app.getEnvironment().getName() : null)
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
+    }
+
+    @GetMapping("/{id}")
+    @RequiresPermission("APP_DEPLOYMENT_VIEW")
+    public ResponseEntity<ApplicationDTO> getApplication(@PathVariable Long id) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+        ApplicationDTO dto = ApplicationDTO.builder()
+                .id(app.getId())
+                .name(app.getName())
+                .type(app.getType())
+                .appLanguage(app.getAppLanguage())
+                .repoUrl(app.getRepoUrl())
+                .targetNode(app.getTargetNode())
+                .branch(app.getBranch())
+                .port(app.getPort())
+                .status(app.getStatus())
+                .lastDeployedAt(app.getLastDeployedAt())
+                .createdAt(app.getCreatedAt())
+                .environmentId(app.getEnvironment().getId())
+                .environmentName(app.getEnvironment().getName())
+                .srcPath(app.getSrcPath())
+                .containerPort(app.getContainerPort())
+                .isCanary(app.getIsCanary())
+                .canaryPort(app.getCanaryPort())
+                .lastErrorMessage(app.getLastErrorMessage())
+                .gitToken(app.getGitToken())
+                .envVars(parseEnvVars(app.getEnvVarsJson()))
+                .metricsPort(app.getMetricsPort())
+                .metricsTestStatus(app.getMetricsTestStatus())
+                .build();
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping("/deploy")
