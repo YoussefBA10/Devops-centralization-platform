@@ -1,12 +1,10 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useEnvironment } from '../../context/EnvironmentContext';
 import { 
   Bell, 
   Search, 
   LogOut, 
-  User as UserIcon,
-  ChevronDown
+  User as UserIcon
 } from 'lucide-react';
 
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../services/api';

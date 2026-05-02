@@ -55,7 +55,6 @@ const ApplicationObservabilityPage: React.FC = () => {
           {applications.map((app) => {
             const isConfigured = app.metricsTestStatus === 'SUCCESS';
             const isFailed = app.metricsTestStatus === 'FAILED';
-            const isPending = !app.metricsTestStatus || app.metricsTestStatus === 'PENDING';
 
             return (
               <Card key={app.id} className="bg-[#0c0c0e] border-white/5 hover:border-indigo-500/30 transition-all group overflow-hidden">

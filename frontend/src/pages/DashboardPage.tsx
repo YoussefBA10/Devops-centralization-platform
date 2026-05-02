@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { useAuth } from '../context/AuthContext';
-import { Card, CardContent } from '../components/ui/Card';
+import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
 import { Link } from 'react-router-dom';
 import api from '../services/api';

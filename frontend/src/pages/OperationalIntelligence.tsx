@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { 
   Zap, 
   Brain, 
-  Flame, 
   TrendingUp, 
   AlertTriangle, 
   CheckCircle2,
@@ -11,10 +10,7 @@ import {
   Info,
   ChevronRight,
   Activity,
-  ShieldAlert,
-  Clock,
-  ExternalLink,
-  Search
+  ShieldAlert
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
@@ -311,14 +307,14 @@ const OperationalIntelligence: React.FC = () => {
               </CardHeader>
               <CardContent className="flex flex-col items-center justify-center py-8">
                  <div className="text-6xl font-black tracking-tighter text-white">
-                   {pulseData.length > 0 
-                    ? (100 - (pulseData.filter(s => s.status === 'CRITICAL').length / pulseData.length) * 100).toFixed(2)
+                   {heatmap.length > 0 
+                    ? (100 - (heatmap.filter(n => n.status === 'CRITICAL' || n.status === 'OFFLINE').length / heatmap.length) * 100).toFixed(2)
                     : "100.00"}%
                  </div>
                  <div className="flex items-center gap-2 mt-4 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                     <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em]">
-                      {pulseData.some(s => s.status === 'CRITICAL') ? 'Interrupted Service' : 'Carrier Grade Link'}
+                      {heatmap.some(n => n.status === 'CRITICAL' || n.status === 'OFFLINE') ? 'Interrupted Service' : 'Carrier Grade Link'}
                     </p>
                  </div>
               </CardContent>

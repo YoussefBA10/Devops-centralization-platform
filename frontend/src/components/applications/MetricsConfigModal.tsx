@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, AlertTriangle, Loader2, Play } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
-import { Button, Input, Label } from '../ui/Input';
+import { Button, Input } from '../ui/Input';
 import api from '../../services/api';
 
 interface MetricsConfigModalProps {
@@ -61,7 +61,7 @@ const MetricsConfigModal: React.FC<MetricsConfigModalProps> = ({ app, onClose, o
         <CardContent className="p-6 space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-white">Metrics Port</Label>
+              <label className="text-white text-sm font-medium">Metrics Port</label>
               <div className="flex gap-2">
                 <Input
                   type="number"
