@@ -350,17 +350,26 @@ public class ApplicationController {
         Integer port = request.get("port") != null ? Integer.valueOf(request.get("port").toString()) : null;
         if (port == null) return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Port is required"));
 
+        String userPath = (String) request.get("path");
+
         // Determine potential paths to try
         java.util.List<String> pathsToTry = new java.util.ArrayList<>();
+        
+        if (userPath != null && !userPath.isEmpty()) {
+            // Ensure path starts with /
+            if (!userPath.startsWith("/")) userPath = "/" + userPath;
+            pathsToTry.add(userPath);
+        }
+
         String lang = app.getAppLanguage() != null ? app.getAppLanguage().toLowerCase() : "";
         
-        // Prioritize paths based on language
+        // Prioritize paths based on language if no user path or as fallbacks
         if (lang.contains("java") || lang.contains("spring")) {
-            pathsToTry.add("/actuator/prometheus");
-            pathsToTry.add("/metrics");
+            if (!pathsToTry.contains("/actuator/prometheus")) pathsToTry.add("/actuator/prometheus");
+            if (!pathsToTry.contains("/metrics")) pathsToTry.add("/metrics");
         } else {
-            pathsToTry.add("/metrics");
-            pathsToTry.add("/actuator/prometheus");
+            if (!pathsToTry.contains("/metrics")) pathsToTry.add("/metrics");
+            if (!pathsToTry.contains("/actuator/prometheus")) pathsToTry.add("/actuator/prometheus");
         }
 
         String successfulPath = null;

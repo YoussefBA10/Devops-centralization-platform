@@ -22,7 +22,10 @@ const MetricsConfigModal: React.FC<MetricsConfigModalProps> = ({ app, onClose, o
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await api.post(`/applications/${app.id}/metrics/test`, { port: parseInt(port, 10) });
+      const res = await api.post(`/applications/${app.id}/metrics/test`, { 
+        port: parseInt(port, 10),
+        path: path
+      });
       setTestResult(res.data);
       if (res.data.success && res.data.path) {
         setPath(res.data.path);
