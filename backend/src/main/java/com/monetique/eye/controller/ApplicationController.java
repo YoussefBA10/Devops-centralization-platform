@@ -354,31 +354,30 @@ public class ApplicationController {
 
         // Determine potential paths to try
         java.util.List<String> pathsToTry = new java.util.ArrayList<>();
+        boolean isManualPath = false;
         
         if (userPath != null && !userPath.isEmpty()) {
-            // Ensure path starts with /
             if (!userPath.startsWith("/")) userPath = "/" + userPath;
             pathsToTry.add(userPath);
-        }
-
-        String lang = app.getAppLanguage() != null ? app.getAppLanguage().toLowerCase() : "";
-        
-        // Prioritize paths based on language if no user path or as fallbacks
-        if (lang.contains("java") || lang.contains("spring")) {
-            if (!pathsToTry.contains("/actuator/prometheus")) pathsToTry.add("/actuator/prometheus");
-            if (!pathsToTry.contains("/metrics")) pathsToTry.add("/metrics");
+            isManualPath = true;
         } else {
-            if (!pathsToTry.contains("/metrics")) pathsToTry.add("/metrics");
-            if (!pathsToTry.contains("/actuator/prometheus")) pathsToTry.add("/actuator/prometheus");
+            String lang = app.getAppLanguage() != null ? app.getAppLanguage().toLowerCase() : "";
+            if (lang.contains("java") || lang.contains("spring")) {
+                pathsToTry.add("/actuator/prometheus");
+                pathsToTry.add("/metrics");
+            } else {
+                pathsToTry.add("/metrics");
+                pathsToTry.add("/actuator/prometheus");
+            }
         }
 
         String successfulPath = null;
-        String errorMessage = "Could not reach metrics endpoint on any common path.";
+        String lastError = "Could not reach host.";
 
         org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(2000);
-        factory.setReadTimeout(3000);
+        factory.setConnectTimeout(5000);
+        factory.setReadTimeout(5000);
         restTemplate.setRequestFactory(factory);
 
         for (String path : pathsToTry) {
@@ -391,8 +390,9 @@ public class ApplicationController {
                     break;
                 }
             } catch (Exception e) {
-                log.warn("Path test failed for {}: {}", path, e.getMessage());
-                errorMessage = "Connection failed for " + path + ": " + e.getMessage();
+                lastError = "Failed to connect to " + path + ": " + e.getMessage();
+                // If the user manually provided a path, don't try fallbacks - show them this specific error
+                if (isManualPath) break;
             }
         }
 
@@ -402,9 +402,9 @@ public class ApplicationController {
             app.setMetricsTestStatus("SUCCESS");
             app.setMetricsTestedAt(java.time.LocalDateTime.now());
             applicationRepository.save(app);
-            return ResponseEntity.ok(Map.of("success", true, "message", "Successfully connected via " + successfulPath + ". Application monitoring is now active.", "path", successfulPath));
+            return ResponseEntity.ok(Map.of("success", true, "message", "Successfully connected via " + successfulPath, "path", successfulPath));
         } else {
-            return ResponseEntity.ok(Map.of("success", false, "message", errorMessage));
+            return ResponseEntity.ok(Map.of("success", false, "message", lastError));
         }
     }
 
