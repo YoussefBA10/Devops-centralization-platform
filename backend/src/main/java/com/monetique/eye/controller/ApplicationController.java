@@ -58,6 +58,8 @@ public class ApplicationController {
                 .lastErrorMessage(app.getLastErrorMessage())
                 .gitToken(app.getGitToken())
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
+                .metricsPort(app.getMetricsPort())
+                .metricsTestStatus(app.getMetricsTestStatus())
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
