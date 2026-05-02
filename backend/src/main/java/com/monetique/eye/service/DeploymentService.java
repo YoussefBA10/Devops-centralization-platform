@@ -604,6 +604,12 @@ public class DeploymentService {
                 this.promoteApplication(environmentId, applicationId, userId);
             }
 
+            // Task 3: Ensure metrics are registered in Prometheus if configured
+            if (app.getMetricsPort() != null && "SUCCESS".equals(app.getMetricsTestStatus())) {
+                log.info("App {} has metrics configured. Updating Prometheus targets...", app.getName());
+                this.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
+            }
+
         } catch (Exception e) {
             log.error("Application full deployment failed: {}", e.getMessage());
             deploymentLog.setStatus("FAILED");

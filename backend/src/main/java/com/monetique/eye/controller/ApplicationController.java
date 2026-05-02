@@ -356,11 +356,13 @@ public class ApplicationController {
         java.util.List<String> pathsToTry = new java.util.ArrayList<>();
         boolean isManualPath = false;
         
-        if (userPath != null && !userPath.isEmpty()) {
+        if (userPath != null && !userPath.trim().isEmpty()) {
+            userPath = userPath.trim();
             if (!userPath.startsWith("/")) userPath = "/" + userPath;
             pathsToTry.add(userPath);
             isManualPath = true;
         } else {
+            // Default heuristics based on language
             String lang = app.getAppLanguage() != null ? app.getAppLanguage().toLowerCase() : "";
             if (lang.contains("java") || lang.contains("spring")) {
                 pathsToTry.add("/actuator/prometheus");
@@ -372,7 +374,7 @@ public class ApplicationController {
         }
 
         String successfulPath = null;
-        String lastError = "Could not reach host.";
+        String lastError = "Could not reach host at any of the attempted paths.";
 
         org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
         org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
@@ -390,7 +392,7 @@ public class ApplicationController {
                     break;
                 }
             } catch (Exception e) {
-                lastError = "Failed to connect to " + path + ": " + e.getMessage();
+                lastError = "Connection failed for " + path + ": " + e.getMessage();
                 // If the user manually provided a path, don't try fallbacks - show them this specific error
                 if (isManualPath) break;
             }

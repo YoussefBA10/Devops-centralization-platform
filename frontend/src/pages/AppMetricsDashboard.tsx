@@ -38,10 +38,10 @@ const AppMetricsDashboard: React.FC = () => {
     const step = '60s';
 
     const queries = {
-      latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket", app_id="${appId}"}[5m])) by (le))`,
-      traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count", app_id="${appId}"}[5m]))`,
-      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}", status_code!~"2..|3..", status!~"2..|3.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total", app_id="${appId}"}[5m]))) * 100`,
-      saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage", app_id="${appId}"}[5m])) * 100`
+      latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket|http_server_requests_seconds_bucket", app_id="${appId}"}[5m])) by (le))`,
+      traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count|http_server_requests_seconds_count", app_id="${appId}"}[5m]))`,
+      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count", app_id="${appId}", status_code!~"2..|3..", status!~"2..|3.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count", app_id="${appId}"}[5m]))) * 100`,
+      saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage|process_cpu_usage|system_cpu_usage", app_id="${appId}"}[5m])) * 100`
     };
 
     const newData: any = { latency: [], traffic: [], errors: [], saturation: [], health: { status: 'UNKNOWN', message: '' } };
