@@ -82,4 +82,9 @@ public class OperationalController {
     public List<com.monetique.eye.dto.IncidentDTO> getIncidents(@RequestParam Long environmentId) {
         return infrastructureService.getEnvironmentIncidents(environmentId);
     }
+
+    @GetMapping("/resources")
+    public List<com.monetique.eye.dto.ServiceResourceDTO> getResources(@RequestParam Long environmentId) {
+        return infrastructureService.getEnvironmentServiceResources(environmentId);
+    }
 }

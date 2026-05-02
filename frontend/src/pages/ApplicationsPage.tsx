@@ -14,7 +14,7 @@ const ApplicationsPage: React.FC = () => {
   const canCreate = isAdmin || permissions?.appDeployment?.create;
   const canEdit = isAdmin || permissions?.appDeployment?.edit;
   const canDelete = isAdmin || permissions?.appDeployment?.delete;
-  const { selectedEnvironment } = useEnvironment();
+  const { environments, selectedEnvironment, setSelectedEnvironment } = useEnvironment();
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
@@ -248,6 +248,23 @@ const ApplicationsPage: React.FC = () => {
   return (
     <div className="flex-1 p-8 overflow-y-auto animate-in fade-in duration-500">
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* Environment Segmented Control */}
+        <div className="flex gap-2 p-1 bg-[#0c0c0e] border border-white/5 rounded-xl w-fit">
+          {environments.map((env) => (
+            <button
+              key={env.id}
+              onClick={() => setSelectedEnvironment(env)}
+              className={`px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${
+                selectedEnvironment?.id === env.id 
+                  ? 'bg-primary/20 text-primary border border-primary/30' 
+                  : 'text-muted-foreground hover:bg-white/5 hover:text-white border border-transparent'
+              }`}
+            >
+              {env.name}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Applications</h1>

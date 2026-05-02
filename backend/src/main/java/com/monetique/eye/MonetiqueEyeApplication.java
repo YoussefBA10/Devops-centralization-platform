@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.util.Properties;
 @EntityScan("com.monetique.eye.entity")
 @EnableJpaRepositories("com.monetique.eye.repository")
 @EnableScheduling
+@EnableAsync
 public class MonetiqueEyeApplication {
 
 	public static void main(String[] args) {

@@ -65,6 +65,13 @@ export const getEnvironmentNodes = (id: number) => api.get(`/environments/${id}/
 export const getDeploymentStatus = (envId: number, targetIp: string) => 
   api.get(`/environments/deployments/status`, { params: { environmentId: envId, targetIp } });
 
+// Operational Intelligence
+export const getOperationalStability = (envId: number) => api.get(`/operational/stability`, { params: { environmentId: envId } });
+export const getOperationalDigest = (envId: number) => api.get(`/operational/digest`, { params: { environmentId: envId } });
+export const getOperationalHeatmap = (envId: number) => api.get(`/operational/heatmap`, { params: { environmentId: envId } });
+export const getOperationalAnomalies = (envId: number) => api.get(`/operational/anomalies`, { params: { environmentId: envId } });
+export const getOperationalResources = (envId: number) => api.get(`/operational/resources`, { params: { environmentId: envId } });
+
 // Application Endpoints
 export const getApplications = (envId: number) => api.get('/applications', { params: { environmentId: envId } });
 export const deployApplication = (data: any) => api.post('/applications/deploy', data);

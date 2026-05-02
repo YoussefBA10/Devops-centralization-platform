@@ -897,11 +897,29 @@ public class DeploymentService {
     }
 
     @Async
-    public void registerAppInPrometheus(Application app, String ip, Integer metricsPort) {
-        log.info("Registering app {} in Prometheus for environment {}", app.getName(), app.getEnvironment().getName());
+    @Transactional
+    public void registerAppInPrometheus(Long appId, String ip, Integer metricsPort) {
+        log.info("Starting background Prometheus registration for appId: {}", appId);
+        Application app = applicationRepository.findById(appId).orElse(null);
+        if (app == null) {
+            log.error("Cannot register app in Prometheus: App with ID {} not found", appId);
+            return;
+        }
+        
+        String envName = "unknown";
+        try {
+            envName = app.getEnvironment().getName();
+        } catch (Exception e) {
+            log.warn("Could not get environment name for app {}: {}", app.getName(), e.getMessage());
+        }
+
+        log.info("Registering app {} in Prometheus for environment {}", app.getName(), envName);
         try {
             File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/app_targets.yml");
-            configFile.getParentFile().mkdirs();
+            if (!configFile.getParentFile().exists()) {
+                log.info("Creating directory: {}", configFile.getParentFile().getAbsolutePath());
+                configFile.getParentFile().mkdirs();
+            }
 
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
                     new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
@@ -918,11 +936,12 @@ public class DeploymentService {
             String envLabel = app.getEnvironment().getSafeName();
             String nodeName = ip.equals(app.getEnvironment().getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
             String targetStr = ip + ":" + metricsPort;
+            String jobName = app.getServiceNameKeyword() != null ? app.getServiceNameKeyword() : app.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
 
             java.util.Map<String, Object> appTarget = new java.util.HashMap<>();
             appTarget.put("targets", java.util.List.of(targetStr));
             appTarget.put("labels",
-                    java.util.Map.of("job", app.getServiceNameKeyword(), "environment", envLabel, "nodename", nodeName, "app_id", String.valueOf(app.getId())));
+                    java.util.Map.of("job", jobName, "environment", envLabel, "nodename", nodeName, "app_id", String.valueOf(app.getId())));
 
             updateOrAdd(targets, appTarget);
 
@@ -981,9 +1000,12 @@ public class DeploymentService {
     private void triggerPrometheusReload() {
         try {
             log.info("Triggering Prometheus reload...");
-            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
+            java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(2))
+                    .build();
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create("http://prometheus:9090/-/reload"))
+                    .timeout(java.time.Duration.ofSeconds(3))
                     .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
                     .build();
             client.send(request, java.net.http.HttpResponse.BodyHandlers.discarding());

@@ -10,7 +10,9 @@ import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.service.DeploymentService;
 import com.monetique.eye.security.RequiresPermission;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/applications")
 @RequiredArgsConstructor
@@ -337,7 +340,9 @@ public class ApplicationController {
 
     @PatchMapping("/{id}/metrics/config")
     @RequiresPermission("APP_DEPLOYMENT_EDIT")
+    @Transactional
     public ResponseEntity<?> updateMetricsConfig(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        log.info("Received metrics config update request for app ID: {}", id);
         Application app = applicationRepository.findById(id).orElse(null);
         if (app == null) return ResponseEntity.notFound().build();
 
@@ -353,7 +358,7 @@ public class ApplicationController {
         applicationRepository.save(app);
 
         if ("SUCCESS".equals(app.getMetricsTestStatus()) && app.getMetricsPort() != null) {
-            deploymentService.registerAppInPrometheus(app, app.getTargetNode(), app.getMetricsPort());
+            deploymentService.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
         }
 
         return ResponseEntity.ok(Map.of("message", "Metrics configuration updated successfully"));

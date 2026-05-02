@@ -8,7 +8,7 @@ import { Activity, Settings, CheckCircle2, AlertCircle, RefreshCw, XCircle } fro
 import MetricsConfigModal from '../components/applications/MetricsConfigModal';
 
 const ApplicationObservabilityPage: React.FC = () => {
-  const { selectedEnvironment } = useEnvironment();
+  const { environments, selectedEnvironment, setSelectedEnvironment } = useEnvironment();
   const navigate = useNavigate();
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,6 +34,23 @@ const ApplicationObservabilityPage: React.FC = () => {
   return (
     <div className="flex-1 p-8 overflow-y-auto animate-in fade-in duration-500 bg-[#0a0a0b] min-h-full">
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* Environment Segmented Control */}
+        <div className="flex gap-2 p-1 bg-[#0c0c0e] border border-white/5 rounded-xl w-fit">
+          {environments.map((env) => (
+            <button
+              key={env.id}
+              onClick={() => setSelectedEnvironment(env)}
+              className={`px-6 py-2 rounded-lg text-sm font-black uppercase tracking-widest transition-all ${
+                selectedEnvironment?.id === env.id 
+                  ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
+                  : 'text-muted-foreground hover:bg-white/5 hover:text-white border border-transparent'
+              }`}
+            >
+              {env.name}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 text-indigo-400 mb-2">
