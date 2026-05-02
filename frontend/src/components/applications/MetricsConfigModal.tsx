@@ -122,16 +122,6 @@ const MetricsConfigModal: React.FC<MetricsConfigModalProps> = ({ app, onClose, o
             <Button variant="ghost" onClick={onClose} disabled={saving} className="hover:bg-white/5">
               Cancel
             </Button>
-            {testResult && !testResult.success && (
-              <Button 
-                onClick={handleSave} 
-                disabled={saving}
-                variant="outline"
-                className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Force Save anyway'}
-              </Button>
-            )}
             <Button 
               onClick={handleSave} 
               disabled={!testResult?.success || saving}

@@ -615,16 +615,11 @@ public class DeploymentService {
             String simpleError = extractSimpleErrorMessage(fullLog);
             deploymentLog.setShortError(simpleError);
 
-            if (isNew) {
-                // Remove application record if it was a new deployment that failed
-                applicationRepository.delete(app);
-                log.info("Deleted failed NEW application record: {}", app.getName());
-            } else {
-                // Update application status and store the error summary for existing apps
-                app.setStatus("FAILED");
-                app.setLastErrorMessage(simpleError);
-                applicationRepository.save(app);
-            }
+            // Update application status and store the error summary
+            app.setStatus("FAILED");
+            app.setLastErrorMessage(simpleError);
+            applicationRepository.save(app);
+            log.info("Deployment failed for application: {}. Error: {}", app.getName(), simpleError);
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
