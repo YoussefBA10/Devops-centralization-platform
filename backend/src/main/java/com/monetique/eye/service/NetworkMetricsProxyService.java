@@ -148,12 +148,23 @@ public class NetworkMetricsProxyService {
         return result;
     }
 
-    private JsonNode queryRange(String query, String start, String step) {
+    private JsonNode queryRange(String query, String startStr, String step) {
         try {
+            long end = System.currentTimeMillis() / 1000;
+            long start;
+            
+            if (startStr.startsWith("now-")) {
+                String duration = startStr.substring(4);
+                long seconds = parseDurationToSeconds(duration);
+                start = end - seconds;
+            } else {
+                start = end - 3600; // default 1h
+            }
+
             java.net.URI uri = UriComponentsBuilder.fromHttpUrl(metricsBaseUrl + "/api/v1/query_range")
                     .queryParam("query", query)
-                    .queryParam("start", start)
-                    .queryParam("end", "now")
+                    .queryParam("start", String.valueOf(start))
+                    .queryParam("end", String.valueOf(end))
                     .queryParam("step", step)
                     .build().encode().toUri();
 
@@ -203,6 +214,23 @@ public class NetworkMetricsProxyService {
     private String getStart(String range) {
         if (range == null || range.isEmpty()) return "now-1h";
         return "now-" + range;
+    }
+
+    private long parseDurationToSeconds(String duration) {
+        try {
+            if (duration.endsWith("m")) {
+                return Long.parseLong(duration.replace("m", "")) * 60;
+            } else if (duration.endsWith("h")) {
+                return Long.parseLong(duration.replace("h", "")) * 3600;
+            } else if (duration.endsWith("d")) {
+                return Long.parseLong(duration.replace("d", "")) * 86400;
+            } else if (duration.endsWith("s")) {
+                return Long.parseLong(duration.replace("s", ""));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse duration: {}", duration);
+        }
+        return 3600; // default 1h
     }
 
     @Data
