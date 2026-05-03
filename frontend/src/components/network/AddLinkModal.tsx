@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Globe, Server, Hash, Activity } from 'lucide-react';
+import { X, Globe, Server, Hash, Activity, AlertCircle } from 'lucide-react';
 import { getNetworkNodes, addNetworkLink } from '../../services/api';
+import { useToast } from '../ui/Toast';
 
 interface AddLinkModalProps {
   isOpen: boolean;
@@ -12,8 +13,10 @@ interface AddLinkModalProps {
 }
 
 const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess, clusterId, editData }) => {
+  const { showToast } = useToast();
   const [nodes, setNodes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isConfirmingUpdate, setIsConfirmingUpdate] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     sourceNodeId: '',
@@ -58,28 +61,38 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
         });
       }
     }
+    setIsConfirmingUpdate(false);
   }, [isOpen, clusterId, editData]);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (editData && !isConfirmingUpdate) {
+      setIsConfirmingUpdate(true);
+      return;
+    }
+
     setLoading(true);
     try {
       if (editData) {
         const { updateNetworkLink } = await import('../../services/api');
         await updateNetworkLink(editData.linkId, formData);
+        showToast('Service link updated successfully', 'success');
       } else {
         await addNetworkLink(formData);
+        showToast('Service link added successfully', 'success');
       }
       onSuccess();
       onClose();
     } catch (err) {
       console.error('Failed to save link:', err);
+      showToast('Failed to save service link', 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all duration-300">
@@ -206,20 +219,47 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
           </div>
 
           <div className="pt-4 flex space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-white hover:bg-white/5 transition-all font-medium"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all font-medium disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : (editData ? 'Update Link' : 'Add Service Link')}
-            </button>
+            {isConfirmingUpdate ? (
+              <div className="w-full flex flex-col space-y-3 animate-in slide-in-from-bottom-2">
+                <div className="p-3 bg-amber-400/10 border border-amber-400/20 rounded-lg flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400" />
+                  <p className="text-xs text-amber-200/80">Confirm changes to this service link?</p>
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsConfirmingUpdate(false)}
+                    className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-white hover:bg-white/5 transition-all font-medium"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all font-medium disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : 'Yes, Update'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-white hover:bg-white/5 transition-all font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all font-medium disabled:opacity-50"
+                >
+                  {loading ? 'Saving...' : (editData ? 'Update Link' : 'Add Service Link')}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>

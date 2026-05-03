@@ -120,8 +120,6 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
-            registerNodeInPrometheus(environment, targetIp);
-            
             // Persist Managed Node credentials
             com.monetique.eye.entity.ManagedNode managedNode = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
                     .orElse(com.monetique.eye.entity.ManagedNode.builder()
@@ -132,7 +130,10 @@ public class DeploymentService {
             managedNode.setSshUser(sshUser);
             managedNode.setSshPassword(sshPassword);
             managedNode.setNodeName(nodeName);
-            managedNodeRepository.save(managedNode);
+            managedNode = managedNodeRepository.save(managedNode);
+
+            // Register in Prometheus with the persisted node ID
+            registerNodeInPrometheus(environment, targetIp, managedNode.getId());
 
             environment.setLastDeploymentStatus(DeploymentStatus.SUCCESS);
             environment.setLastDeployedAt(java.time.LocalDateTime.now());
@@ -833,7 +834,7 @@ public class DeploymentService {
     }
 
     @Async
-    public void registerNodeInPrometheus(Environment environment, String ip) {
+    public void registerNodeInPrometheus(Environment environment, String ip, Long nodeId) {
         log.info("Registering node {} in Prometheus for environment {}", ip, environment.getName());
         try {
             File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
@@ -870,17 +871,17 @@ public class DeploymentService {
             java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
             nodeExporter.put("targets", java.util.List.of(nodeExporterTarget));
             nodeExporter.put("labels",
-                    java.util.Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName));
+                    java.util.Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
 
             // Add cAdvisor target
             java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
             cadvisor.put("targets", java.util.List.of(cadvisorTarget));
-            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel, "nodename", nodeName));
+            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
 
             // Add Filebeat target
             java.util.Map<String, Object> filebeat = new java.util.HashMap<>();
             filebeat.put("targets", java.util.List.of(filebeatTarget));
-            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel, "nodename", nodeName));
+            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
 
             // Check for duplicates and update or add
             updateOrAdd(targets, nodeExporter);
@@ -943,6 +944,10 @@ public class DeploymentService {
             labels.put("job", jobName);
             labels.put("environment", envLabel);
             labels.put("nodename", nodeName);
+            
+            // Find node ID for this app
+            managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), ip)
+                .ifPresent(n -> labels.put("node_id", String.valueOf(n.getId())));
             labels.put("app_id", String.valueOf(app.getId()));
             if (app.getMetricsPath() != null) {
                 labels.put("metrics_path", app.getMetricsPath());
@@ -1266,5 +1271,20 @@ public class DeploymentService {
         } catch (Exception e) {
             log.error("Failed to restart container {}: {}", containerName, e.getMessage());
         }
+    @Async
+    public void syncMonitoring() {
+        log.info("Starting global monitoring synchronization...");
+        List<com.monetique.eye.entity.ManagedNode> nodes = managedNodeRepository.findAll();
+        for (com.monetique.eye.entity.ManagedNode node : nodes) {
+            registerNodeInPrometheus(node.getEnvironment(), node.getIp(), node.getId());
+        }
+
+        List<com.monetique.eye.entity.Application> apps = applicationRepository.findAll();
+        for (com.monetique.eye.entity.Application app : apps) {
+            if (app.getTargetNode() != null && app.getMetricsPort() != null) {
+                registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
+            }
+        }
+        log.info("Global monitoring synchronization complete.");
     }
 }

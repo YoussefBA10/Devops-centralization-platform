@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/api/setup/**").authenticated()
+                .requestMatchers("/api/infrastructure/sync-monitoring").permitAll()
                 .requestMatchers("/api/infrastructure/**").authenticated()
                 .requestMatchers("/api/environments/**").authenticated()
                 .anyRequest().authenticated()

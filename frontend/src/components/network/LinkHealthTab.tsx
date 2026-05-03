@@ -3,23 +3,41 @@ import { useEnvironment } from '../../context/EnvironmentContext';
 import { useCluster } from '../../context/ClusterContext';
 import { CheckCircle2, AlertCircle, XCircle, Edit2, Trash2 } from 'lucide-react';
 import { getNetworkHealthSummary, deleteNetworkLink } from '../../services/api';
+import { useToast } from '../ui/Toast';
 import AddLinkModal from './AddLinkModal';
+import DeleteLinkModal from './DeleteLinkModal';
 
 const LinkHealthTab: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
   const { selectedCluster } = useCluster();
+  const { showToast } = useToast();
   const [links, setLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLink, setEditingLink] = useState<any>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [linkToDelete, setLinkToDelete] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this service link?')) return;
+  const handleDeleteClick = (link: any) => {
+    setLinkToDelete(link);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!linkToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteNetworkLink(id);
+      await deleteNetworkLink(linkToDelete.linkId);
+      showToast('Service link deleted successfully', 'success');
       fetchLinks();
+      setIsDeleteModalOpen(false);
+      setLinkToDelete(null);
     } catch (err) {
       console.error('Failed to delete link:', err);
+      showToast('Failed to delete service link', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -122,7 +140,7 @@ const LinkHealthTab: React.FC = () => {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleDelete(link.linkId)}
+                      onClick={() => handleDeleteClick(link)}
                       className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-all"
                       title="Delete Link"
                     >
@@ -145,6 +163,17 @@ const LinkHealthTab: React.FC = () => {
         onSuccess={fetchLinks}
         clusterId={selectedCluster?.id.toString()}
         editData={editingLink}
+      />
+
+      <DeleteLinkModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setLinkToDelete(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        linkName={linkToDelete?.linkName || ''}
+        loading={isDeleting}
       />
     </div>
   );
