@@ -84,7 +84,12 @@ public class ScrapeConfigGeneratorService {
             labels.put("source_node", String.valueOf(link.getSourceNode().getId()));
             labels.put("target_node", String.valueOf(link.getTargetNode().getId()));
             labels.put("env", link.getSourceNode().getEnvironment().getName());
-            labels.put("cluster", String.valueOf(link.getSourceNode().getEnvironment().getCluster().getId()));
+            
+            if (link.getSourceNode().getEnvironment().getCluster() != null) {
+                labels.put("cluster", String.valueOf(link.getSourceNode().getEnvironment().getCluster().getId()));
+            } else {
+                labels.put("cluster", "none");
+            }
             
             targetConfig.put("labels", labels);
             fileSdConfigs.add(targetConfig);

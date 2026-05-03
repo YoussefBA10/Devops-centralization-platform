@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Globe, Server, Hash, Activity, AlertCircle } from 'lucide-react';
-import { getNetworkNodes, addNetworkLink } from '../../services/api';
+import { getNetworkNodes, getNetworkLinks, addNetworkLink, updateNetworkLink } from '../../services/api';
 import { useToast } from '../ui/Toast';
 
 interface AddLinkModalProps {
@@ -39,16 +39,28 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
       };
       fetchNodes();
 
-      if (editData) {
-        setFormData({
-          name: editData.linkName || '',
-          sourceNodeId: editData.sourceNodeId || '',
-          targetNodeId: editData.targetNodeId || '',
-          targetPort: editData.targetPort || 8080,
-          targetPath: editData.targetPath || '/health',
-          protocol: editData.protocol || 'http',
-          probeModule: editData.probeModule || 'http_2xx'
-        });
+      if (editData && editData.linkId) {
+        // Fetch the full link details from the backend
+        const fetchLinkDetails = async () => {
+          try {
+            const res = await getNetworkLinks();
+            const fullLink = res.data.find((l: any) => l.id === editData.linkId);
+            if (fullLink) {
+              setFormData({
+                name: fullLink.name || editData.linkName || '',
+                sourceNodeId: fullLink.sourceNode?.id?.toString() || editData.sourceNode || '',
+                targetNodeId: fullLink.targetNode?.id?.toString() || editData.targetNode || '',
+                targetPort: fullLink.targetPort || 8080,
+                targetPath: fullLink.targetPath || '/health',
+                protocol: fullLink.protocol || 'http',
+                probeModule: fullLink.probeModule || 'http_2xx'
+              });
+            }
+          } catch (err) {
+            console.error('Failed to fetch link details:', err);
+          }
+        };
+        fetchLinkDetails();
       } else {
         setFormData({
           name: '',
@@ -74,8 +86,7 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
 
     setLoading(true);
     try {
-      if (editData) {
-        const { updateNetworkLink } = await import('../../services/api');
+      if (editData && editData.linkId) {
         await updateNetworkLink(editData.linkId, formData);
         showToast('Service link updated successfully', 'success');
       } else {
