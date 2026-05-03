@@ -1271,6 +1271,8 @@ public class DeploymentService {
         } catch (Exception e) {
             log.error("Failed to restart container {}: {}", containerName, e.getMessage());
         }
+    }
+
     @Async
     public void syncMonitoring() {
         log.info("Starting global monitoring synchronization...");
