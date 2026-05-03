@@ -88,6 +88,10 @@ const LinkHealthTab: React.FC = () => {
             <tr>
               <th className="px-6 py-3 font-medium">Status</th>
               <th className="px-6 py-3 font-medium">Link Name</th>
+              <th className="px-6 py-3 font-medium">Source</th>
+              <th className="px-6 py-3 font-medium">Target</th>
+              <th className="px-6 py-3 font-medium">Port</th>
+              <th className="px-6 py-3 font-medium">Protocol</th>
               <th className="px-6 py-3 font-medium">Current (ms)</th>
               <th className="px-6 py-3 font-medium">Avg 1h (ms)</th>
               <th className="px-6 py-3 font-medium">Max 1h (ms)</th>
@@ -99,7 +103,7 @@ const LinkHealthTab: React.FC = () => {
           <tbody className="divide-y divide-white/5">
             {links.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">No links configured.</td>
+                <td colSpan={11} className="px-6 py-8 text-center text-muted-foreground">No links configured.</td>
               </tr>
             )}
             {links.map((link) => (
@@ -125,6 +129,10 @@ const LinkHealthTab: React.FC = () => {
                     )}                  </div>
                 </td>
                 <td className="px-6 py-4 font-medium text-white">{link.linkName}</td>
+                <td className="px-6 py-4 text-xs text-muted-foreground">{link.sourceNode}</td>
+                <td className="px-6 py-4 text-xs text-muted-foreground">{link.targetNode}</td>
+                <td className="px-6 py-4 text-xs font-mono text-blue-400">{link.targetPort}</td>
+                <td className="px-6 py-4 text-[10px]"><span className="bg-white/5 px-1.5 py-0.5 rounded text-muted-foreground font-bold">{link.protocol?.toUpperCase()}</span></td>
                 <td className="px-6 py-4 text-muted-foreground">{link.currentLatencyMs?.toFixed(0)} ms</td>
                 <td className="px-6 py-4 text-muted-foreground">{link.avgLatencyMs?.toFixed(0)} ms</td>
                 <td className="px-6 py-4 text-muted-foreground">{link.maxLatencyMs?.toFixed(0)} ms</td>

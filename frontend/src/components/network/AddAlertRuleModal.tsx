@@ -104,25 +104,25 @@ const AddAlertRuleModal: React.FC<AddAlertRuleModalProps> = ({ isOpen, onClose, 
             <div className="space-y-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rule Type</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.ruleType}
                 onChange={(e) => setFormData({ ...formData, ruleType: e.target.value })}
               >
-                <option value="LATENCY">Latency</option>
-                <option value="ERROR_RATE">Error Rate</option>
-                <option value="PACKET_LOSS">Packet Loss</option>
-                <option value="RETRANSMISSION">TCP Retransmits</option>
+                <option className="bg-slate-900" value="LATENCY">Latency</option>
+                <option className="bg-slate-900" value="ERROR_RATE">Error Rate</option>
+                <option className="bg-slate-900" value="PACKET_LOSS">Packet Loss</option>
+                <option className="bg-slate-900" value="RETRANSMISSION">TCP Retransmits</option>
               </select>
             </div>
             <div className="space-y-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Severity</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.severity}
                 onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
               >
-                <option value="WARNING">Warning</option>
-                <option value="CRITICAL">Critical</option>
+                <option className="bg-slate-900" value="WARNING">Warning</option>
+                <option className="bg-slate-900" value="CRITICAL">Critical</option>
               </select>
             </div>
           </div>
@@ -158,15 +158,22 @@ const AddAlertRuleModal: React.FC<AddAlertRuleModalProps> = ({ isOpen, onClose, 
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Select Link</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.linkId}
                 onChange={(e) => setFormData({ ...formData, linkId: e.target.value })}
                 required
               >
-                <option value="" disabled>Select a link...</option>
-                {links.map(link => (
-                  <option key={link.id} value={link.id}>{link.id}</option>
-                ))}
+                <option className="bg-slate-900" value="" disabled>Select a link...</option>
+                {links.map(link => {
+                  const sourceNode = nodes.find(n => n.id === link.source);
+                  const targetNode = nodes.find(n => n.id === link.target);
+                  const label = `${sourceNode?.label || link.source} → ${targetNode?.label || link.target} (${link.protocol})`;
+                  return (
+                    <option className="bg-slate-900" key={link.id} value={link.id}>
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
               {links.length === 0 && <p className="text-[10px] text-amber-500">No links found.</p>}
             </div>
@@ -176,14 +183,14 @@ const AddAlertRuleModal: React.FC<AddAlertRuleModalProps> = ({ isOpen, onClose, 
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Select Node</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.nodeId || ''}
                 onChange={(e) => setFormData({ ...formData, nodeId: parseInt(e.target.value) })}
                 required
               >
-                <option value="" disabled>Select a node...</option>
+                <option className="bg-slate-900" value="" disabled>Select a node...</option>
                 {nodes.map(node => (
-                  <option key={node.id} value={node.id}>{node.label || node.ip} ({node.ip})</option>
+                  <option className="bg-slate-900" key={node.id} value={node.id}>{node.label || node.ip} ({node.ip})</option>
                 ))}
               </select>
               {nodes.length === 0 && <p className="text-[10px] text-amber-500">No nodes found.</p>}
@@ -205,15 +212,15 @@ const AddAlertRuleModal: React.FC<AddAlertRuleModalProps> = ({ isOpen, onClose, 
             <div className="space-y-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Unit</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.thresholdUnit}
                 onChange={(e) => setFormData({ ...formData, thresholdUnit: e.target.value })}
               >
-                <option value="s">Seconds (s)</option>
-                <option value="ms">Milliseconds (ms)</option>
-                <option value="%">Percent (%)</option>
-                <option value="byte/s">Bytes/sec</option>
-                <option value="rate">Rate (count/s)</option>
+                <option className="bg-slate-900" value="s">Seconds (s)</option>
+                <option className="bg-slate-900" value="ms">Milliseconds (ms)</option>
+                <option className="bg-slate-900" value="%">Percent (%)</option>
+                <option className="bg-slate-900" value="byte/s">Bytes/sec</option>
+                <option className="bg-slate-900" value="rate">Rate (count/s)</option>
               </select>
             </div>
           </div>

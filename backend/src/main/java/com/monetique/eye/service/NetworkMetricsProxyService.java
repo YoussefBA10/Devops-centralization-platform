@@ -122,8 +122,10 @@ public class NetworkMetricsProxyService {
             summaries.add(LinkHealthSummary.builder()
                     .linkId(link.getId())
                     .linkName(link.getName())
-                    .sourceNode(String.valueOf(link.getSourceNode().getId()))
-                    .targetNode(String.valueOf(link.getTargetNode().getId()))
+                    .sourceNode(link.getSourceNode().getNodeName() != null ? link.getSourceNode().getNodeName() : link.getSourceNode().getIp())
+                    .targetNode(link.getTargetNode().getNodeName() != null ? link.getTargetNode().getNodeName() : link.getTargetNode().getIp())
+                    .targetPort(link.getTargetPort())
+                    .protocol(link.getProtocol())
                     .status(status)
                     .currentLatencyMs(currentLatency != null ? currentLatency * 1000 : 0)
                     .avgLatencyMs(avgLatency != null ? avgLatency * 1000 : 0)
@@ -240,6 +242,8 @@ public class NetworkMetricsProxyService {
         private String linkName;
         private String sourceNode;
         private String targetNode;
+        private Integer targetPort;
+        private String protocol;
         private String status;
         private double currentLatencyMs;
         private double avgLatencyMs;

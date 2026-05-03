@@ -120,13 +120,13 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
               </label>
               <select
                 required
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.sourceNodeId}
                 onChange={(e) => setFormData({ ...formData, sourceNodeId: e.target.value })}
               >
-                <option value="">Select Source</option>
+                <option className="bg-slate-900" value="">Select Source</option>
                 {nodes.map(node => (
-                  <option key={node.id} value={node.id}>{node.nodeName || node.ip} ({node.ip})</option>
+                  <option className="bg-slate-900" key={node.id} value={node.id}>{node.nodeName || node.ip} ({node.ip})</option>
                 ))}
               </select>
             </div>
@@ -137,13 +137,13 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
               </label>
               <select
                 required
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.targetNodeId}
                 onChange={(e) => setFormData({ ...formData, targetNodeId: e.target.value })}
               >
-                <option value="">Select Target</option>
+                <option className="bg-slate-900" value="">Select Target</option>
                 {nodes.map(node => (
-                  <option key={node.id} value={node.id}>{node.nodeName || node.ip} ({node.ip})</option>
+                  <option className="bg-slate-900" key={node.id} value={node.id}>{node.nodeName || node.ip} ({node.ip})</option>
                 ))}
               </select>
             </div>
@@ -179,14 +179,14 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Protocol</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.protocol}
                 onChange={(e) => setFormData({ ...formData, protocol: e.target.value })}
               >
-                <option value="http">HTTP</option>
-                <option value="https">HTTPS</option>
-                <option value="tcp">TCP</option>
-                <option value="icmp">ICMP (Ping)</option>
+                <option className="bg-slate-900" value="http">HTTP</option>
+                <option className="bg-slate-900" value="https">HTTPS</option>
+                <option className="bg-slate-900" value="tcp">TCP</option>
+                <option className="bg-slate-900" value="icmp">ICMP (Ping)</option>
               </select>
             </div>
           </div>
@@ -206,14 +206,14 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Probe Module</label>
               <select
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 value={formData.probeModule}
                 onChange={(e) => setFormData({ ...formData, probeModule: e.target.value })}
               >
-                <option value="http_2xx">http_2xx (HTTP Success)</option>
-                <option value="http_4xx">http_4xx (Expect Client Error)</option>
-                <option value="tcp_connect">tcp_connect (Port Check)</option>
-                <option value="icmp">icmp (Ping)</option>
+                <option className="bg-slate-900" value="http_2xx">http_2xx (HTTP Success)</option>
+                <option className="bg-slate-900" value="http_4xx">http_4xx (Expect Client Error)</option>
+                <option className="bg-slate-900" value="tcp_connect">tcp_connect (Port Check)</option>
+                <option className="bg-slate-900" value="icmp">icmp (Ping)</option>
               </select>
             </div>
           </div>
