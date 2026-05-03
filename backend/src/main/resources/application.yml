@@ -68,4 +68,6 @@ monitoring:
     conf-dir: ${MONITORING_PROMETHEUS_CONF_DIR:/opt/monitoring/prometheus/conf.d}
     reload-url: ${MONITORING_PROMETHEUS_RELOAD_URL:http://prometheus:9090/-/reload}
   blackbox-exporter:
-    url: ${MONITORING_BLACKBOX_EXPORTER_URL:blackbox-exporter:9115}
+    url: ${MONITORING_BLACKBOX_EXPORTER_URL:http://blackbox-exporter:9115}
+  alertmanager:
+    base-url: ${MONITORING_ALERTMANAGER_URL:http://alertmanager:9093}

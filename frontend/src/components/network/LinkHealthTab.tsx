@@ -76,12 +76,15 @@ const LinkHealthTab: React.FC = () => {
                       <span className="flex items-center text-red-400 bg-red-400/10 px-2 py-1 rounded text-xs font-medium">
                         <XCircle className="w-3.5 h-3.5 mr-1" /> DOWN
                       </span>
-                    ) : (
+                    ) : link.status === 'DEGRADED' ? (
                       <span className="flex items-center text-amber-400 bg-amber-400/10 px-2 py-1 rounded text-xs font-medium">
                         <AlertCircle className="w-3.5 h-3.5 mr-1" /> DEGRADED
                       </span>
-                    )}
-                  </div>
+                    ) : (
+                      <span className="flex items-center text-slate-400 bg-slate-400/10 px-2 py-1 rounded text-xs font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 mr-1" /> UNKNOWN
+                      </span>
+                    )}                  </div>
                 </td>
                 <td className="px-6 py-4 font-medium text-white">{link.linkName}</td>
                 <td className="px-6 py-4 text-muted-foreground">{link.currentLatencyMs?.toFixed(0)} ms</td>
