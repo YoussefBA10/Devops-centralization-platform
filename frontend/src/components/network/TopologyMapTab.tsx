@@ -14,6 +14,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { useEnvironment } from '../../context/EnvironmentContext';
+import { useCluster } from '../../context/ClusterContext';
 import { getTopology } from '../../services/api';
 import { Server, Database, Network, Plus } from 'lucide-react';
 import AddLinkModal from './AddLinkModal';
@@ -139,6 +140,7 @@ const edgeTypes = {
 
 const TopologyMapTab: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { selectedCluster } = useCluster();
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(true);
@@ -147,10 +149,11 @@ const TopologyMapTab: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
-    if (!selectedEnvironment) return;
+    const clusterId = selectedCluster?.id.toString();
+    const envId = selectedEnvironment?.id.toString();
     try {
       // Assuming a single cluster ID for simplicity or passed via context
-      const res = await getTopology('1', selectedEnvironment.id.toString());
+      const res = await getTopology(clusterId, envId);
       const rawNodes = res.data.nodes.map((n: any) => ({
         id: n.id,
         type: 'vmNode',
@@ -179,7 +182,7 @@ const TopologyMapTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedEnvironment, setNodes, setEdges]);
+  }, [selectedEnvironment, selectedCluster, setNodes, setEdges]);
 
   useEffect(() => {
     fetchData();
@@ -187,7 +190,6 @@ const TopologyMapTab: React.FC = () => {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  if (!selectedEnvironment) return <div className="p-4 text-muted-foreground">Please select an environment</div>;
   if (loading && nodes.length === 0) return <div className="p-4 text-muted-foreground">Loading topology...</div>;
   if (error) return <div className="p-4 text-red-400">{error}</div>;
 
@@ -232,8 +234,8 @@ const TopologyMapTab: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchData}
-        clusterId="1"
-        envId={selectedEnvironment?.id.toString() || ''}
+        clusterId={selectedCluster?.id.toString() || '1'}
+        envId={selectedEnvironment?.id.toString()}
       />
     </div>
   );

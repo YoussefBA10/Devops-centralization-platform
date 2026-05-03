@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useEnvironment } from '../../context/EnvironmentContext';
+import { useCluster } from '../../context/ClusterContext';
 import { getNetworkNodes, getVmNetworkMetrics } from '../../services/api';
 import { Server, Activity, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
@@ -10,14 +11,17 @@ interface Props {
 
 const VmNetworkHealthTab: React.FC<Props> = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { selectedCluster } = useCluster();
   const [nodes, setNodes] = useState<any[]>([]);
   const [metricsData, setMetricsData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
   const fetchNodes = async () => {
-    if (!selectedEnvironment) return;
+    const clusterId = selectedCluster?.id.toString();
+    const envId = selectedEnvironment?.id.toString();
+    
     try {
-      const res = await getNetworkNodes('1', selectedEnvironment.id.toString());
+      const res = await getNetworkNodes(clusterId, envId);
       setNodes(res.data);
       
       // Fetch metrics for each Node
@@ -42,7 +46,7 @@ const VmNetworkHealthTab: React.FC<Props> = () => {
     fetchNodes();
     const interval = setInterval(fetchNodes, 60000);
     return () => clearInterval(interval);
-  }, [selectedEnvironment]);
+  }, [selectedEnvironment, selectedCluster]);
 
   if (loading && nodes.length === 0) return <div className="p-6 text-muted-foreground">Loading VM network health...</div>;
 

@@ -109,19 +109,19 @@ export const markNotificationAsRead = (id: number) => api.post(`/notifications/$
 export const markAllNotificationsAsRead = () => api.post('/notifications/read-all');
 
 // Network Monitoring
-export const getNetworkNodes = (clusterId: string, envId: string) => api.get(`/network/vms`, { params: { clusterId, envId } });
+export const getNetworkNodes = (clusterId?: string, envId?: string) => api.get(`/network/vms`, { params: { clusterId, envId } });
 export const getExporterStatus = (id: string) => api.get(`/network/vms/${id}/exporter-status`);
 
-export const getNetworkLinks = (clusterId: string, envId: string) => api.get(`/network/links`, { params: { clusterId, envId } });
+export const getNetworkLinks = (clusterId?: string, envId?: string) => api.get(`/network/links`, { params: { clusterId, envId } });
 export const addNetworkLink = (data: any) => api.post(`/network/links`, data);
 export const deleteNetworkLink = (id: string) => api.delete(`/network/links/${id}`);
 
-export const getTopology = (clusterId: string, envId: string) => api.get(`/network/topology`, { params: { clusterId, envId } });
+export const getTopology = (clusterId?: string, envId?: string) => api.get(`/network/topology`, { params: { clusterId, envId } });
 
 export const getLinkMetrics = (linkId: string, range?: string) => api.get(`/network/metrics/link/${linkId}`, { params: { range } });
 export const getVmNetworkMetrics = (nodeId: string, range?: string) => api.get(`/network/metrics/vm/${nodeId}`, { params: { range } });
 export const getVmContainerMetrics = (nodeId: string, range?: string) => api.get(`/network/metrics/vm/${nodeId}/containers`, { params: { range } });
-export const getNetworkHealthSummary = (clusterId: string, envId: string) => api.get(`/network/metrics/health-summary`, { params: { clusterId, envId } });
+export const getNetworkHealthSummary = (clusterId?: string, envId?: string) => api.get(`/network/metrics/health-summary`, { params: { clusterId, envId } });
 
 export const getNetworkLogs = (params: any) => api.get(`/network/logs`, { params });
 

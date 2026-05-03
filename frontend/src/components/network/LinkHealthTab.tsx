@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useEnvironment } from '../../context/EnvironmentContext';
+import { useCluster } from '../../context/ClusterContext';
 import { getNetworkHealthSummary } from '../../services/api';
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import AddLinkModal from './AddLinkModal';
 
 const LinkHealthTab: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { selectedCluster } = useCluster();
   const [links, setLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchLinks = async () => {
-    if (!selectedEnvironment) return;
+    const clusterId = selectedCluster?.id.toString();
+    const envId = selectedEnvironment?.id.toString();
     try {
-      const res = await getNetworkHealthSummary('1', selectedEnvironment.id.toString());
+      const res = await getNetworkHealthSummary(clusterId, envId);
       setLinks(res.data);
     } catch (err) {
       console.error(err);
@@ -26,7 +29,7 @@ const LinkHealthTab: React.FC = () => {
     fetchLinks();
     const interval = setInterval(fetchLinks, 30000);
     return () => clearInterval(interval);
-  }, [selectedEnvironment]);
+  }, [selectedEnvironment, selectedCluster]);
 
   if (loading && links.length === 0) return <div className="p-6 text-muted-foreground">Loading link health data...</div>;
 
@@ -96,8 +99,8 @@ const LinkHealthTab: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchLinks}
-        clusterId="1" // Default or fetched from context
-        envId={selectedEnvironment?.id.toString() || ''}
+        clusterId={selectedCluster?.id.toString() || '1'}
+        envId={selectedEnvironment?.id.toString()}
       />
     </div>
   );

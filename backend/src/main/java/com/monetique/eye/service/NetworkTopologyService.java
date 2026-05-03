@@ -33,9 +33,23 @@ public class NetworkTopologyService {
     private String alertmanagerBaseUrl;
 
     public TopologyGraph buildTopologyGraph(Long clusterId, Long envId) {
-        List<ManagedNode> nodesList = managedNodeRepository.findByEnvironment_Cluster_IdAndEnvironment_Id(clusterId, envId);
-        List<ServiceLink> links = serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId);
-        List<NetworkMetricsProxyService.LinkHealthSummary> healthSummaries = metricsProxyService.getHealthSummary(clusterId, envId);
+        List<ManagedNode> nodesList;
+        List<ServiceLink> links;
+        List<NetworkMetricsProxyService.LinkHealthSummary> healthSummaries;
+
+        if (envId != null) {
+            nodesList = managedNodeRepository.findByEnvironment_Cluster_IdAndEnvironment_Id(clusterId, envId);
+            links = serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId);
+            healthSummaries = metricsProxyService.getHealthSummary(clusterId, envId);
+        } else if (clusterId != null) {
+            nodesList = managedNodeRepository.findByEnvironment_Cluster_Id(clusterId);
+            links = serviceLinkRepository.findByClusterId(clusterId);
+            healthSummaries = metricsProxyService.getHealthSummary(clusterId, null);
+        } else {
+            nodesList = managedNodeRepository.findAll();
+            links = serviceLinkRepository.findAll();
+            healthSummaries = metricsProxyService.getHealthSummary(null, null);
+        }
 
         Map<String, NetworkMetricsProxyService.LinkHealthSummary> healthMap = healthSummaries.stream()
                 .collect(Collectors.toMap(NetworkMetricsProxyService.LinkHealthSummary::getLinkId, s -> s));

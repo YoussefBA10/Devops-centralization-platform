@@ -41,8 +41,14 @@ public class NetworkController {
     // --- Nodes ---
 
     @GetMapping("/vms")
-    public ResponseEntity<List<ManagedNode>> getNodes(@RequestParam Long clusterId, @RequestParam Long envId) {
-        return ResponseEntity.ok(managedNodeRepository.findByEnvironment_Cluster_IdAndEnvironment_Id(clusterId, envId));
+    public ResponseEntity<List<ManagedNode>> getNodes(@RequestParam(required = false) Long clusterId, @RequestParam(required = false) Long envId) {
+        if (envId != null) {
+            return ResponseEntity.ok(managedNodeRepository.findByEnvironment_Cluster_IdAndEnvironment_Id(clusterId, envId));
+        } else if (clusterId != null) {
+            return ResponseEntity.ok(managedNodeRepository.findByEnvironment_Cluster_Id(clusterId));
+        } else {
+            return ResponseEntity.ok(managedNodeRepository.findAll());
+        }
     }
 
     @GetMapping("/vms/{id}/exporter-status")
@@ -53,8 +59,14 @@ public class NetworkController {
     // --- Links ---
 
     @GetMapping("/links")
-    public ResponseEntity<List<ServiceLink>> getLinks(@RequestParam Long clusterId, @RequestParam Long envId) {
-        return ResponseEntity.ok(serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId));
+    public ResponseEntity<List<ServiceLink>> getLinks(@RequestParam(required = false) Long clusterId, @RequestParam(required = false) Long envId) {
+        if (envId != null) {
+            return ResponseEntity.ok(serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId));
+        } else if (clusterId != null) {
+            return ResponseEntity.ok(serviceLinkRepository.findByClusterId(clusterId));
+        } else {
+            return ResponseEntity.ok(serviceLinkRepository.findAll());
+        }
     }
 
     @PostMapping("/links")
@@ -88,7 +100,7 @@ public class NetworkController {
     // --- Topology ---
 
     @GetMapping("/topology")
-    public ResponseEntity<NetworkTopologyService.TopologyGraph> getTopology(@RequestParam Long clusterId, @RequestParam Long envId) {
+    public ResponseEntity<NetworkTopologyService.TopologyGraph> getTopology(@RequestParam(required = false) Long clusterId, @RequestParam(required = false) Long envId) {
         return ResponseEntity.ok(topologyService.buildTopologyGraph(clusterId, envId));
     }
 
@@ -110,7 +122,7 @@ public class NetworkController {
     }
 
     @GetMapping("/metrics/health-summary")
-    public ResponseEntity<List<NetworkMetricsProxyService.LinkHealthSummary>> getHealthSummary(@RequestParam Long clusterId, @RequestParam Long envId) {
+    public ResponseEntity<List<NetworkMetricsProxyService.LinkHealthSummary>> getHealthSummary(@RequestParam(required = false) Long clusterId, @RequestParam(required = false) Long envId) {
         return ResponseEntity.ok(metricsProxy.getHealthSummary(clusterId, envId));
     }
 

@@ -88,7 +88,14 @@ public class NetworkMetricsProxyService {
     }
 
     public List<LinkHealthSummary> getHealthSummary(Long clusterId, Long envId) {
-        List<ServiceLink> links = serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId);
+        List<ServiceLink> links;
+        if (envId != null) {
+            links = serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId);
+        } else if (clusterId != null) {
+            links = serviceLinkRepository.findByClusterId(clusterId);
+        } else {
+            links = serviceLinkRepository.findAll();
+        }
         List<LinkHealthSummary> summaries = new ArrayList<>();
 
         for (ServiceLink link : links) {

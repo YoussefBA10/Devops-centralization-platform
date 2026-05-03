@@ -7,7 +7,7 @@ interface AddLinkModalProps {
   onClose: () => void;
   onSuccess: () => void;
   clusterId: string;
-  envId: string;
+  envId?: string;
 }
 
 const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess, clusterId, envId }) => {
