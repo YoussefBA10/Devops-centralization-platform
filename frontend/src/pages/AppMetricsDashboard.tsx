@@ -38,10 +38,10 @@ const AppMetricsDashboard: React.FC = () => {
     const step = '60s';
 
     const queries = {
-      latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket|http_server_requests_seconds_bucket", app_id="${appId}"}[5m])) by (le))`,
-      traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count|http_server_requests_seconds_count", app_id="${appId}"}[5m]))`,
-      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count", app_id="${appId}", status_code!~"2..|3..", status!~"2..|3.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count", app_id="${appId}"}[5m]))) * 100`,
-      saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage|process_cpu_usage|system_cpu_usage", app_id="${appId}"}[5m])) * 100`
+      latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket|http_server_requests_seconds_bucket|django_http_requests_latency_seconds_by_view_method_bucket", app_id="${appId}"}[5m])) by (le)) or (sum(rate(http_server_requests_seconds_sum{app_id="${appId}"}[5m])) / sum(rate(http_server_requests_seconds_count{app_id="${appId}"}[5m])))`,
+      traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count|http_server_requests_seconds_count|django_http_requests_before_middlewares_total", app_id="${appId}"}[5m]))`,
+      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count|django_http_responses_before_middlewares_total", app_id="${appId}", status_code!~"2..|3..", status!~"2..|3.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count|django_http_responses_before_middlewares_total", app_id="${appId}"}[5m]))) * 100`,
+      saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage", app_id="${appId}"}[5m])) * 100 or (avg({__name__=~"process_cpu_usage|system_cpu_usage", app_id="${appId}"}) * 100)`
     };
 
     const newData: any = { latency: [], traffic: [], errors: [], saturation: [], health: { status: 'UNKNOWN', message: '' } };
@@ -52,11 +52,11 @@ const AppMetricsDashboard: React.FC = () => {
         const healthRes = await api.get(`/applications/${appId}/metrics`, {
           params: { query: `up{app_id="${appId}"}` }
         });
-        
+
         // healthRes.data is a direct list from queryList
         if (Array.isArray(healthRes.data) && healthRes.data.length > 0) {
           const val = parseFloat(healthRes.data[0].value);
-          newData.health = { 
+          newData.health = {
             status: val === 1 ? 'UP' : 'DOWN',
             message: val === 1 ? 'Prometheus is successfully scraping this app.' : 'Prometheus cannot reach the metrics endpoint (Check port/firewall).'
           };
@@ -66,9 +66,9 @@ const AppMetricsDashboard: React.FC = () => {
             params: { query: `count({app_id="${appId}"})` }
           });
           if (Array.isArray(anyMetrics.data) && anyMetrics.data.length > 0) {
-             newData.health = { status: 'UP', message: 'Prometheus is scraping, but the health signal is still stabilizing.' };
+            newData.health = { status: 'UP', message: 'Prometheus is scraping, but the health signal is still stabilizing.' };
           } else {
-             newData.health = { status: 'NOT_FOUND', message: 'Prometheus has not discovered this target yet.' };
+            newData.health = { status: 'NOT_FOUND', message: 'Prometheus has not discovered this target yet.' };
           }
         }
       } catch (e) {
@@ -122,7 +122,7 @@ const AppMetricsDashboard: React.FC = () => {
       mode: 'index' as const,
       intersect: false,
     },
-    plugins: { 
+    plugins: {
       legend: { display: false },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -134,18 +134,18 @@ const AppMetricsDashboard: React.FC = () => {
       }
     },
     scales: {
-      x: { 
-        grid: { display: false }, 
-        ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } } 
+      x: {
+        grid: { display: false },
+        ticks: { color: 'rgba(255,255,255,0.4)', font: { size: 10 } }
       },
-      y: { 
-        grid: { color: 'rgba(255,255,255,0.05)' }, 
-        ticks: { 
-          color: 'rgba(255,255,255,0.4)', 
+      y: {
+        grid: { color: 'rgba(255,255,255,0.05)' },
+        ticks: {
+          color: 'rgba(255,255,255,0.4)',
           font: { size: 10 },
           callback: (value: any) => value.toLocaleString()
-        }, 
-        beginAtZero: true 
+        },
+        beginAtZero: true
       }
     }
   };
@@ -184,12 +184,14 @@ const AppMetricsDashboard: React.FC = () => {
             </Button>
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-3xl font-black tracking-tight text-white">Golden Signals</h1>
+                <h1 className="text-3xl font-black tracking-tight text-white">Golden Signals<span className="ml-2 text-[10px] font-black uppercase tracking-widest text-indigo-400">.</span></h1>
                 {appInfo && (
                   <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
                     <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{appInfo.environmentName}</span>
                     <div className="w-1 h-1 rounded-full bg-indigo-500/30" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-white">{appInfo.name}</span>
+                    <div className="w-1 h-1 rounded-full bg-indigo-500/30" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{appInfo.targetNode}</span>
                   </div>
                 )}
               </div>
@@ -203,17 +205,15 @@ const AppMetricsDashboard: React.FC = () => {
         </div>
 
         {/* Scrape Health Status */}
-        <div className={`p-4 rounded-2xl border flex items-center justify-between ${
-          metricsData.health.status === 'UP' ? 'bg-emerald-500/5 border-emerald-500/20' : 
-          metricsData.health.status === 'DOWN' ? 'bg-rose-500/5 border-rose-500/20' : 
-          'bg-amber-500/5 border-amber-500/20'
-        }`}>
+        <div className={`p-4 rounded-2xl border flex items-center justify-between ${metricsData.health.status === 'UP' ? 'bg-emerald-500/5 border-emerald-500/20' :
+          metricsData.health.status === 'DOWN' ? 'bg-rose-500/5 border-rose-500/20' :
+            'bg-amber-500/5 border-amber-500/20'
+          }`}>
           <div className="flex items-center gap-4">
-            <div className={`p-2 rounded-lg ${
-              metricsData.health.status === 'UP' ? 'bg-emerald-500/20 text-emerald-400' : 
-              metricsData.health.status === 'DOWN' ? 'bg-rose-500/20 text-rose-400' : 
-              'bg-amber-500/20 text-amber-400'
-            }`}>
+            <div className={`p-2 rounded-lg ${metricsData.health.status === 'UP' ? 'bg-emerald-500/20 text-emerald-400' :
+              metricsData.health.status === 'DOWN' ? 'bg-rose-500/20 text-rose-400' :
+                'bg-amber-500/20 text-amber-400'
+              }`}>
               <Activity className="w-5 h-5" />
             </div>
             <div>
@@ -222,11 +222,10 @@ const AppMetricsDashboard: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              metricsData.health.status === 'UP' ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
-              metricsData.health.status === 'DOWN' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 
-              'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
-            }`} />
+            <div className={`w-2 h-2 rounded-full ${metricsData.health.status === 'UP' ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+              metricsData.health.status === 'DOWN' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' :
+                'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]'
+              }`} />
             <span className="text-[10px] font-black uppercase tracking-widest">{metricsData.health.status}</span>
           </div>
         </div>

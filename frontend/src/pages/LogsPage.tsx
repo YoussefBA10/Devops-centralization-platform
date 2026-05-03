@@ -18,7 +18,7 @@ import { Button, Input } from '../components/ui/Input';
 import { getApplications, getSystemLogs, clearSystemLogs, exportSystemLogs } from '../services/api';
 
 const LogsPage: React.FC = () => {
-  const { selectedEnvironment } = useEnvironment();
+  const { selectedEnvironment, environments, setSelectedEnvironment } = useEnvironment();
   const [logs, setLogs] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -172,6 +172,21 @@ const LogsPage: React.FC = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
+            </div>
+            <div className="w-48">
+              <select 
+                className="w-full h-11 px-3 rounded-lg bg-background border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                value={selectedEnvironment?.id || ''}
+                onChange={(e) => {
+                  const env = environments.find(env => env.id === Number(e.target.value));
+                  if (env) setSelectedEnvironment(env);
+                }}
+              >
+                {environments.length === 0 ? <option value="">No Environments</option> : null}
+                {environments.map(env => (
+                  <option key={env.id} value={env.id}>{env.name}</option>
+                ))}
+              </select>
             </div>
             <div className="w-48">
               <select 
