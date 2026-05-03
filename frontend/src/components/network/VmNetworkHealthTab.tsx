@@ -18,10 +18,10 @@ const VmNetworkHealthTab: React.FC<Props> = () => {
 
   const fetchNodes = async () => {
     const clusterId = selectedCluster?.id.toString();
-    const envId = selectedEnvironment?.id.toString();
     
     try {
-      const res = await getNetworkNodes(clusterId, envId);
+      // Show all cluster nodes for a complete overview
+      const res = await getNetworkNodes(clusterId, undefined);
       setNodes(res.data);
       
       // Fetch metrics for each Node

@@ -150,10 +150,9 @@ const TopologyMapTab: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     const clusterId = selectedCluster?.id.toString();
-    const envId = selectedEnvironment?.id.toString();
     try {
-      // Assuming a single cluster ID for simplicity or passed via context
-      const res = await getTopology(clusterId, envId);
+      // Fetch for the entire cluster to show all environments together
+      const res = await getTopology(clusterId, undefined);
       const rawNodes = res.data.nodes.map((n: any) => ({
         id: n.id,
         type: 'vmNode',
@@ -234,8 +233,7 @@ const TopologyMapTab: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchData}
-        clusterId={selectedCluster?.id.toString() || '1'}
-        envId={selectedEnvironment?.id.toString()}
+        clusterId={selectedCluster?.id.toString()}
       />
     </div>
   );

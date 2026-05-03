@@ -6,11 +6,11 @@ interface AddLinkModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  clusterId: string;
+  clusterId?: string;
   envId?: string;
 }
 
-const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess, clusterId, envId }) => {
+const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess, clusterId }) => {
   const [nodes, setNodes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -27,7 +27,8 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
     if (isOpen) {
       const fetchNodes = async () => {
         try {
-          const res = await getNetworkNodes(clusterId, envId);
+          // Fetch all nodes in the cluster to allow cross-environment linking
+          const res = await getNetworkNodes(clusterId, undefined);
           setNodes(res.data);
         } catch (err) {
           console.error('Failed to fetch nodes:', err);
@@ -35,7 +36,7 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
       };
       fetchNodes();
     }
-  }, [isOpen, clusterId, envId]);
+  }, [isOpen, clusterId]);
 
   if (!isOpen) return null;
 

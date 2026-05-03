@@ -14,9 +14,9 @@ const LinkHealthTab: React.FC = () => {
 
   const fetchLinks = async () => {
     const clusterId = selectedCluster?.id.toString();
-    const envId = selectedEnvironment?.id.toString();
     try {
-      const res = await getNetworkHealthSummary(clusterId, envId);
+      // Aggregate health summary for the whole cluster
+      const res = await getNetworkHealthSummary(clusterId, undefined);
       setLinks(res.data);
     } catch (err) {
       console.error(err);
@@ -99,8 +99,7 @@ const LinkHealthTab: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchLinks}
-        clusterId={selectedCluster?.id.toString() || '1'}
-        envId={selectedEnvironment?.id.toString()}
+        clusterId={selectedCluster?.id.toString()}
       />
     </div>
   );
