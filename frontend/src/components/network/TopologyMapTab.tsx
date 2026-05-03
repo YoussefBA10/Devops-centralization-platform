@@ -15,7 +15,8 @@ import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import { getTopology } from '../../services/api';
-import { Server, Database, Network } from 'lucide-react';
+import { Server, Database, Network, Plus } from 'lucide-react';
+import AddLinkModal from './AddLinkModal';
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -143,6 +144,7 @@ const TopologyMapTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!selectedEnvironment) return;
@@ -195,6 +197,12 @@ const TopologyMapTab: React.FC = () => {
         <button onClick={fetchData} className="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 border border-primary/50 rounded text-sm text-primary transition-colors">
           Refresh Map
         </button>
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="px-3 py-1.5 bg-primary hover:bg-primary/90 border border-primary/50 rounded text-sm text-white transition-colors flex items-center"
+        >
+          <Plus className="w-4 h-4 mr-1" /> Add Link
+        </button>
         <div className="flex items-center px-3 py-1.5 bg-white/5 border border-white/10 rounded text-xs text-muted-foreground">
           Last updated: {lastUpdated.toLocaleTimeString()}
         </div>
@@ -219,6 +227,14 @@ const TopologyMapTab: React.FC = () => {
           />
         </ReactFlow>
       </div>
+
+      <AddLinkModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchData}
+        clusterId="1"
+        envId={selectedEnvironment?.id.toString() || ''}
+      />
     </div>
   );
 };

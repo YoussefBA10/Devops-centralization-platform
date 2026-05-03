@@ -1,14 +1,13 @@
 package com.monetique.eye.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.monetique.eye.entity.Cluster;
+import com.monetique.eye.entity.ManagedNode;
 import com.monetique.eye.entity.NetworkAlertRule;
 import com.monetique.eye.entity.ServiceLink;
-import com.monetique.eye.entity.VmRegistry;
 import com.monetique.eye.repository.ClusterRepository;
+import com.monetique.eye.repository.ManagedNodeRepository;
 import com.monetique.eye.repository.NetworkAlertRuleRepository;
 import com.monetique.eye.repository.ServiceLinkRepository;
-import com.monetique.eye.repository.VmRegistryRepository;
 import com.monetique.eye.service.*;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +26,7 @@ import java.util.Optional;
 @Slf4j
 public class NetworkController {
 
-    private final VmRegistryRepository vmRegistryRepository;
+    private final ManagedNodeRepository managedNodeRepository;
     private final ServiceLinkRepository serviceLinkRepository;
     private final NetworkAlertRuleRepository alertRuleRepository;
     private final ClusterRepository clusterRepository;
@@ -39,62 +38,34 @@ public class NetworkController {
     private final ElasticsearchLogQueryService logQueryService;
     private final AlertmanagerProxyService alertmanagerProxy;
 
-    // --- VMs ---
+    // --- Nodes ---
 
     @GetMapping("/vms")
-    public ResponseEntity<List<VmRegistry>> getVms(@RequestParam Long clusterId, @RequestParam String env) {
-        return ResponseEntity.ok(vmRegistryRepository.findByClusterIdAndEnv(clusterId, env));
-    }
-
-    @PostMapping("/vms")
-    public ResponseEntity<VmRegistry> addVm(@RequestBody VmRequest request) {
-        Cluster cluster = clusterRepository.findById(request.getClusterId()).orElseThrow(() -> new RuntimeException("Cluster not found"));
-        VmRegistry vm = VmRegistry.builder()
-                .name(request.getName())
-                .ipAddress(request.getIpAddress())
-                .role(request.getRole())
-                .cluster(cluster)
-                .env(request.getEnv())
-                .nodeExporterPort(request.getNodeExporterPort() != null ? request.getNodeExporterPort() : 9100)
-                .cadvisorPort(request.getCadvisorPort() != null ? request.getCadvisorPort() : 8080)
-                .appMetricsPort(request.getAppMetricsPort())
-                .appMetricsPath(request.getAppMetricsPath() != null ? request.getAppMetricsPath() : "/metrics")
-                .appName(request.getAppName())
-                .build();
-        
-        VmRegistry saved = vmRegistryRepository.save(vm);
-        scrapeGenerator.generateAndReload();
-        return ResponseEntity.ok(saved);
-    }
-
-    @DeleteMapping("/vms/{id}")
-    public ResponseEntity<Void> deleteVm(@PathVariable String id) {
-        vmRegistryRepository.deleteById(id);
-        scrapeGenerator.generateAndReload();
-        return ResponseEntity.ok().build();
+    public ResponseEntity<List<ManagedNode>> getNodes(@RequestParam Long clusterId, @RequestParam Long envId) {
+        return ResponseEntity.ok(managedNodeRepository.findByEnvironment_Cluster_IdAndEnvironment_Id(clusterId, envId));
     }
 
     @GetMapping("/vms/{id}/exporter-status")
-    public ResponseEntity<Map<String, Object>> getExporterStatus(@PathVariable String id) {
+    public ResponseEntity<Map<String, Object>> getExporterStatus(@PathVariable Long id) {
         return ResponseEntity.ok(metricsProxy.checkExporterCollectors(id));
     }
 
     // --- Links ---
 
     @GetMapping("/links")
-    public ResponseEntity<List<ServiceLink>> getLinks(@RequestParam Long clusterId, @RequestParam String env) {
-        return ResponseEntity.ok(serviceLinkRepository.findByClusterIdAndEnv(clusterId, env));
+    public ResponseEntity<List<ServiceLink>> getLinks(@RequestParam Long clusterId, @RequestParam Long envId) {
+        return ResponseEntity.ok(serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId));
     }
 
     @PostMapping("/links")
     public ResponseEntity<ServiceLink> addLink(@RequestBody LinkRequest request) {
-        VmRegistry source = vmRegistryRepository.findById(request.getSourceVmId()).orElseThrow();
-        VmRegistry target = vmRegistryRepository.findById(request.getTargetVmId()).orElseThrow();
+        ManagedNode source = managedNodeRepository.findById(request.getSourceNodeId()).orElseThrow();
+        ManagedNode target = managedNodeRepository.findById(request.getTargetNodeId()).orElseThrow();
         
         ServiceLink link = ServiceLink.builder()
-                .name(request.getName() != null ? request.getName() : source.getName() + " -> " + target.getName())
-                .sourceVm(source)
-                .targetVm(target)
+                .name(request.getName() != null ? request.getName() : source.getNodeName() + " -> " + target.getNodeName())
+                .sourceNode(source)
+                .targetNode(target)
                 .targetPort(request.getTargetPort())
                 .targetPath(request.getTargetPath() != null ? request.getTargetPath() : "/health")
                 .protocol(request.getProtocol() != null ? request.getProtocol() : "http")
@@ -117,8 +88,8 @@ public class NetworkController {
     // --- Topology ---
 
     @GetMapping("/topology")
-    public ResponseEntity<NetworkTopologyService.TopologyGraph> getTopology(@RequestParam Long clusterId, @RequestParam String env) {
-        return ResponseEntity.ok(topologyService.buildTopologyGraph(clusterId, env));
+    public ResponseEntity<NetworkTopologyService.TopologyGraph> getTopology(@RequestParam Long clusterId, @RequestParam Long envId) {
+        return ResponseEntity.ok(topologyService.buildTopologyGraph(clusterId, envId));
     }
 
     // --- Metrics ---
@@ -128,19 +99,19 @@ public class NetworkController {
         return ResponseEntity.ok(metricsProxy.getLinkMetrics(linkId, range));
     }
 
-    @GetMapping("/metrics/vm/{vmId}")
-    public ResponseEntity<Map<String, Object>> getVmNetworkMetrics(@PathVariable String vmId, @RequestParam(defaultValue = "1h") String range) {
-        return ResponseEntity.ok(metricsProxy.getVmNetworkMetrics(vmId, range));
+    @GetMapping("/metrics/vm/{nodeId}")
+    public ResponseEntity<Map<String, Object>> getVmNetworkMetrics(@PathVariable Long nodeId, @RequestParam(defaultValue = "1h") String range) {
+        return ResponseEntity.ok(metricsProxy.getVmNetworkMetrics(nodeId, range));
     }
 
-    @GetMapping("/metrics/vm/{vmId}/containers")
-    public ResponseEntity<Map<String, Map<String, Object>>> getVmContainerNetworkMetrics(@PathVariable String vmId, @RequestParam(defaultValue = "1h") String range) {
-        return ResponseEntity.ok(metricsProxy.getVmContainerNetworkMetrics(vmId, range));
+    @GetMapping("/metrics/vm/{nodeId}/containers")
+    public ResponseEntity<Map<String, Map<String, Object>>> getVmContainerNetworkMetrics(@PathVariable Long nodeId, @RequestParam(defaultValue = "1h") String range) {
+        return ResponseEntity.ok(metricsProxy.getVmContainerNetworkMetrics(nodeId, range));
     }
 
     @GetMapping("/metrics/health-summary")
-    public ResponseEntity<List<NetworkMetricsProxyService.LinkHealthSummary>> getHealthSummary(@RequestParam Long clusterId, @RequestParam String env) {
-        return ResponseEntity.ok(metricsProxy.getHealthSummary(clusterId, env));
+    public ResponseEntity<List<NetworkMetricsProxyService.LinkHealthSummary>> getHealthSummary(@RequestParam Long clusterId, @RequestParam Long envId) {
+        return ResponseEntity.ok(metricsProxy.getHealthSummary(clusterId, envId));
     }
 
     // --- Logs ---
@@ -193,8 +164,8 @@ public class NetworkController {
         if (request.getLinkId() != null && !request.getLinkId().isEmpty()) {
             rule.setLink(serviceLinkRepository.findById(request.getLinkId()).orElse(null));
         }
-        if (request.getVmId() != null && !request.getVmId().isEmpty()) {
-            rule.setVm(vmRegistryRepository.findById(request.getVmId()).orElse(null));
+        if (request.getNodeId() != null) {
+            rule.setNode(managedNodeRepository.findById(request.getNodeId()).orElse(null));
         }
 
         NetworkAlertRule saved = alertRuleRepository.save(rule);
@@ -218,24 +189,10 @@ public class NetworkController {
     // --- DTOs ---
 
     @Data
-    public static class VmRequest {
-        private String name;
-        private String ipAddress;
-        private String role;
-        private Long clusterId;
-        private String env;
-        private Integer nodeExporterPort;
-        private Integer cadvisorPort;
-        private Integer appMetricsPort;
-        private String appMetricsPath;
-        private String appName;
-    }
-
-    @Data
     public static class LinkRequest {
         private String name;
-        private String sourceVmId;
-        private String targetVmId;
+        private Long sourceNodeId;
+        private Long targetNodeId;
         private Integer targetPort;
         private String targetPath;
         private String protocol;
@@ -247,7 +204,7 @@ public class NetworkController {
         private String name;
         private String ruleType;
         private String linkId;
-        private String vmId;
+        private Long nodeId;
         private Double thresholdValue;
         private String thresholdUnit;
         private String severity;

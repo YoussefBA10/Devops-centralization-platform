@@ -31,8 +31,8 @@ public class NetworkAlertRule {
     private ServiceLink link;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "vm_id")
-    private VmRegistry vm;
+    @JoinColumn(name = "node_id")
+    private ManagedNode node;
 
     @Column(name = "threshold_value", nullable = false)
     private Double thresholdValue;

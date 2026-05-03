@@ -28,6 +28,25 @@ public class ManagedNode {
     @Column(nullable = false)
     private String sshPassword;
 
+    private String role; // e.g., app, db, proxy
+
+    @Column(name = "node_exporter_port")
+    @Builder.Default
+    private Integer nodeExporterPort = 9100;
+
+    @Column(name = "cadvisor_port")
+    @Builder.Default
+    private Integer cadvisorPort = 8080;
+
+    @Column(name = "app_metrics_port")
+    private Integer appMetricsPort;
+
+    @Column(name = "app_metrics_path")
+    @Builder.Default
+    private String appMetricsPath = "/metrics";
+
+    private String appName;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "environment_id", nullable = false)
     @ToString.Exclude

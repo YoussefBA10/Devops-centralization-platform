@@ -66,8 +66,8 @@ public class PrometheusAlertRulesGeneratorService {
             if (rule.getLink() != null) {
                 labels.put("link_id", rule.getLink().getId());
             }
-            if (rule.getVm() != null) {
-                labels.put("vm_id", rule.getVm().getId());
+            if (rule.getNode() != null) {
+                labels.put("node_id", String.valueOf(rule.getNode().getId()));
             }
             promRule.put("labels", labels);
 
@@ -100,8 +100,8 @@ public class PrometheusAlertRulesGeneratorService {
         String filter = "";
         if (rule.getLink() != null) {
             filter = "{link_id=\"" + rule.getLink().getId() + "\"}";
-        } else if (rule.getVm() != null) {
-            filter = "{vm_id=\"" + rule.getVm().getId() + "\"}";
+        } else if (rule.getNode() != null) {
+            filter = "{node_id=\"" + rule.getNode().getId() + "\"}";
         } else {
             // Apply to specific jobs to prevent wide matches
             filter = "{job=~\"blackbox_probe.*|node_exporter|cadvisor\"}";

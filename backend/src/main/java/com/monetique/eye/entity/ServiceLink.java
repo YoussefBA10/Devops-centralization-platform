@@ -24,12 +24,12 @@ public class ServiceLink {
     private String name;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_vm_id", nullable = false)
-    private VmRegistry sourceVm;
+    @JoinColumn(name = "source_node_id", nullable = false)
+    private ManagedNode sourceNode;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "target_vm_id", nullable = false)
-    private VmRegistry targetVm;
+    @JoinColumn(name = "target_node_id", nullable = false)
+    private ManagedNode targetNode;
 
     @Column(name = "target_port", nullable = false)
     private Integer targetPort;

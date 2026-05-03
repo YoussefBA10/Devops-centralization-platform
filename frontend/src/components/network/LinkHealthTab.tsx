@@ -2,24 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import { getNetworkHealthSummary } from '../../services/api';
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
+import AddLinkModal from './AddLinkModal';
 
 const LinkHealthTab: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
   const [links, setLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchLinks = async () => {
+    if (!selectedEnvironment) return;
+    try {
+      const res = await getNetworkHealthSummary('1', selectedEnvironment.id.toString());
+      setLinks(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLinks = async () => {
-      if (!selectedEnvironment) return;
-      try {
-        const res = await getNetworkHealthSummary('1', selectedEnvironment.id.toString());
-        setLinks(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchLinks();
     const interval = setInterval(fetchLinks, 30000);
     return () => clearInterval(interval);
@@ -31,7 +34,10 @@ const LinkHealthTab: React.FC = () => {
     <div className="h-full w-full flex flex-col p-6 overflow-y-auto">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-bold">Service Link Health</h2>
-        <button className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary/90">
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary/90"
+        >
           + Add Link
         </button>
       </div>
@@ -85,6 +91,14 @@ const LinkHealthTab: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      <AddLinkModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={fetchLinks}
+        clusterId="1" // Default or fetched from context
+        envId={selectedEnvironment?.id.toString() || ''}
+      />
     </div>
   );
 };

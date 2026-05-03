@@ -42,29 +42,29 @@ public class NetworkMetricsProxyService {
         return result;
     }
 
-    public Map<String, Object> getVmNetworkMetrics(String vmId, String range) {
+    public Map<String, Object> getVmNetworkMetrics(Long nodeId, String range) {
         String step = getStep(range);
         String start = getStart(range);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("retransmitRate", queryRange("rate(node_netstat_Tcp_RetransSegs{vm_id=\"" + vmId + "\"}[5m])", start, step));
-        result.put("dropRate", queryRange("rate(node_network_receive_drop_total{vm_id=\"" + vmId + "\"}[5m])", start, step));
-        result.put("rxMbps", queryRange("rate(node_network_receive_bytes_total{vm_id=\"" + vmId + "\"}[5m]) * 8 / 1e6", start, step));
-        result.put("txMbps", queryRange("rate(node_network_transmit_bytes_total{vm_id=\"" + vmId + "\"}[5m]) * 8 / 1e6", start, step));
-        result.put("tcpEstab", queryRange("node_netstat_Tcp_CurrEstab{vm_id=\"" + vmId + "\"}", start, step));
-        result.put("timeWait", queryRange("node_sockstat_TCP_tw{vm_id=\"" + vmId + "\"}", start, step));
-        result.put("errors", queryRange("rate(node_network_receive_errs_total{vm_id=\"" + vmId + "\"}[5m])", start, step));
+        result.put("retransmitRate", queryRange("rate(node_netstat_Tcp_RetransSegs{node_id=\"" + nodeId + "\"}[5m])", start, step));
+        result.put("dropRate", queryRange("rate(node_network_receive_drop_total{node_id=\"" + nodeId + "\"}[5m])", start, step));
+        result.put("rxMbps", queryRange("rate(node_network_receive_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step));
+        result.put("txMbps", queryRange("rate(node_network_transmit_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step));
+        result.put("tcpEstab", queryRange("node_netstat_Tcp_CurrEstab{node_id=\"" + nodeId + "\"}", start, step));
+        result.put("timeWait", queryRange("node_sockstat_TCP_tw{node_id=\"" + nodeId + "\"}", start, step));
+        result.put("errors", queryRange("rate(node_network_receive_errs_total{node_id=\"" + nodeId + "\"}[5m])", start, step));
         
         return result;
     }
 
-    public Map<String, Map<String, Object>> getVmContainerNetworkMetrics(String vmId, String range) {
+    public Map<String, Map<String, Object>> getVmContainerNetworkMetrics(Long nodeId, String range) {
         String step = getStep(range);
         String start = getStart(range);
 
-        JsonNode rxData = queryRange("rate(container_network_receive_bytes_total{vm_id=\"" + vmId + "\"}[5m]) * 8 / 1e6", start, step);
-        JsonNode txData = queryRange("rate(container_network_transmit_bytes_total{vm_id=\"" + vmId + "\"}[5m]) * 8 / 1e6", start, step);
-        JsonNode dropData = queryRange("rate(container_network_receive_dropped_total{vm_id=\"" + vmId + "\"}[5m])", start, step);
+        JsonNode rxData = queryRange("rate(container_network_receive_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step);
+        JsonNode txData = queryRange("rate(container_network_transmit_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step);
+        JsonNode dropData = queryRange("rate(container_network_receive_dropped_total{node_id=\"" + nodeId + "\"}[5m])", start, step);
 
         Map<String, Map<String, Object>> containers = new HashMap<>();
         
@@ -87,8 +87,8 @@ public class NetworkMetricsProxyService {
         }
     }
 
-    public List<LinkHealthSummary> getHealthSummary(Long clusterId, String env) {
-        List<ServiceLink> links = serviceLinkRepository.findByClusterIdAndEnv(clusterId, env);
+    public List<LinkHealthSummary> getHealthSummary(Long clusterId, Long envId) {
+        List<ServiceLink> links = serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId);
         List<LinkHealthSummary> summaries = new ArrayList<>();
 
         for (ServiceLink link : links) {
@@ -115,8 +115,8 @@ public class NetworkMetricsProxyService {
             summaries.add(LinkHealthSummary.builder()
                     .linkId(link.getId())
                     .linkName(link.getName())
-                    .sourceVm(link.getSourceVm().getId())
-                    .targetVm(link.getTargetVm().getId())
+                    .sourceNode(String.valueOf(link.getSourceNode().getId()))
+                    .targetNode(String.valueOf(link.getTargetNode().getId()))
                     .status(status)
                     .currentLatencyMs(currentLatency != null ? currentLatency * 1000 : 0)
                     .avgLatencyMs(avgLatency != null ? avgLatency * 1000 : 0)
@@ -129,8 +129,8 @@ public class NetworkMetricsProxyService {
         return summaries;
     }
 
-    public Map<String, Object> checkExporterCollectors(String vmId) {
-        Double value = querySingleValue("node_netstat_Tcp_RetransSegs{vm_id=\"" + vmId + "\"}");
+    public Map<String, Object> checkExporterCollectors(Long nodeId) {
+        Double value = querySingleValue("node_netstat_Tcp_RetransSegs{node_id=\"" + nodeId + "\"}");
         Map<String, Object> result = new HashMap<>();
         if (value == null) {
             result.put("netstatAvailable", false);
@@ -203,8 +203,8 @@ public class NetworkMetricsProxyService {
     public static class LinkHealthSummary {
         private String linkId;
         private String linkName;
-        private String sourceVm;
-        private String targetVm;
+        private String sourceNode;
+        private String targetNode;
         private String status;
         private double currentLatencyMs;
         private double avgLatencyMs;

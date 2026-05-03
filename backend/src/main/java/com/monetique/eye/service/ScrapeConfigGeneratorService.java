@@ -62,7 +62,7 @@ public class ScrapeConfigGeneratorService {
             Map<String, Object> targetConfig = new LinkedHashMap<>();
             String targetUrl = String.format("%s://%s:%d%s", 
                 link.getProtocol(), 
-                link.getTargetVm().getIpAddress(), 
+                link.getTargetNode().getIp(), 
                 link.getTargetPort(), 
                 link.getTargetPath() != null ? link.getTargetPath() : "");
             
@@ -72,10 +72,10 @@ public class ScrapeConfigGeneratorService {
             labels.put("probe_module", link.getProbeModule());
             labels.put("link_id", link.getId());
             labels.put("link_name", link.getName() != null ? link.getName() : "");
-            labels.put("source_vm", link.getSourceVm().getId());
-            labels.put("target_vm", link.getTargetVm().getId());
-            labels.put("env", link.getSourceVm().getEnv());
-            labels.put("cluster", String.valueOf(link.getSourceVm().getCluster().getId()));
+            labels.put("source_node", String.valueOf(link.getSourceNode().getId()));
+            labels.put("target_node", String.valueOf(link.getTargetNode().getId()));
+            labels.put("env", link.getSourceNode().getEnvironment().getName());
+            labels.put("cluster", String.valueOf(link.getSourceNode().getEnvironment().getCluster().getId()));
             
             targetConfig.put("labels", labels);
             fileSdConfigs.add(targetConfig);

@@ -2,10 +2,10 @@ package com.monetique.eye.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.monetique.eye.entity.ManagedNode;
 import com.monetique.eye.entity.ServiceLink;
-import com.monetique.eye.entity.VmRegistry;
+import com.monetique.eye.repository.ManagedNodeRepository;
 import com.monetique.eye.repository.ServiceLinkRepository;
-import com.monetique.eye.repository.VmRegistryRepository;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class NetworkTopologyService {
 
-    private final VmRegistryRepository vmRegistryRepository;
+    private final ManagedNodeRepository managedNodeRepository;
     private final ServiceLinkRepository serviceLinkRepository;
     private final NetworkMetricsProxyService metricsProxyService;
     private final RestTemplate restTemplate;
@@ -32,28 +32,26 @@ public class NetworkTopologyService {
     @Value("${monitoring.alertmanager.base-url:http://localhost:9093}")
     private String alertmanagerBaseUrl;
 
-    public TopologyGraph buildTopologyGraph(Long clusterId, String env) {
-        List<VmRegistry> vms = vmRegistryRepository.findByClusterIdAndEnv(clusterId, env);
-        List<ServiceLink> links = serviceLinkRepository.findByClusterIdAndEnv(clusterId, env);
-        List<NetworkMetricsProxyService.LinkHealthSummary> healthSummaries = metricsProxyService.getHealthSummary(clusterId, env);
+    public TopologyGraph buildTopologyGraph(Long clusterId, Long envId) {
+        List<ManagedNode> nodesList = managedNodeRepository.findByEnvironment_Cluster_IdAndEnvironment_Id(clusterId, envId);
+        List<ServiceLink> links = serviceLinkRepository.findByClusterIdAndEnvironmentId(clusterId, envId);
+        List<NetworkMetricsProxyService.LinkHealthSummary> healthSummaries = metricsProxyService.getHealthSummary(clusterId, envId);
 
         Map<String, NetworkMetricsProxyService.LinkHealthSummary> healthMap = healthSummaries.stream()
                 .collect(Collectors.toMap(NetworkMetricsProxyService.LinkHealthSummary::getLinkId, s -> s));
 
-        Map<String, Integer> vmAlertCounts = getActiveAlertCountsByVm();
+        Map<String, Integer> nodeAlertCounts = getActiveAlertCountsByNode();
 
         List<TopologyNode> nodes = new ArrayList<>();
-        for (VmRegistry vm : vms) {
-            int alertCount = vmAlertCounts.getOrDefault(vm.getId(), 0);
+        for (ManagedNode node : nodesList) {
+            int alertCount = nodeAlertCounts.getOrDefault(String.valueOf(node.getId()), 0);
             String status = alertCount > 0 ? "WARNING" : "HEALTHY";
-            // Check if any critical alerts exist (simplified here: if > 0, assume warning, if high count maybe critical. 
-            // Better yet, real alert parsing would check severity. Let's stick to WARNING/HEALTHY based on count as spec is simple).
             
             nodes.add(TopologyNode.builder()
-                    .id(vm.getId())
-                    .label(vm.getName() != null ? vm.getName() : vm.getIpAddress())
-                    .role(vm.getRole())
-                    .ip(vm.getIpAddress())
+                    .id(String.valueOf(node.getId()))
+                    .label(node.getNodeName() != null ? node.getNodeName() : node.getIp())
+                    .role(node.getRole())
+                    .ip(node.getIp())
                     .status(status)
                     .alertCount(alertCount)
                     .build());
@@ -69,8 +67,8 @@ public class NetworkTopologyService {
 
             edges.add(TopologyEdge.builder()
                     .id(link.getId())
-                    .source(link.getSourceVm().getId())
-                    .target(link.getTargetVm().getId())
+                    .source(String.valueOf(link.getSourceNode().getId()))
+                    .target(String.valueOf(link.getTargetNode().getId()))
                     .status(status)
                     .latencyMs(latency)
                     .protocol(link.getProtocol())
@@ -84,7 +82,7 @@ public class NetworkTopologyService {
                 .build();
     }
 
-    private Map<String, Integer> getActiveAlertCountsByVm() {
+    private Map<String, Integer> getActiveAlertCountsByNode() {
         Map<String, Integer> counts = new HashMap<>();
         try {
             String url = alertmanagerBaseUrl + "/api/v2/alerts?filter=job=~\"blackbox_probe|node_exporter|cadvisor|app_metrics.*\"";
@@ -93,15 +91,13 @@ public class NetworkTopologyService {
             
             if (root.isArray()) {
                 for (JsonNode alert : root) {
-                    // Only count firing alerts
                     if ("active".equals(alert.path("status").path("state").asText())) {
-                        String vmId = alert.path("labels").path("vm_id").asText(null);
-                        if (vmId == null) {
-                            // try to map from target_vm or source_vm if it's a link alert
-                            vmId = alert.path("labels").path("target_vm").asText(null);
+                        String nodeId = alert.path("labels").path("node_id").asText(null);
+                        if (nodeId == null) {
+                            nodeId = alert.path("labels").path("target_node").asText(null);
                         }
-                        if (vmId != null) {
-                            counts.put(vmId, counts.getOrDefault(vmId, 0) + 1);
+                        if (nodeId != null) {
+                            counts.put(nodeId, counts.getOrDefault(nodeId, 0) + 1);
                         }
                     }
                 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useEnvironment } from '../../context/EnvironmentContext';
-import { getNetworkVms, getVmNetworkMetrics } from '../../services/api';
+import { getNetworkNodes, getVmNetworkMetrics } from '../../services/api';
 import { Server, Activity, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -10,40 +10,41 @@ interface Props {
 
 const VmNetworkHealthTab: React.FC<Props> = () => {
   const { selectedEnvironment } = useEnvironment();
-  const [vms, setVms] = useState<any[]>([]);
+  const [nodes, setNodes] = useState<any[]>([]);
   const [metricsData, setMetricsData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
+  const fetchNodes = async () => {
+    if (!selectedEnvironment) return;
+    try {
+      const res = await getNetworkNodes('1', selectedEnvironment.id.toString());
+      setNodes(res.data);
+      
+      // Fetch metrics for each Node
+      const mData: Record<string, any> = {};
+      await Promise.all(res.data.map(async (node: any) => {
+        try {
+          const mRes = await getVmNetworkMetrics(node.id, '1h');
+          mData[node.id] = mRes.data;
+        } catch (e) {
+          console.error(`Failed to fetch metrics for ${node.id}`);
+        }
+      }));
+      setMetricsData(mData);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchVms = async () => {
-      if (!selectedEnvironment) return;
-      try {
-        const res = await getNetworkVms('1', selectedEnvironment.id.toString());
-        setVms(res.data);
-        
-        // Fetch metrics for each VM
-        const mData: Record<string, any> = {};
-        await Promise.all(res.data.map(async (vm: any) => {
-          try {
-            const mRes = await getVmNetworkMetrics(vm.id, '1h');
-            mData[vm.id] = mRes.data;
-          } catch (e) {
-            console.error(`Failed to fetch metrics for ${vm.id}`);
-          }
-        }));
-        setMetricsData(mData);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchVms();
-    const interval = setInterval(fetchVms, 60000);
+    fetchNodes();
+    const interval = setInterval(fetchNodes, 60000);
     return () => clearInterval(interval);
   }, [selectedEnvironment]);
 
-  if (loading && vms.length === 0) return <div className="p-6 text-muted-foreground">Loading VM network health...</div>;
+  if (loading && nodes.length === 0) return <div className="p-6 text-muted-foreground">Loading VM network health...</div>;
 
   const renderSparkline = (dataArr: any[], color: string) => {
     if (!dataArr || dataArr.length === 0) return <div className="h-12 flex items-center justify-center text-xs text-muted-foreground">No data</div>;
@@ -76,21 +77,23 @@ const VmNetworkHealthTab: React.FC<Props> = () => {
 
   return (
     <div className="h-full w-full overflow-y-auto p-6">
-      <h2 className="text-lg font-bold mb-6">VM Network Health</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-bold">VM Network Health</h2>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {vms.map((vm) => {
-          const metrics = metricsData[vm.id] || {};
+        {nodes.map((node) => {
+          const metrics = metricsData[node.id] || {};
           return (
-            <div key={vm.id} className="bg-white/5 border border-white/10 rounded-lg p-5 hover:bg-white/10 transition-colors cursor-pointer">
+            <div key={node.id} className="bg-white/5 border border-white/10 rounded-lg p-5 hover:bg-white/10 transition-colors cursor-pointer">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center">
                   <div className="p-2 bg-blue-500/20 rounded-md text-blue-400 mr-3">
                     <Server className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-white">{vm.name || vm.ipAddress}</h3>
-                    <p className="text-xs text-muted-foreground">{vm.role} • {vm.ipAddress}</p>
+                    <h3 className="font-bold text-white">{node.nodeName || node.ip}</h3>
+                    <p className="text-xs text-muted-foreground">{node.role || 'Managed Node'} • {node.ip}</p>
                   </div>
                 </div>
               </div>

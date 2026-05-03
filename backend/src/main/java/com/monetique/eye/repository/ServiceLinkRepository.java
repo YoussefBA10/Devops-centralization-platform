@@ -10,6 +10,6 @@ import java.util.List;
 @Repository
 public interface ServiceLinkRepository extends JpaRepository<ServiceLink, String> {
     
-    @Query("SELECT sl FROM ServiceLink sl WHERE sl.sourceVm.cluster.id = :clusterId AND sl.sourceVm.env = :env AND sl.targetVm.cluster.id = :clusterId AND sl.targetVm.env = :env")
-    List<ServiceLink> findByClusterIdAndEnv(Long clusterId, String env);
+    @Query("SELECT sl FROM ServiceLink sl WHERE sl.sourceNode.environment.cluster.id = :clusterId AND sl.sourceNode.environment.id = :envId")
+    List<ServiceLink> findByClusterIdAndEnvironmentId(Long clusterId, Long envId);
 }
