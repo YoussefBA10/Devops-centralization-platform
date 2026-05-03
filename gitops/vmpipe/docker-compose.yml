@@ -131,7 +131,8 @@ services:
   blackbox-exporter:
     image: prom/blackbox-exporter:latest
     container_name: blackbox-exporter
-    # ... (other blackbox config)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     labels:
       app: "monetique-eye"
       env: "central-node"

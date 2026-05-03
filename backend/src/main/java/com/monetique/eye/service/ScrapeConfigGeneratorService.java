@@ -60,9 +60,18 @@ public class ScrapeConfigGeneratorService {
             if (!link.getEnabled()) continue;
 
             Map<String, Object> targetConfig = new LinkedHashMap<>();
+            
+            // For targets on the central node (same Docker host as blackbox-exporter),
+            // use host.docker.internal so the probe can reach the host's published ports.
+            String targetIp = link.getTargetNode().getIp();
+            String centralNodeIp = link.getTargetNode().getEnvironment().getCentralNodeIp();
+            if (targetIp != null && targetIp.equals(centralNodeIp)) {
+                targetIp = "host.docker.internal";
+            }
+            
             String targetUrl = String.format("%s://%s:%d%s", 
                 link.getProtocol(), 
-                link.getTargetNode().getIp(), 
+                targetIp, 
                 link.getTargetPort(), 
                 link.getTargetPath() != null ? link.getTargetPath() : "");
             
