@@ -114,6 +114,7 @@ export const getExporterStatus = (id: string) => api.get(`/network/vms/${id}/exp
 
 export const getNetworkLinks = (clusterId?: string, envId?: string) => api.get(`/network/links`, { params: { clusterId, envId } });
 export const addNetworkLink = (data: any) => api.post(`/network/links`, data);
+export const updateNetworkLink = (id: string, data: any) => api.put(`/network/links/${id}`, data);
 export const deleteNetworkLink = (id: string) => api.delete(`/network/links/${id}`);
 
 export const getTopology = (clusterId?: string, envId?: string) => api.get(`/network/topology`, { params: { clusterId, envId } });

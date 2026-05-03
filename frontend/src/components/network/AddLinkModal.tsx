@@ -8,9 +8,10 @@ interface AddLinkModalProps {
   onSuccess: () => void;
   clusterId?: string;
   envId?: string;
+  editData?: any;
 }
 
-const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess, clusterId }) => {
+const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess, clusterId, editData }) => {
   const [nodes, setNodes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -27,7 +28,6 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
     if (isOpen) {
       const fetchNodes = async () => {
         try {
-          // Fetch all nodes in the cluster to allow cross-environment linking
           const res = await getNetworkNodes(clusterId, undefined);
           setNodes(res.data);
         } catch (err) {
@@ -35,8 +35,30 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
         }
       };
       fetchNodes();
+
+      if (editData) {
+        setFormData({
+          name: editData.linkName || '',
+          sourceNodeId: editData.sourceNodeId || '',
+          targetNodeId: editData.targetNodeId || '',
+          targetPort: editData.targetPort || 8080,
+          targetPath: editData.targetPath || '/health',
+          protocol: editData.protocol || 'http',
+          probeModule: editData.probeModule || 'http_2xx'
+        });
+      } else {
+        setFormData({
+          name: '',
+          sourceNodeId: '',
+          targetNodeId: '',
+          targetPort: 8080,
+          targetPath: '/health',
+          protocol: 'http',
+          probeModule: 'http_2xx'
+        });
+      }
     }
-  }, [isOpen, clusterId]);
+  }, [isOpen, clusterId, editData]);
 
   if (!isOpen) return null;
 
@@ -44,11 +66,16 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
     e.preventDefault();
     setLoading(true);
     try {
-      await addNetworkLink(formData);
+      if (editData) {
+        const { updateNetworkLink } = await import('../../services/api');
+        await updateNetworkLink(editData.linkId, formData);
+      } else {
+        await addNetworkLink(formData);
+      }
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Failed to add link:', err);
+      console.error('Failed to save link:', err);
     } finally {
       setLoading(false);
     }
@@ -63,8 +90,8 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
               <Activity className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Add Service Link</h2>
-              <p className="text-xs text-muted-foreground">Configure inter-node health probing</p>
+              <h2 className="text-xl font-bold text-white">{editData ? 'Edit Service Link' : 'Add Service Link'}</h2>
+              <p className="text-xs text-muted-foreground">{editData ? 'Modify probe configuration' : 'Configure inter-node health probing'}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-white transition-colors p-1">
@@ -191,7 +218,7 @@ const AddLinkModal: React.FC<AddLinkModalProps> = ({ isOpen, onClose, onSuccess,
               disabled={loading}
               className="flex-1 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-all font-medium disabled:opacity-50"
             >
-              {loading ? 'Adding...' : 'Add Service Link'}
+              {loading ? 'Saving...' : (editData ? 'Update Link' : 'Add Service Link')}
             </button>
           </div>
         </form>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useEnvironment } from '../../context/EnvironmentContext';
 import { useCluster } from '../../context/ClusterContext';
-import { getNetworkHealthSummary } from '../../services/api';
-import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, XCircle, Edit2, Trash2 } from 'lucide-react';
+import { getNetworkHealthSummary, deleteNetworkLink } from '../../services/api';
 import AddLinkModal from './AddLinkModal';
 
 const LinkHealthTab: React.FC = () => {
@@ -11,6 +11,22 @@ const LinkHealthTab: React.FC = () => {
   const [links, setLinks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<any>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this service link?')) return;
+    try {
+      await deleteNetworkLink(id);
+      fetchLinks();
+    } catch (err) {
+      console.error('Failed to delete link:', err);
+    }
+  };
+
+  const handleEdit = (link: any) => {
+    setEditingLink(link);
+    setIsModalOpen(true);
+  };
 
   const fetchLinks = async () => {
     const clusterId = selectedCluster?.id.toString();
@@ -38,7 +54,10 @@ const LinkHealthTab: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-bold">Service Link Health</h2>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingLink(null);
+            setIsModalOpen(true);
+          }}
           className="px-4 py-2 bg-primary text-white text-sm font-medium rounded-md hover:bg-primary/90"
         >
           + Add Link
@@ -56,6 +75,7 @@ const LinkHealthTab: React.FC = () => {
               <th className="px-6 py-3 font-medium">Max 1h (ms)</th>
               <th className="px-6 py-3 font-medium">Uptime 1h</th>
               <th className="px-6 py-3 font-medium">Error Rate</th>
+              <th className="px-6 py-3 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -92,6 +112,24 @@ const LinkHealthTab: React.FC = () => {
                 <td className="px-6 py-4 text-muted-foreground">{link.maxLatencyMs?.toFixed(0)} ms</td>
                 <td className="px-6 py-4 text-muted-foreground">{link.uptimePercent?.toFixed(1)}%</td>
                 <td className="px-6 py-4 text-muted-foreground">{link.errorRate?.toFixed(2)}%</td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex justify-end space-x-2">
+                    <button 
+                      onClick={() => handleEdit(link)}
+                      className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-all"
+                      title="Edit Link"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(link.linkId)}
+                      className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-all"
+                      title="Delete Link"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -100,9 +138,13 @@ const LinkHealthTab: React.FC = () => {
 
       <AddLinkModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingLink(null);
+        }}
         onSuccess={fetchLinks}
         clusterId={selectedCluster?.id.toString()}
+        editData={editingLink}
       />
     </div>
   );

@@ -97,6 +97,23 @@ public class NetworkController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/links/{id}")
+    public ResponseEntity<ServiceLink> updateLink(@PathVariable String id, @RequestBody LinkRequest request) {
+        ServiceLink link = serviceLinkRepository.findById(id).orElseThrow();
+        
+        if (request.getName() != null) link.setName(request.getName());
+        if (request.getTargetPort() != null) link.setTargetPort(request.getTargetPort());
+        if (request.getTargetPath() != null) link.setTargetPath(request.getTargetPath());
+        if (request.getProtocol() != null) link.setProtocol(request.getProtocol());
+        if (request.getProbeModule() != null) link.setProbeModule(request.getProbeModule());
+        if (request.getSourceNodeId() != null) link.setSourceNode(managedNodeRepository.findById(request.getSourceNodeId()).orElseThrow());
+        if (request.getTargetNodeId() != null) link.setTargetNode(managedNodeRepository.findById(request.getTargetNodeId()).orElseThrow());
+
+        ServiceLink saved = serviceLinkRepository.save(link);
+        scrapeGenerator.generateAndReload();
+        return ResponseEntity.ok(saved);
+    }
+
     // --- Topology ---
 
     @GetMapping("/topology")
