@@ -75,6 +75,7 @@ export const getOperationalResources = (envId: number) => api.get(`/operational/
 // Application Endpoints
 export const getApplications = (envId: number) => api.get('/applications', { params: { environmentId: envId } });
 export const deployApplication = (data: any) => api.post('/applications/deploy', data);
+export const checkRunning = (data: { targetIp: string; appName: string; port: string }) => api.post('/applications/check-running', data);
 export const restartApplication = (appId: number) => api.post(`/applications/${appId}/restart`);
 export const getApplicationLogs = (appId: number) => api.get(`/applications/${appId}/logs`);
 export const getApplicationStatus = (appId: number) => api.get(`/applications/${appId}/status`);
@@ -106,5 +107,30 @@ export const getNotifications = () => api.get('/notifications');
 export const getUnreadCount = () => api.get('/notifications/unread-count');
 export const markNotificationAsRead = (id: number) => api.post(`/notifications/${id}/read`);
 export const markAllNotificationsAsRead = () => api.post('/notifications/read-all');
+
+// Network Monitoring
+export const getNetworkVms = (clusterId: string, env: string) => api.get(`/network/vms`, { params: { clusterId, env } });
+export const addNetworkVm = (data: any) => api.post(`/network/vms`, data);
+export const deleteNetworkVm = (id: string) => api.delete(`/network/vms/${id}`);
+export const getExporterStatus = (id: string) => api.get(`/network/vms/${id}/exporter-status`);
+
+export const getNetworkLinks = (clusterId: string, env: string) => api.get(`/network/links`, { params: { clusterId, env } });
+export const addNetworkLink = (data: any) => api.post(`/network/links`, data);
+export const deleteNetworkLink = (id: string) => api.delete(`/network/links/${id}`);
+
+export const getTopology = (clusterId: string, env: string) => api.get(`/network/topology`, { params: { clusterId, env } });
+
+export const getLinkMetrics = (linkId: string, range?: string) => api.get(`/network/metrics/link/${linkId}`, { params: { range } });
+export const getVmNetworkMetrics = (vmId: string, range?: string) => api.get(`/network/metrics/vm/${vmId}`, { params: { range } });
+export const getVmContainerMetrics = (vmId: string, range?: string) => api.get(`/network/metrics/vm/${vmId}/containers`, { params: { range } });
+export const getNetworkHealthSummary = (clusterId: string, env: string) => api.get(`/network/metrics/health-summary`, { params: { clusterId, env } });
+
+export const getNetworkLogs = (params: any) => api.get(`/network/logs`, { params });
+
+export const getActiveAlerts = () => api.get(`/network/alerts/active`);
+export const silenceAlert = (id: string) => api.post(`/network/alerts/${id}/silence`);
+export const getAlertRules = () => api.get(`/network/alert-rules`);
+export const addAlertRule = (data: any) => api.post(`/network/alert-rules`, data);
+export const deleteAlertRule = (id: string) => api.delete(`/network/alert-rules/${id}`);
 
 export default api;

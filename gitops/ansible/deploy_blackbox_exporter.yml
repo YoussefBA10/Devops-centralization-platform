@@ -1,0 +1,90 @@
+---
+- name: Deploy Blackbox Exporter on Central Monitoring VM
+  hosts: monitoring_vm
+  gather_facts: false
+
+  tasks:
+    - name: Create blackbox monitoring directory
+      become: true
+      ansible.builtin.file:
+        path: /opt/monitoring/blackbox
+        state: directory
+        mode: '0755'
+
+    - name: Write blackbox exporter configuration
+      become: true
+      ansible.builtin.copy:
+        dest: /opt/monitoring/blackbox/blackbox.yml
+        content: |
+          modules:
+            http_2xx:
+              prober: http
+              timeout: 5s
+              http:
+                valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+                valid_status_codes: [200, 201, 204]
+                method: GET
+                preferred_ip_protocol: "ip4"
+                no_follow_redirects: false
+
+            http_post_2xx:
+              prober: http
+              timeout: 5s
+              http:
+                method: POST
+                valid_status_codes: [200, 201, 204]
+                preferred_ip_protocol: "ip4"
+
+            tcp_connect:
+              prober: tcp
+              timeout: 5s
+              tcp:
+                preferred_ip_protocol: "ip4"
+        mode: '0644'
+
+    - name: Run blackbox_exporter Docker container
+      # Using docker group access, become not required if user is in docker group.
+      # But sometimes we just use command if docker module is not installed, or use docker_container
+      ansible.builtin.command: |
+        docker run -d \
+          --name blackbox_exporter \
+          --restart unless-stopped \
+          -p 9115:9115 \
+          -v /opt/monitoring/blackbox/blackbox.yml:/config/blackbox.yml:ro \
+          prom/blackbox-exporter:v0.25.0 \
+          --config.file=/config/blackbox.yml
+      register: docker_run
+      failed_when: 
+        - docker_run.rc != 0
+        - "'Conflict. The container name \"/blackbox_exporter\" is already in use' not in docker_run.stderr"
+      changed_when: docker_run.rc == 0
+
+    - name: Verify blackbox_exporter is running
+      ansible.builtin.uri:
+        url: http://localhost:9115/-/healthy
+        return_content: yes
+      register: health_check
+      until: health_check.status == 200
+      retries: 5
+      delay: 2
+      failed_when: health_check.status != 200
+
+    - name: Add Prometheus scrape job for blackbox exporter itself
+      # This assumes there is a mechanism to include /opt/monitoring/prometheus/conf.d/*.yml
+      # We will write a static config file for it in conf.d
+      become: true
+      ansible.builtin.copy:
+        dest: /opt/monitoring/prometheus/conf.d/blackbox_exporter_meta.yml
+        content: |
+          - job_name: 'blackbox_exporter_meta'
+            static_configs:
+              - targets: ['localhost:9115']
+        mode: '0644'
+      notify: Reload Prometheus
+
+  handlers:
+    - name: Reload Prometheus
+      ansible.builtin.uri:
+        url: http://localhost:9090/-/reload
+        method: POST
+        status_code: 200

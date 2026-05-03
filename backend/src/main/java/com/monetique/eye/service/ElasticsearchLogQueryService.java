@@ -1,0 +1,102 @@
+package com.monetique.eye.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ElasticsearchLogQueryService {
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+
+    @Value("${monitoring.elasticsearch.base-url:http://localhost:9200}")
+    private String elasticsearchBaseUrl;
+
+    public List<Map<String, Object>> queryLogs(String env, String vmId, String linkId, String level, String from, String to, String q, int page, int size) {
+        String indexPattern = "monetique-logs-" + env + "-*";
+        String url = elasticsearchBaseUrl + "/" + indexPattern + "/_search";
+
+        // Build ES query
+        Map<String, Object> query = new HashMap<>();
+        Map<String, Object> bool = new HashMap<>();
+        List<Map<String, Object>> must = new ArrayList<>();
+
+        if (vmId != null && !vmId.isEmpty()) {
+            must.add(Map.of("match", Map.of("vm_id", vmId)));
+        }
+        
+        if (linkId != null && !linkId.isEmpty()) {
+            must.add(Map.of("match", Map.of("link_id", linkId)));
+        }
+
+        if (level != null && !level.isEmpty()) {
+            must.add(Map.of("match", Map.of("log.level", level)));
+        }
+
+        if (q != null && !q.isEmpty()) {
+            must.add(Map.of("query_string", Map.of("query", q)));
+        }
+
+        // Add range if from/to provided
+        if ((from != null && !from.isEmpty()) || (to != null && !to.isEmpty())) {
+            Map<String, Object> rangeFilter = new HashMap<>();
+            Map<String, String> rangeOpts = new HashMap<>();
+            if (from != null && !from.isEmpty()) rangeOpts.put("gte", from);
+            if (to != null && !to.isEmpty()) rangeOpts.put("lte", to);
+            rangeFilter.put("@timestamp", rangeOpts);
+            must.add(Map.of("range", rangeFilter));
+        }
+
+        bool.put("must", must);
+        query.put("bool", bool);
+
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put("query", query);
+        searchRequest.put("from", page * size);
+        searchRequest.put("size", size);
+        searchRequest.put("sort", List.of(Map.of("@timestamp", Map.of("order", "desc"))));
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(searchRequest), headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            JsonNode root = objectMapper.readTree(response.getBody());
+            
+            List<Map<String, Object>> results = new ArrayList<>();
+            JsonNode hitsNode = root.path("hits").path("hits");
+            if (hitsNode.isArray()) {
+                for (JsonNode hit : hitsNode) {
+                    JsonNode source = hit.path("_source");
+                    Map<String, Object> logEntry = new HashMap<>();
+                    logEntry.put("timestamp", source.path("@timestamp").asText());
+                    logEntry.put("level", source.path("log").path("level").asText("INFO"));
+                    logEntry.put("message", source.path("message").asText());
+                    logEntry.put("vm_id", source.path("vm_id").asText());
+                    results.add(logEntry);
+                }
+            }
+            return results;
+        } catch (Exception e) {
+            log.error("Failed to query Elasticsearch logs: {}", e.getMessage(), e);
+            return new ArrayList<>(); // Return empty list on failure to avoid breaking UI
+        }
+    }
+}

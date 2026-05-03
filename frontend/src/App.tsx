@@ -22,6 +22,7 @@ import AccessDeniedPage from './pages/AccessDeniedPage';
 import DocumentationPage from './pages/DocumentationPage';
 import ServiceUnavailablePage from './pages/ServiceUnavailablePage';
 import ChatWidget from './components/layout/ChatWidget';
+import NetworkMonitor from './pages/NetworkMonitor';
 import { useEnvironment } from './context/EnvironmentContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -105,6 +106,8 @@ function App() {
                     <Route path="/observability/apps" element={<ApplicationObservabilityPage />} />
                     <Route path="/observability/apps/:appId/dashboard" element={<AppMetricsDashboard />} />
                     <Route path="/operational" element={<OperationalIntelligence />} />
+                    <Route path="/network-monitor" element={<NetworkMonitor />} />
+                    <Route path="/network-monitor/vm/:vmId" element={<NetworkMonitor />} />
                     <Route path="/infrastructure" element={<InfrastructureTopologyPage />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/tickets" element={<TicketsPage />} />

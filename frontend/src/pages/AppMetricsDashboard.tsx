@@ -99,7 +99,7 @@ const AppMetricsDashboard: React.FC = () => {
 
       // Final polish: If we have traffic but no errors, errors = 0
       if (newData.traffic.length > 0 && newData.errors.length === 0) {
-        newData.errors = newData.traffic.map(d => ({ ...d, y: 0 }));
+        newData.errors = newData.traffic.map((d: any) => ({ ...d, y: 0 }));
       }
 
       setMetricsData(newData);
