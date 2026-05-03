@@ -150,29 +150,29 @@ public class NetworkMetricsProxyService {
 
     private JsonNode queryRange(String query, String start, String step) {
         try {
-            String url = UriComponentsBuilder.fromHttpUrl(metricsBaseUrl + "/api/v1/query_range")
+            java.net.URI uri = UriComponentsBuilder.fromHttpUrl(metricsBaseUrl + "/api/v1/query_range")
                     .queryParam("query", query)
                     .queryParam("start", start)
                     .queryParam("end", "now")
                     .queryParam("step", step)
-                    .build().toUriString();
+                    .build().encode().toUri();
 
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
             JsonNode root = objectMapper.readTree(response.getBody());
             return root.path("data");
         } catch (Exception e) {
-            log.error("PromQL range query failed: {}", query, e);
+            log.error("PromQL range query failed: {} - Error: {}", query, e.getMessage());
             return null;
         }
     }
 
     private Double querySingleValue(String query) {
         try {
-            String url = UriComponentsBuilder.fromHttpUrl(metricsBaseUrl + "/api/v1/query")
+            java.net.URI uri = UriComponentsBuilder.fromHttpUrl(metricsBaseUrl + "/api/v1/query")
                     .queryParam("query", query)
-                    .build().toUriString();
+                    .build().encode().toUri();
 
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
             JsonNode root = objectMapper.readTree(response.getBody());
             JsonNode result = root.path("data").path("result");
             if (result.isArray() && result.size() > 0) {
@@ -185,7 +185,7 @@ public class NetworkMetricsProxyService {
             }
             return null;
         } catch (Exception e) {
-            log.warn("PromQL query failed: {}", query);
+            log.warn("PromQL query failed: {} - Error: {}", query, e.getMessage());
             return null;
         }
     }
