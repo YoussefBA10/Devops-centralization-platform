@@ -72,9 +72,4 @@ public class InfrastructureController {
         return Map.of("message", "Restart command sent for " + containerName);
     }
 
-    @PostMapping("/sync-monitoring")
-    public Map<String, String> syncMonitoring() {
-        deploymentService.syncMonitoring();
-        return Map.of("message", "Global monitoring synchronization triggered.");
-    }
 }

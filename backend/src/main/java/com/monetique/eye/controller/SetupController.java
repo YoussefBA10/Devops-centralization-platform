@@ -55,4 +55,10 @@ public class SetupController {
             return ResponseEntity.internalServerError().body(Map.of("message", "Initialization failed: " + e.getMessage()));
         }
     }
+
+    @PostMapping("/sync-monitoring")
+    public ResponseEntity<Map<String, String>> syncMonitoring() {
+        deploymentService.syncMonitoring();
+        return ResponseEntity.ok(Map.of("message", "Global monitoring synchronization triggered."));
+    }
 }
