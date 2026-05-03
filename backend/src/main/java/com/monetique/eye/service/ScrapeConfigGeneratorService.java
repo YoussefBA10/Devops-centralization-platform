@@ -57,10 +57,11 @@ public class ScrapeConfigGeneratorService {
         List<Map<String, Object>> fileSdConfigs = new ArrayList<>();
 
         for (ServiceLink link : links) {
-            if (!link.getEnabled()) continue;
+            if (!link.getEnabled())
+                continue;
 
             Map<String, Object> targetConfig = new LinkedHashMap<>();
-            
+
             // For targets on the central node (same Docker host as blackbox-exporter),
             // use host.docker.internal so the probe can reach the host's published ports.
             String targetIp = link.getTargetNode().getIp();
@@ -68,15 +69,15 @@ public class ScrapeConfigGeneratorService {
             if (targetIp != null && targetIp.equals(centralNodeIp)) {
                 targetIp = "host.docker.internal";
             }
-            
-            String targetUrl = String.format("%s://%s:%d%s", 
-                link.getProtocol(), 
-                targetIp, 
-                link.getTargetPort(), 
-                link.getTargetPath() != null ? link.getTargetPath() : "");
-            
+
+            String targetUrl = String.format("%s://%s:%d%s",
+                    link.getProtocol(),
+                    targetIp,
+                    link.getTargetPort(),
+                    link.getTargetPath() != null ? link.getTargetPath() : "");
+
             targetConfig.put("targets", Collections.singletonList(targetUrl));
-            
+
             Map<String, String> labels = new LinkedHashMap<>();
             labels.put("probe_module", link.getProbeModule());
             labels.put("link_id", link.getId());
@@ -84,13 +85,8 @@ public class ScrapeConfigGeneratorService {
             labels.put("source_node", String.valueOf(link.getSourceNode().getId()));
             labels.put("target_node", String.valueOf(link.getTargetNode().getId()));
             labels.put("env", link.getSourceNode().getEnvironment().getName());
-            
-            if (link.getSourceNode().getEnvironment().getCluster() != null) {
-                labels.put("cluster", String.valueOf(link.getSourceNode().getEnvironment().getCluster().getId()));
-            } else {
-                labels.put("cluster", "none");
-            }
-            
+            labels.put("cluster", String.valueOf(link.getSourceNode().getEnvironment().getCluster().getId()));
+
             targetConfig.put("labels", labels);
             fileSdConfigs.add(targetConfig);
         }
@@ -113,14 +109,14 @@ public class ScrapeConfigGeneratorService {
         if (!dir.exists()) {
             dir.mkdirs();
         }
-        
+
         Path finalPath = Paths.get(confDir, "network_monitor.yml");
         Path tmpPath = Paths.get(confDir, "network_monitor.yml.tmp");
-        
+
         try (FileWriter writer = new FileWriter(tmpPath.toFile())) {
             writer.write(content);
         }
-        
+
         Files.move(tmpPath, finalPath, StandardCopyOption.REPLACE_EXISTING);
         log.info("Wrote scrape config to {}", finalPath);
     }
@@ -129,10 +125,12 @@ public class ScrapeConfigGeneratorService {
         try {
             HttpHeaders headers = new HttpHeaders();
             HttpEntity<String> entity = new HttpEntity<>(null, headers);
-            ResponseEntity<String> response = restTemplate.exchange(prometheusReloadUrl, HttpMethod.POST, entity, String.class);
-            
+            ResponseEntity<String> response = restTemplate.exchange(prometheusReloadUrl, HttpMethod.POST, entity,
+                    String.class);
+
             if (!response.getStatusCode().is2xxSuccessful()) {
-                throw new RuntimeException("Prometheus returned non-2xx: " + response.getStatusCode() + " body: " + response.getBody());
+                throw new RuntimeException(
+                        "Prometheus returned non-2xx: " + response.getStatusCode() + " body: " + response.getBody());
             }
             log.info("Prometheus successfully reloaded.");
         } catch (Exception e) {
