@@ -1274,6 +1274,7 @@ public class DeploymentService {
     }
 
     @Async
+    @Transactional
     public void syncMonitoring() {
         log.info("Starting global monitoring synchronization...");
         List<com.monetique.eye.entity.ManagedNode> nodes = managedNodeRepository.findAll();
@@ -1281,8 +1282,8 @@ public class DeploymentService {
             registerNodeInPrometheus(node.getEnvironment(), node.getIp(), node.getId());
         }
 
-        List<com.monetique.eye.entity.Application> apps = applicationRepository.findAll();
-        for (com.monetique.eye.entity.Application app : apps) {
+        List<Application> apps = applicationRepository.findAll();
+        for (Application app : apps) {
             if (app.getTargetNode() != null && app.getMetricsPort() != null) {
                 registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
             }
