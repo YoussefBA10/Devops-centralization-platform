@@ -25,7 +25,7 @@ public class NetworkMetricsProxyService {
     private final ServiceLinkRepository serviceLinkRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${monitoring.metrics.base-url:http://localhost:8428}")
+    @Value("${prometheus.url:http://prometheus:9090}")
     private String metricsBaseUrl;
 
     public Map<String, Object> getLinkMetrics(String linkId, String range) {

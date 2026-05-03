@@ -41,6 +41,8 @@ services:
       - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
       - ./prometheus/prediction_rules.yml:/etc/prometheus/prediction_rules.yml
       - ./prometheus/file_sd:/etc/prometheus/file_sd
+      - ./prometheus/conf.d:/etc/prometheus/conf.d
+      - ./prometheus/rules:/etc/prometheus/rules
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - prometheus_data:/prometheus
     command:
@@ -265,6 +267,8 @@ services:
       com.monetique.category: "backend"
     volumes:
       - ../:/app/gitops
+      - ./prometheus/conf.d:/opt/monitoring/prometheus/conf.d
+      - ./prometheus/rules:/opt/monitoring/prometheus/rules
     environment:
       SERVER_PORT: ${SERVER_PORT}
       NODE_NAME: "central-node"
@@ -280,7 +284,9 @@ services:
       ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
       LOGSTASH_HOST: ${LOGSTASH_HOST}
       LOGSTASH_PORT: ${LOGSTASH_PORT}
-      PROMETHEUS_URL: ${PROMETHEUS_URL}
+      PROMETHEUS_URL: "http://prometheus:9090"
+      MONITORING_PROMETHEUS_RELOAD_URL: "http://prometheus:9090/-/reload"
+      MONITORING_BLACKBOX_EXPORTER_URL: "blackbox-exporter:9115"
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
       MONETIQUE_GITOPS_PATH: "/app/gitops"
