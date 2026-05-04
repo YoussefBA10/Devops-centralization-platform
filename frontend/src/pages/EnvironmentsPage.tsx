@@ -550,7 +550,7 @@ const EnvironmentsPage: React.FC = () => {
                     className="w-full bg-secondary border border-border rounded-lg py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                   >
                     <option value="">No Cluster</option>
-                    {clusters.map(c => (
+                    {(clusters || []).map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -612,7 +612,7 @@ const EnvironmentsPage: React.FC = () => {
                     className="w-full bg-secondary border border-border rounded-lg py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                   >
                     <option value="">No Cluster</option>
-                    {clusters.map(c => (
+                    {(clusters || []).map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -783,7 +783,7 @@ const ClusterManagementModal: React.FC<{
           <div className="space-y-2">
             <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Existing Clusters</h4>
             <div className="space-y-2">
-              {clusters.length > 0 ? clusters.map(cluster => (
+              {(clusters || []).length > 0 ? (clusters || []).map(cluster => (
                 <div key={cluster.id} className="flex items-center justify-between p-4 bg-card/50 border border-white/5 rounded-xl group hover:border-primary/30 transition-all">
                   <div>
                     <h5 className="font-bold text-white">{cluster.name}</h5>
