@@ -32,12 +32,12 @@ public class DataInitializer {
     private final ClusterRepository clusterRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public DataInitializer(UserRepository userRepository, 
-                           EnvironmentRepository environmentRepository, 
-                           ApplicationRepository applicationRepository,
-                           ManagedNodeRepository managedNodeRepository,
-                           ClusterRepository clusterRepository,
-                           PasswordEncoder passwordEncoder) {
+    public DataInitializer(UserRepository userRepository,
+            EnvironmentRepository environmentRepository,
+            ApplicationRepository applicationRepository,
+            ManagedNodeRepository managedNodeRepository,
+            ClusterRepository clusterRepository,
+            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
@@ -49,7 +49,7 @@ public class DataInitializer {
     public Environment manualInitialize(String environmentName, String centralIp, String sshUser) {
         String finalName = (environmentName == null || environmentName.isEmpty()) ? "central-node" : environmentName;
         log.info("Performing manual initialization for environment: {}", finalName);
-        
+
         // 0. Create Cluster
         Cluster cluster = new Cluster();
         cluster.setName("central-node");
@@ -70,13 +70,14 @@ public class DataInitializer {
                 .ip(centralIp)
                 .nodeName("central-node")
                 .sshUser(sshUser)
-                .sshPassword("auto-provisioned") // Placeholder, should be handled via SSH keys or user input in production
+                .sshPassword("auto-provisioned") // Placeholder, should be handled via SSH keys or user input in
+                                                 // production
                 .environment(env)
                 .build();
         managedNodeRepository.save(centralNode);
 
         // 2. Create Core Applications matching docker-compose container names
-        //    These names MUST match the container_name in docker-compose.yml
+        // These names MUST match the container_name in docker-compose.yml
         Application backend = Application.builder()
                 .name("backend")
                 .environment(env)
@@ -86,7 +87,7 @@ public class DataInitializer {
                 .targetNode(centralIp)
                 .port(8880)
                 .containerPort(8880)
-                .metricsPort(9001)
+                .metricsPort(8880)
                 .metricsPath("/actuator/prometheus")
                 .metricsTestStatus("SUCCESS")
                 .status("RUNNING")

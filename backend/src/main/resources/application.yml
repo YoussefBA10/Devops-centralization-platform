@@ -19,7 +19,7 @@ spring:
         dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.MySQL8Dialect}
   
   flyway:
-    enabled: true
+    enabled: false
     baseline-on-migrate: true
     baseline-version: "3"
     repair-on-migrate: true
