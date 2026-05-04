@@ -165,7 +165,18 @@ public class NetworkMetricsProxyService {
                     // CLEAN IP ON THE FLY
                     String cleanIp = ip.replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
                     
-                    if (cleanIp.equals("127.0.0.1") || cleanIp.equals("localhost") || cleanIp.equals("central-node")) {
+                    String centralIp = null;
+                    if (node.getEnvironment() != null && node.getEnvironment().getCentralNodeIp() != null) {
+                        centralIp = node.getEnvironment().getCentralNodeIp().replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
+                    }
+
+                    boolean isCentral = cleanIp.equals("127.0.0.1") || 
+                                        cleanIp.equals("localhost") || 
+                                        cleanIp.equals("central-node") || 
+                                        (node.getNodeName() != null && node.getNodeName().toLowerCase().contains("central")) ||
+                                        (centralIp != null && cleanIp.equals(centralIp));
+                    
+                    if (isCentral) {
                         return "instance=~\"localhost:.*|node-exporter:.*|central-node:.*\"";
                     }
                     return "instance=~\"" + cleanIp + ":.*\"";
