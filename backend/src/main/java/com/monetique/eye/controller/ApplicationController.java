@@ -396,7 +396,12 @@ public class ApplicationController {
         restTemplate.setRequestFactory(factory);
 
         for (String path : pathsToTry) {
-            String url = "http://" + app.getTargetNode() + ":" + port + path;
+            String host = app.getTargetNode();
+            if (host != null) {
+                // Strip protocols and trailing slashes if accidentally included in the IP field
+                host = host.replaceAll("^https?://", "").replaceAll("/$", "");
+            }
+            String url = "http://" + host + ":" + port + path;
             try {
                 org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && 

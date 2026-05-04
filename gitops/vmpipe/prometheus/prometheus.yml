@@ -23,7 +23,7 @@ scrape_configs:
   - job_name: 'monetique-backend'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['backend:9001']
+      - targets: ['backend:8880']
         labels:
           environment: "central-node"
           nodename: "central-node"
