@@ -54,8 +54,8 @@ public class TicketController {
             if (isAdmin) {
                 tickets = ticketRepository.findAll();
             } else {
-                List<String> allowedEnvIdsStr = permissionService.getAllowedEnvironmentIds(auth.getName());
-                List<Long> envIds = allowedEnvIdsStr.stream().map(Long::valueOf).collect(java.util.stream.Collectors.toList());
+                List<String> allowedClusterIdsStr = permissionService.getAllowedClusterIds(auth.getName());
+                List<Long> envIds = allowedClusterIdsStr.stream().map(Long::valueOf).collect(java.util.stream.Collectors.toList());
                 if (envIds.isEmpty()) {
                     tickets = java.util.Collections.emptyList();
                 } else {

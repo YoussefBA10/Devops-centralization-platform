@@ -1,5 +1,5 @@
 import React from 'react';
-import { WifiOff, RefreshCw, ServerOff, ChevronLeft, ShieldAlert } from 'lucide-react';
+import { RefreshCw, ChevronLeft } from 'lucide-react';
 import { Button } from '../components/ui/Input';
 import logo from '../assets/logo.png';
 
@@ -22,20 +22,7 @@ const ServiceUnavailablePage: React.FC = () => {
           <img src={logo} alt="Monetique Eye" className="h-16 w-auto opacity-80 hover:opacity-100 transition-opacity drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
         </div>
 
-        {/* Main Icon Group */}
-        <div className="flex justify-center">
-          <div className="relative">
-            <div className="p-8 bg-destructive/10 rounded-[2.5rem] border border-destructive/20 shadow-2xl shadow-destructive/10 animate-bounce-slow">
-              <ServerOff className="w-20 h-20 text-destructive" />
-            </div>
-            <div className="absolute -top-4 -right-4 p-3 bg-[#0c0c0e] rounded-2xl border border-white/5 shadow-xl">
-              <WifiOff className="w-6 h-6 text-amber-500 animate-pulse" />
-            </div>
-            <div className="absolute -bottom-2 -left-2 p-2 bg-[#0c0c0e] rounded-xl border border-white/5 shadow-lg">
-              <ShieldAlert className="w-4 h-4 text-primary" />
-            </div>
-          </div>
-        </div>
+
 
         {/* Text Content */}
         <div className="space-y-4">
