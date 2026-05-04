@@ -1,10 +1,10 @@
 package com.monetique.eye.controller;
 
 import com.monetique.eye.entity.Environment;
-import com.monetique.eye.entity.EnvironmentAccess;
+import com.monetique.eye.entity.ClusterAccess;
 import com.monetique.eye.entity.User;
 import com.monetique.eye.entity.enums.Role;
-import com.monetique.eye.repository.EnvironmentAccessRepository;
+import com.monetique.eye.repository.ClusterAccessRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.service.DeploymentService;
 import com.monetique.eye.service.SecurityService;
@@ -33,7 +33,7 @@ public class EnvironmentController {
     private final DeploymentLogRepository deploymentLogRepository;
     private final com.monetique.eye.repository.UserRepository userRepository;
     private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
-    private final EnvironmentAccessRepository environmentAccessRepository;
+    private final ClusterAccessRepository clusterAccessRepository;
     private final com.monetique.eye.repository.ClusterRepository clusterRepository;
 
     private final com.monetique.eye.service.ActivityLogService activityLogService;
@@ -45,7 +45,7 @@ public class EnvironmentController {
             DeploymentLogRepository deploymentLogRepository,
             com.monetique.eye.repository.UserRepository userRepository,
             com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository,
-            EnvironmentAccessRepository environmentAccessRepository,
+            ClusterAccessRepository clusterAccessRepository,
             com.monetique.eye.repository.ClusterRepository clusterRepository,
             com.monetique.eye.service.ActivityLogService activityLogService) {
         this.environmentRepository = environmentRepository;
@@ -55,7 +55,7 @@ public class EnvironmentController {
         this.deploymentLogRepository = deploymentLogRepository;
         this.userRepository = userRepository;
         this.managedNodeRepository = managedNodeRepository;
-        this.environmentAccessRepository = environmentAccessRepository;
+        this.clusterAccessRepository = clusterAccessRepository;
         this.clusterRepository = clusterRepository;
         this.activityLogService = activityLogService;
     }
@@ -79,8 +79,8 @@ public class EnvironmentController {
         if (user.getRole() == Role.ADMIN) {
             all = environmentRepository.findAll();
         } else {
-            List<String> allowedIds = environmentAccessRepository.findByUserId(user.getUsername()).stream()
-                    .map(EnvironmentAccess::getEnvironmentId)
+            List<String> allowedIds = clusterAccessRepository.findByUserId(user.getUsername()).stream()
+                    .map(ClusterAccess::getClusterId)
                     .collect(Collectors.toList());
             
             all = environmentRepository.findAll().stream()
@@ -266,11 +266,11 @@ public class EnvironmentController {
         // Auto-assign the creator to the new environment
         User currentUser = securityService.getCurrentUser();
         if (currentUser != null && currentUser.getRole() != Role.ADMIN) {
-            EnvironmentAccess access = EnvironmentAccess.builder()
+            ClusterAccess access = ClusterAccess.builder()
                     .userId(currentUser.getUsername())
-                    .environmentId(saved.getId().toString())
+                    .clusterId(saved.getId().toString())
                     .build();
-            environmentAccessRepository.save(access);
+            clusterAccessRepository.save(access);
         }
         
         return saved;

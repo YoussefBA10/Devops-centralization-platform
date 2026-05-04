@@ -1,10 +1,10 @@
 package com.monetique.eye.controller;
 
 import com.monetique.eye.dto.UserPermissionDto;
-import com.monetique.eye.entity.EnvironmentAccess;
+import com.monetique.eye.entity.ClusterAccess;
 import com.monetique.eye.entity.User;
 import com.monetique.eye.entity.UserPermissionDetail;
-import com.monetique.eye.repository.EnvironmentAccessRepository;
+import com.monetique.eye.repository.ClusterAccessRepository;
 import com.monetique.eye.repository.UserPermissionDetailRepository;
 import com.monetique.eye.service.SecurityService;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 public class MeController {
 
     private final UserPermissionDetailRepository userPermissionDetailRepository;
-    private final EnvironmentAccessRepository environmentAccessRepository;
+    private final ClusterAccessRepository clusterAccessRepository;
     private final SecurityService securityService;
 
     @GetMapping("/permissions")
@@ -35,18 +35,18 @@ public class MeController {
         UserPermissionDetail detail = userPermissionDetailRepository.findByUserId(userId)
                 .orElse(UserPermissionDetail.builder().userId(userId).build());
         
-        List<String> allowedEnvs = environmentAccessRepository.findByUserId(userId).stream()
-                .map(EnvironmentAccess::getEnvironmentId)
+        List<String> allowedClusters = clusterAccessRepository.findByUserId(userId).stream()
+                .map(ClusterAccess::getClusterId)
                 .collect(Collectors.toList());
 
-        return ResponseEntity.ok(mapToDto(userId, detail, allowedEnvs));
+        return ResponseEntity.ok(mapToDto(userId, detail, allowedClusters));
     }
 
-    private UserPermissionDto mapToDto(String userId, UserPermissionDetail detail, List<String> allowedEnvs) {
+    private UserPermissionDto mapToDto(String userId, UserPermissionDetail detail, List<String> allowedClusters) {
         return UserPermissionDto.builder()
                 .userId(userId)
-                .environmentAccess(detail.isEnvironmentAccess())
-                .allowedEnvironmentIds(allowedEnvs)
+                .clusterAccess(detail.isClusterAccess())
+                .allowedClusterIds(allowedClusters)
                 .monitoring(UserPermissionDto.MonitoringPermissions.builder()
                         .observability(detail.isMonitoringObservability())
                         .logs(detail.isMonitoringLogs())

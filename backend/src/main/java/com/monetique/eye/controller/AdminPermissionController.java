@@ -134,7 +134,7 @@ public class AdminPermissionController {
         UserPermissionDetail detail = userPermissionDetailRepository.findByUserId(userId)
                 .orElse(UserPermissionDetail.builder().userId(userId).build());
         
-        detail.setEnvironmentAccess(dto.isEnvironmentAccess());
+        detail.setClusterAccess(dto.isClusterAccess());
         detail.setMonitoringObservability(dto.getMonitoring().isObservability());
         detail.setMonitoringLogs(dto.getMonitoring().isLogs());
         detail.setMonitoringInfraGraph(dto.getMonitoring().isInfraGraph());

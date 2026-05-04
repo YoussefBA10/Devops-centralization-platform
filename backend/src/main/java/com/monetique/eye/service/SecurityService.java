@@ -17,7 +17,7 @@ public class SecurityService {
 
     public boolean canAccessEnvironment(Long environmentId) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        return permissionService.hasEnvironmentAccess(username, environmentId.toString());
+        return permissionService.hasClusterAccess(username, environmentId.toString());
     }
 
     public boolean canAccessApplication(Long appId) {

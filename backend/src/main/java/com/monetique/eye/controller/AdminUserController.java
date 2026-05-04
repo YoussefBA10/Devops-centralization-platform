@@ -5,7 +5,7 @@ import com.monetique.eye.entity.enums.Role;
 import com.monetique.eye.repository.UserRepository;
 import com.monetique.eye.repository.UserPermissionRepository;
 import com.monetique.eye.repository.UserPermissionDetailRepository;
-import com.monetique.eye.repository.EnvironmentAccessRepository;
+import com.monetique.eye.repository.ClusterAccessRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,7 +28,7 @@ public class AdminUserController {
     private final PasswordEncoder passwordEncoder;
     private final UserPermissionRepository userPermissionRepository;
     private final UserPermissionDetailRepository userPermissionDetailRepository;
-    private final EnvironmentAccessRepository environmentAccessRepository;
+    private final ClusterAccessRepository clusterAccessRepository;
 
     @GetMapping
     public List<Map<String, Object>> getAllUsers() {
@@ -86,7 +86,7 @@ public class AdminUserController {
             // Cleanup permissions before deleting user
             userPermissionRepository.deleteByUserId(username);
             userPermissionDetailRepository.deleteByUserId(username);
-            environmentAccessRepository.deleteByUserId(username);
+            clusterAccessRepository.deleteByUserId(username);
             
             userRepository.delete(user);
             return ResponseEntity.ok(Map.of("message", "User deleted successfully"));

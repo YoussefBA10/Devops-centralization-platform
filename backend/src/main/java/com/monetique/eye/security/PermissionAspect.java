@@ -61,7 +61,7 @@ public class PermissionAspect {
         if (isEnvironmentScoped(permissionKey)) {
             Long envId = findEnvironmentId(joinPoint, permissionKey);
             if (envId != null) {
-                if (!permissionService.hasEnvironmentAccess(username, envId.toString())) {
+                if (!permissionService.hasClusterAccess(username, envId.toString())) {
                     String envName = environmentRepository.findById(envId)
                             .map(Environment::getName)
                             .orElse("ID: " + envId);
@@ -132,7 +132,7 @@ public class PermissionAspect {
 
     private String getErrorMessage(String key, String context) {
         return switch (key) {
-            case "ENVIRONMENT_ACCESS" -> "You don't have access to the environments feature.";
+            case "CLUSTER_ACCESS" -> "You don't have access to the clusters feature.";
             case "MONITORING_OBSERVABILITY" -> "You don't have permission to view observability dashboards.";
             case "MONITORING_LOGS" -> "You don't have permission to view or search logs.";
             case "MONITORING_INFRA_GRAPH" -> "You don't have permission to view the infrastructure graph.";
