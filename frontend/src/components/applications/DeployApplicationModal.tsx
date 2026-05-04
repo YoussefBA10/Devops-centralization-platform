@@ -757,7 +757,11 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
               </Button>
             )}
             {step === 3 && (
+<<<<<<< HEAD
               <Button onClick={() => handleDeploy()} loading={loading}
+=======
+              <Button onClick={() => handleDeploy(false)} loading={loading}
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
                 className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-[0_0_15px_rgba(59,130,246,0.3)]">
                 {initialData ? 'Update & Redeploy' : 'Deploy Application'}
               </Button>

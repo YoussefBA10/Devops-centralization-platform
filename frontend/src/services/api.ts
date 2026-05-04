@@ -26,11 +26,20 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+<<<<<<< HEAD
     if (!error.response) {
       // Network error or backend down
       if (window.location.pathname !== '/service-unavailable') {
         window.location.href = '/service-unavailable';
       }
+=======
+    // Check if it's a network error (no response) or a 503 maintenance status
+    const isMaintenance = !error.response || error.response.status === 503;
+    const isAlreadyOnMaintenance = window.location.pathname === '/maintenance';
+
+    if (isMaintenance && !isAlreadyOnMaintenance) {
+      window.location.href = '/maintenance';
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
       return Promise.reject(error);
     }
 

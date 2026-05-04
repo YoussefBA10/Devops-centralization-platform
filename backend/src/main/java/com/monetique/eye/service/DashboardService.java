@@ -55,8 +55,9 @@ public class DashboardService {
             }
         }
         
-        // Fetch from ActivityLogRepository
-        List<ActivityItem> activities = activityLogRepository.findTop10ByOrderByTimestampDesc().stream()
+        // Fetch all activities from the last 24 hours
+        LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
+        List<ActivityItem> activities = activityLogRepository.findAllByTimestampAfterOrderByTimestampDesc(twentyFourHoursAgo).stream()
                 .map(log -> ActivityItem.builder()
                         .title(log.getTitle())
                         .type(log.getType())
@@ -65,10 +66,15 @@ public class DashboardService {
                         .build())
                 .collect(Collectors.toList());
         
+<<<<<<< HEAD
         // Calculate Stability Index from central-node telemetry
         double averageStability = aggregationRepository.findFirstByNodeOrderByWindowEndDesc("central-node")
                 .map(LogAggregationWindow::getStabilityScore)
                 .orElse(100.0); 
+=======
+        // Calculate Stability Index dynamically
+        double averageStability = infrastructureService.getGlobalStability().getAvgStability(); 
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
         
         if (healthStream.isEmpty()) {
             healthStream.add("> SYS-OK: all services operational [global]");

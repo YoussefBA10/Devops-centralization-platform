@@ -148,8 +148,10 @@ public class DeploymentService {
             
             environment.setLastDeploymentStatus(DeploymentStatus.FAILED);
             environmentRepository.save(environment);
-            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
-                    + "\nERROR: " + e.getMessage());
+            String fullLogContent = (deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage();
+            deploymentLog.setLogOutput(fullLogContent);
+            deploymentLog.setShortError(extractSimpleErrorMessage(fullLogContent));
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
@@ -1145,7 +1147,11 @@ public class DeploymentService {
             return "Deployment Failed: A task in the playbook failed. Check logs for details.";
         }
         
-        // 4. Check for Permission denied
+        // 4. Check for Permission denied or sudoers issue
+        if (fullLog.contains("n'apparaît pas dans le fichier sudoers") || fullLog.contains("is not in the sudoers file")) {
+            return "Privilege Error: The deployment user does not have sudo permissions on the target node.";
+        }
+        
         if (fullLog.contains("Permission denied")) {
             return "Access Denied: Invalid SSH credentials or insufficient permissions on the node.";
         }

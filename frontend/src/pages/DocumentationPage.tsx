@@ -145,7 +145,11 @@ const DocumentationPage: React.FC = () => {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-4xl font-extrabold tracking-tight">Dashboards &amp; Insights</h1>
+<<<<<<< HEAD
             <p className="text-xl text-muted-foreground">Monetique Eye provides nine interconnected dashboards and views, each designed for a specific operational concern.</p>
+=======
+            <p className="text-xl text-muted-foreground">Monetique Eye provides five interconnected dashboards, each designed for a specific operational concern.</p>
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
 
             <div className="space-y-12">
               {/* 1. Main Dashboard */}
@@ -396,7 +400,11 @@ const DocumentationPage: React.FC = () => {
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">MONETIQUE_GITOPS_PATH</td>
                       <td className="px-6 py-4">Local filesystem path to the gitops directory.</td>
+<<<<<<< HEAD
                       <td className="px-6 py-4 text-xs italic">/data/monetique/gitops</td>
+=======
+                      <td className="px-6 py-4 text-xs italic">/data/monetique-eye/gitops</td>
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
                     </tr>
                     <tr>
                       <td className="px-6 py-4 font-mono text-primary">ELASTICSEARCH_URL</td>
@@ -651,10 +659,16 @@ const DocumentationPage: React.FC = () => {
                 </h3>
                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-4">Upcoming Release</p>
                 <ul className="space-y-2 text-sm text-muted-foreground">
+<<<<<<< HEAD
                   <li>• <strong>Planned</strong>: Custom metric dashboard builder with drag-and-drop widgets.</li>
                   <li>• <strong>Planned</strong>: Automated incident response with runbook integration.</li>
                   <li>• <strong>Planned</strong>: Multi-tenant support with organization-level isolation.</li>
                   <li>• <strong>Planned</strong>: Webhook integrations (Slack, Teams, PagerDuty).</li>
+=======
+                  <li>• **Planned**: Horizontal scaling and replica management.</li>
+                  <li>• **Planned**: Advanced custom metric dashboards.</li>
+                  <li>• **Planned**: Enhanced automated incident response.</li>
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
                 </ul>
               </div>
 
@@ -667,6 +681,7 @@ const DocumentationPage: React.FC = () => {
                 </h3>
                 <p className="text-[10px] text-primary uppercase font-bold tracking-widest mb-4">May 4, 2026</p>
                 <ul className="space-y-2 text-sm text-muted-foreground">
+<<<<<<< HEAD
                   <li>• <strong>Manual Deployment Mode</strong>: Register externally deployed services without GitOps infrastructure. Includes application type selector (Backend/Frontend) and automated action guards.</li>
                   <li>• <strong>Dynamic Stability Index</strong>: Dashboard stability metric now sourced from real-time central-node telemetry instead of static values.</li>
                   <li>• <strong>Cluster-Based RBAC</strong>: Renamed "Environment Access" to "Cluster Access" across the entire permission model, including database schema, API layer, and UI.</li>
@@ -689,6 +704,9 @@ const DocumentationPage: React.FC = () => {
                 <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-4">April 28, 2026</p>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li>• <strong>Core</strong>: Multi-cluster observability platform with real-time Prometheus and ELK integration.</li>
+=======
+                  <li>• <strong>Core</strong>: Multi-environment observability platform with real-time Prometheus and ELK integration.</li>
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
                   <li>• <strong>Dashboard</strong>: System Overview with KPI cards, Health Stream, Pulse Feed, and System Load visualization.</li>
                   <li>• <strong>Topology</strong>: Real-time Cluster Graph with equilateral triangle layout and per-node CPU/RAM metrics.</li>
                   <li>• <strong>Operational Intelligence</strong>: Stability Gauge, Node Heatmap, Anomaly Detection, and Live Service Pulse table.</li>
@@ -696,11 +714,19 @@ const DocumentationPage: React.FC = () => {
                   <li>• <strong>GitHub</strong>: Private repo integration with auto-analysis, Dockerfile generation, and Nginx config generation.</li>
                   <li>• <strong>Logs</strong>: Centralized log console with LIVE mode, severity filtering, date ranges, and CSV export.</li>
                   <li>• <strong>Incidents</strong>: Ticket management with priority levels, node/app linking, and OPEN→IN_PROGRESS→RESOLVED lifecycle.</li>
+<<<<<<< HEAD
                   <li>• <strong>Security</strong>: Dual-layered RBAC (Global roles + Cluster scoping) with granular permission matrix.</li>
                   <li>• <strong>Notifications</strong>: Real-time privilege change alerts via bell icon.</li>
                   <li>• <strong>AI Assistant</strong>: Built-in chatbot powered by Groq LLaMA 3.3 70B.</li>
                   <li>• <strong>Audit Log</strong>: Immutable system-wide activity log with filtering, search, and CSV export.</li>
                   <li>• <strong>Documentation</strong>: Enterprise Documentation Hub.</li>
+=======
+                  <li>• <strong>Security</strong>: Dual-layered RBAC (Global roles + Environment scoping) with granular permission matrix.</li>
+                  <li>• <strong>Notifications</strong>: Real-time privilege change alerts via bell icon.</li>
+                  <li>• <strong>AI Assistant</strong>: Built-in chatbot powered by Groq LLaMA 3.3 70B.</li>
+                  <li>• <strong>Audit Log</strong>: Immutable system-wide activity log with filtering, search, and CSV export.</li>
+                  <li>• <strong>Documentation</strong>: Enterprise Documentation Hub (this page).</li>
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
                 </ul>
               </div>
             </div>
@@ -829,11 +855,17 @@ const DocumentationPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#0a0a0b]">
+    <div className="flex h-screen overflow-hidden bg-[#0a0a0b]">
       {/* Documentation Sidebar */}
+<<<<<<< HEAD
       <aside className="w-80 border-r border-white/5 bg-[#0c0c0e]/50 backdrop-blur-xl flex flex-col h-full overflow-hidden">
         <div className="p-8 pb-4 shrink-0">
           <div className="flex items-center gap-3">
+=======
+      <aside className="w-80 border-r border-white/5 bg-[#0c0c0e]/50 backdrop-blur-xl flex flex-col">
+        <div className="p-8 flex-1 overflow-y-auto">
+          <div className="flex items-center gap-3 mb-8">
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Book className="w-6 h-6 text-primary" />
             </div>
@@ -865,7 +897,11 @@ const DocumentationPage: React.FC = () => {
           </nav>
         </div>
 
+<<<<<<< HEAD
         <div className="p-8 pt-4 shrink-0">
+=======
+        <div className="mt-auto p-8 pt-0">
+>>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
           <Card className="p-4 bg-primary/5 border-primary/10">
             <p className="text-[10px] font-bold text-primary uppercase mb-2">Support</p>
             <p className="text-xs text-muted-foreground leading-relaxed mb-3">Need help with a complex integration? Our team is available for enterprise support.</p>

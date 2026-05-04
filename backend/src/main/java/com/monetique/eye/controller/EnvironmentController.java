@@ -397,6 +397,7 @@ public class EnvironmentController {
                     "status", log.getStatus(),
                     "action", log.getAction(),
                     "timestamp", log.getExecutedAt(),
+                    "shortError", log.getShortError() != null ? log.getShortError() : "",
                     "log", log.getLogOutput() != null ? log.getLogOutput() : ""));
         }
 
@@ -410,6 +411,7 @@ public class EnvironmentController {
                 .map(log -> ResponseEntity.ok(Map.of(
                         "status", log.getStatus(),
                         "log", log.getLogOutput(),
+                        "shortError", log.getShortError() != null ? log.getShortError() : "",
                         "executedAt", log.getExecutedAt().toString()
                 )))
                 .orElse(ResponseEntity.ok(Map.of("log", "No logs found for this node.", "status", "NONE")));
