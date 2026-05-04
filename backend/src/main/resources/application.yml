@@ -2,6 +2,8 @@ server:
   port: ${SERVER_PORT:8880}
 
 spring:
+  codec:
+    max-in-memory-size: 10MB
   datasource:
     url: ${DB_URL:jdbc:mysql://192.168.126.130:3306/monetique-eye-db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${DB_USERNAME:youss}
@@ -17,7 +19,7 @@ spring:
         dialect: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.MySQL8Dialect}
   
   flyway:
-    enabled: false
+    enabled: true
     baseline-on-migrate: true
     baseline-version: "3"
     repair-on-migrate: true
@@ -42,8 +44,6 @@ prometheus:
   url: ${PROMETHEUS_URL:http://192.168.126.130:9090}
 
 management:
-  server:
-    port: 9001
   endpoints:
     web:
       exposure:

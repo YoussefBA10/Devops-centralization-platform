@@ -14,6 +14,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
@@ -28,6 +30,13 @@ public class SecurityConfig {
                           AuthenticationProvider authenticationProvider) {
         this.jwtRequestFilter = jwtRequestFilter;
         this.authenticationProvider = authenticationProvider;
+    }
+
+
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring()
+            .requestMatchers(new AntPathRequestMatcher("/actuator/**"));
     }
 
     @Bean
