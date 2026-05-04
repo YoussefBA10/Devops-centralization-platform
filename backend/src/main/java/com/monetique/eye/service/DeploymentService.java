@@ -855,12 +855,20 @@ public class DeploymentService {
             }
 
             String envLabel = environment.getSafeName();
-            String nodeName = ip.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
+            
+            // SANITIZE IP
+            String cleanIp = ip;
+            if (cleanIp != null) {
+                cleanIp = cleanIp.replaceAll("^https?://", "").replaceAll("/$", "");
+            }
+            final String finalIp = cleanIp;
+
+            String nodeName = finalIp.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + finalIp.replace(".", "-");
 
             // Determine targets based on whether the IP matches the central node
-            String nodeExporterTarget = ip + ":9100";
-            String cadvisorTarget = ip + ":8081";
-            String filebeatTarget = ip + ":5066";
+            String nodeExporterTarget = finalIp + ":9100";
+            String cadvisorTarget = finalIp + ":8081";
+            String filebeatTarget = finalIp + ":5066";
 
             if (ip.equals(environment.getCentralNodeIp())) {
                 log.info("Node {} is detected as Central Node. Using internal service names.", ip);
@@ -938,8 +946,16 @@ public class DeploymentService {
             }
 
             String envLabel = app.getEnvironment().getSafeName();
-            String nodeName = ip.equals(app.getEnvironment().getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
-            String targetStr = ip + ":" + metricsPort;
+            
+            // SANITIZE IP
+            String cleanIp = ip;
+            if (cleanIp != null) {
+                cleanIp = cleanIp.replaceAll("^https?://", "").replaceAll("/$", "");
+            }
+            final String finalIp = cleanIp;
+
+            String nodeName = finalIp.equals(app.getEnvironment().getCentralNodeIp()) ? "central-node" : "node-" + finalIp.replace(".", "-");
+            String targetStr = finalIp + ":" + metricsPort;
             String jobName = app.getServiceNameKeyword() != null ? app.getServiceNameKeyword() : app.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
 
             java.util.Map<String, String> labels = new java.util.HashMap<>();
