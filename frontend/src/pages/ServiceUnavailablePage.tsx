@@ -1,6 +1,7 @@
 import React from 'react';
 import { WifiOff, RefreshCw, ServerOff, ChevronLeft, ShieldAlert } from 'lucide-react';
 import { Button } from '../components/ui/Input';
+import logo from '../assets/logo.png';
 
 const ServiceUnavailablePage: React.FC = () => {
   const handleRetry = () => {
@@ -16,6 +17,11 @@ const ServiceUnavailablePage: React.FC = () => {
       </div>
 
       <div className="relative w-full max-w-2xl text-center space-y-12 animate-in fade-in zoom-in duration-700">
+        {/* Logo */}
+        <div className="flex justify-center mb-4">
+          <img src={logo} alt="Monetique Eye" className="h-16 w-auto opacity-80 hover:opacity-100 transition-opacity drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
+        </div>
+
         {/* Main Icon Group */}
         <div className="flex justify-center">
           <div className="relative">

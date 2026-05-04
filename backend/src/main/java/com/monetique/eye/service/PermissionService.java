@@ -1,10 +1,10 @@
 package com.monetique.eye.service;
 
-import com.monetique.eye.entity.EnvironmentAccess;
+import com.monetique.eye.entity.ClusterAccess;
 import com.monetique.eye.entity.User;
 import com.monetique.eye.entity.UserPermissionDetail;
 import com.monetique.eye.entity.enums.Role;
-import com.monetique.eye.repository.EnvironmentAccessRepository;
+import com.monetique.eye.repository.ClusterAccessRepository;
 import com.monetique.eye.repository.UserPermissionDetailRepository;
 import com.monetique.eye.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class PermissionService {
 
     private final UserPermissionDetailRepository permissionDetailRepository;
-    private final EnvironmentAccessRepository environmentAccessRepository;
+    private final ClusterAccessRepository clusterAccessRepository;
     private final UserRepository userRepository;
 
     public UserPermissionDetail getPermissions(String userId) {
@@ -25,16 +25,16 @@ public class PermissionService {
                 .orElse(UserPermissionDetail.builder().userId(userId).build());
     }
 
-    public List<String> getAllowedEnvironmentIds(String userId) {
-        return environmentAccessRepository.findByUserId(userId)
+    public List<String> getAllowedClusterIds(String userId) {
+        return clusterAccessRepository.findByUserId(userId)
                 .stream()
-                .map(EnvironmentAccess::getEnvironmentId)
+                .map(ClusterAccess::getClusterId)
                 .collect(Collectors.toList());
     }
 
-    public boolean hasEnvironmentAccess(String userId, String environmentId) {
+    public boolean hasClusterAccess(String userId, String clusterId) {
         if (isAdmin(userId)) return true;
-        return environmentAccessRepository.existsByUserIdAndEnvironmentId(userId, environmentId);
+        return clusterAccessRepository.existsByUserIdAndClusterId(userId, clusterId);
     }
 
     public boolean can(String userId, String permission) {
@@ -42,7 +42,7 @@ public class PermissionService {
 
         UserPermissionDetail detail = getPermissions(userId);
         return switch (permission) {
-            case "ENVIRONMENT_ACCESS" -> detail.isEnvironmentAccess();
+            case "CLUSTER_ACCESS" -> detail.isClusterAccess();
             case "MONITORING_OBSERVABILITY" -> detail.isMonitoringObservability();
             case "MONITORING_LOGS" -> detail.isMonitoringLogs();
             case "MONITORING_INFRA_GRAPH" -> detail.isMonitoringInfraGraph();

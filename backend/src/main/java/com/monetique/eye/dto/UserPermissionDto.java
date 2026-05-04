@@ -12,8 +12,8 @@ import java.util.List;
 @Builder
 public class UserPermissionDto {
     private String userId;
-    private boolean environmentAccess;
-    private List<String> allowedEnvironmentIds;
+    private boolean clusterAccess;
+    private List<String> allowedClusterIds;
     private MonitoringPermissions monitoring;
     private DeploymentPermissions envDeployment;
     private DeploymentPermissions appDeployment;

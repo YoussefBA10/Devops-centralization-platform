@@ -8,4 +8,5 @@ import java.util.List;
 public interface LogAggregationWindowRepository extends JpaRepository<LogAggregationWindow, Long> {
     List<LogAggregationWindow> findTop24ByApplicationOrderByWindowEndDesc(Application application);
     List<LogAggregationWindow> findTop24ByApplicationIdOrderByWindowEndDesc(Long applicationId);
+    java.util.Optional<LogAggregationWindow> findFirstByNodeOrderByWindowEndDesc(String node);
 }

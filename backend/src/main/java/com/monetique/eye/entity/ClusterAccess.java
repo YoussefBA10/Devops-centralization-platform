@@ -4,14 +4,14 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "environment_access", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"userId", "environmentId"})
+@Table(name = "cluster_access", uniqueConstraints = {
+    @UniqueConstraint(columnNames = {"userId", "clusterId"})
 })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EnvironmentAccess {
+public class ClusterAccess {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -20,5 +20,5 @@ public class EnvironmentAccess {
     private String userId;
 
     @Column(nullable = false)
-    private String environmentId;
+    private String clusterId;
 }

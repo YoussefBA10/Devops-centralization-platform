@@ -2,12 +2,12 @@ package com.monetique.eye.controller;
 
 import com.monetique.eye.dto.UserPermissionDto;
 import com.monetique.eye.entity.Environment;
-import com.monetique.eye.entity.EnvironmentAccess;
+import com.monetique.eye.entity.ClusterAccess;
 import com.monetique.eye.entity.User;
 import com.monetique.eye.entity.UserPermission;
 import com.monetique.eye.entity.UserPermissionDetail;
 import com.monetique.eye.entity.enums.Role;
-import com.monetique.eye.repository.EnvironmentAccessRepository;
+import com.monetique.eye.repository.ClusterAccessRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.UserPermissionDetailRepository;
 import com.monetique.eye.repository.UserPermissionRepository;
@@ -33,7 +33,7 @@ public class AdminPermissionController {
     private final EnvironmentRepository environmentRepository;
     private final UserPermissionRepository userPermissionRepository;
     private final UserPermissionDetailRepository userPermissionDetailRepository;
-    private final EnvironmentAccessRepository environmentAccessRepository;
+    private final ClusterAccessRepository clusterAccessRepository;
     private final SecurityService securityService;
     private final com.monetique.eye.service.NotificationService notificationService;
 
@@ -48,14 +48,14 @@ public class AdminPermissionController {
         }
         
         UserPermissionDetail detail = userPermissionDetailRepository.findByUserId(userId).orElse(null);
-        List<String> allowedEnvs = environmentAccessRepository.findByUserId(userId).stream()
-                .map(EnvironmentAccess::getEnvironmentId)
+        List<String> allowedClusters = clusterAccessRepository.findByUserId(userId).stream()
+                .map(ClusterAccess::getClusterId)
                 .collect(Collectors.toList());
 
         if (detail == null) {
             return ResponseEntity.ok(UserPermissionDto.builder()
                     .userId(userId)
-                    .allowedEnvironmentIds(allowedEnvs)
+                    .allowedClusterIds(allowedClusters)
                     .monitoring(UserPermissionDto.MonitoringPermissions.builder().build())
                     .envDeployment(UserPermissionDto.DeploymentPermissions.builder().build())
                     .appDeployment(UserPermissionDto.DeploymentPermissions.builder().build())
@@ -63,7 +63,7 @@ public class AdminPermissionController {
                     .build());
         }
 
-        return ResponseEntity.ok(mapToDto(userId, detail, allowedEnvs));
+        return ResponseEntity.ok(mapToDto(userId, detail, allowedClusters));
     }
 
     @GetMapping("/users")
@@ -99,15 +99,15 @@ public class AdminPermissionController {
         UserPermissionDetail detail = userPermissionDetailRepository.findByUserId(userId)
                 .orElse(null);
         
-        List<String> allowedEnvs = environmentAccessRepository.findByUserId(userId).stream()
-                .map(EnvironmentAccess::getEnvironmentId)
+        List<String> allowedClusters = clusterAccessRepository.findByUserId(userId).stream()
+                .map(ClusterAccess::getClusterId)
                 .collect(Collectors.toList());
 
         if (detail == null) {
             // Return a default DTO with everything false
             return ResponseEntity.ok(UserPermissionDto.builder()
                     .userId(userId)
-                    .allowedEnvironmentIds(allowedEnvs)
+                    .allowedClusterIds(allowedClusters)
                     .monitoring(UserPermissionDto.MonitoringPermissions.builder().build())
                     .envDeployment(UserPermissionDto.DeploymentPermissions.builder().build())
                     .appDeployment(UserPermissionDto.DeploymentPermissions.builder().build())
@@ -115,7 +115,7 @@ public class AdminPermissionController {
                     .build());
         }
 
-        return ResponseEntity.ok(mapToDto(userId, detail, allowedEnvs));
+        return ResponseEntity.ok(mapToDto(userId, detail, allowedClusters));
     }
 
     @PutMapping("/{userId}")
@@ -158,15 +158,15 @@ public class AdminPermissionController {
         
         userPermissionDetailRepository.save(detail);
 
-        // 3. Update Environment Access
-        environmentAccessRepository.deleteByUserId(userId);
-        List<EnvironmentAccess> accesses = dto.getAllowedEnvironmentIds().stream()
-                .map(envId -> EnvironmentAccess.builder()
+        // 3. Update Cluster Access
+        clusterAccessRepository.deleteByUserId(userId);
+        List<ClusterAccess> accesses = dto.getAllowedClusterIds().stream()
+                .map(clusterId -> ClusterAccess.builder()
                         .userId(userId)
-                        .environmentId(envId)
+                        .clusterId(clusterId)
                         .build())
                 .collect(Collectors.toList());
-        environmentAccessRepository.saveAll(accesses);
+        clusterAccessRepository.saveAll(accesses);
 
         // 4. Notify User
         notificationService.createNotification(
@@ -185,15 +185,15 @@ public class AdminPermissionController {
     public ResponseEntity<Map<String, String>> revokePermissions(@PathVariable String userId) {
         userPermissionRepository.deleteByUserId(userId);
         userPermissionDetailRepository.deleteByUserId(userId);
-        environmentAccessRepository.deleteByUserId(userId);
+        clusterAccessRepository.deleteByUserId(userId);
         return ResponseEntity.ok(Map.of("message", "All permissions revoked for user " + userId));
     }
 
     private UserPermissionDto getFullPermissionsDto(String userId) {
         return UserPermissionDto.builder()
                 .userId(userId)
-                .environmentAccess(true)
-                .allowedEnvironmentIds(environmentRepository.findAll().stream().map(e -> e.getId().toString()).collect(Collectors.toList()))
+                .clusterAccess(true)
+                .allowedClusterIds(environmentRepository.findAll().stream().map(e -> e.getId().toString()).collect(Collectors.toList()))
                 .monitoring(new UserPermissionDto.MonitoringPermissions(true, true, true))
                 .envDeployment(new UserPermissionDto.DeploymentPermissions(true, true, true, true))
                 .appDeployment(new UserPermissionDto.DeploymentPermissions(true, true, true, true))
@@ -202,11 +202,11 @@ public class AdminPermissionController {
                 .build();
     }
 
-    private UserPermissionDto mapToDto(String userId, UserPermissionDetail detail, List<String> allowedEnvs) {
+    private UserPermissionDto mapToDto(String userId, UserPermissionDetail detail, List<String> allowedClusters) {
         return UserPermissionDto.builder()
                 .userId(userId)
-                .environmentAccess(detail.isEnvironmentAccess())
-                .allowedEnvironmentIds(allowedEnvs)
+                .clusterAccess(detail.isClusterAccess())
+                .allowedClusterIds(allowedClusters)
                 .monitoring(UserPermissionDto.MonitoringPermissions.builder()
                         .observability(detail.isMonitoringObservability())
                         .logs(detail.isMonitoringLogs())

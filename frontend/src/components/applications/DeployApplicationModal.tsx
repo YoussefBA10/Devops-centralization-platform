@@ -65,6 +65,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
   const [autoGenerateConfig, setAutoGenerateConfig] = useState(true);
   const [nodes, setNodes] = useState<any[]>([]);
   const [manualFramework, setManualFramework] = useState('Java Spring Boot');
+  const [manualType, setManualType] = useState('BACKEND');
 
   // Step 3
   const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>([]);
@@ -132,16 +133,15 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
 
   // When selected app changes, update defaults
   useEffect(() => {
-    if (detectedApps.length === 0) return;
+    if (onboardingType !== 'AUTOMATIC' || detectedApps.length === 0) return;
     const app = detectedApps[selectedAppIdx];
     if (!app) return;
-    if (!appName || appName === detectedApps[selectedAppIdx === 0 ? 0 : selectedAppIdx - 1]?.name) {
-      setAppName(app.name);
-    }
+    
+    setAppName(app.name);
     const defaults = FRAMEWORK_DEFAULTS[app.framework] || { port: '8080', containerPort: '8080' };
     setPort(defaults.port);
     setContainerPort(defaults.containerPort);
-  }, [selectedAppIdx, detectedApps]);
+  }, [selectedAppIdx, detectedApps, onboardingType]);
 
   const chooseAutomatic = () => {
     setOnboardingType('AUTOMATIC');
@@ -153,6 +153,8 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
     setAlreadyDeployed(true);
     setAutoGenerateConfig(false);
     setRepoUrl('local');
+    setManualFramework('Java Spring Boot');
+    setManualType('BACKEND');
     setDetectedApps([{
       name: '',
       type: 'BACKEND',
@@ -396,7 +398,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                     <GitBranch className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="font-bold text-lg">Automatic Deployment</h4>
+                    <h4 className="font-bold text-lg">Automated Deployment</h4>
                     <p className="text-xs text-muted-foreground leading-relaxed">Connect a GitHub repository. We'll analyze your code, build the image, and deploy it using GitOps.</p>
                   </div>
                   <div className="pt-2 flex items-center text-xs font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
@@ -413,7 +415,7 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
                   </div>
                   <div>
                     <h4 className="font-bold text-lg">Manual Onboarding</h4>
-                    <p className="text-xs text-muted-foreground leading-relaxed">Register an application that is already running on a node. We'll verify connectivity and start monitoring.</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">Register an application that is already running on a node. Note: Automated infrastructure actions will be disabled.</p>
                   </div>
                   <div className="pt-2 flex items-center text-xs font-bold text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity">
                     ADD EXISTING APP <ChevronRight className="w-3 h-3 ml-1" />
@@ -517,60 +519,89 @@ const DeployApplicationModal: React.FC<DeployApplicationModalProps> = ({ isOpen,
               )}
 
               {onboardingType === 'MANUAL' && (
-                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-200/80 text-sm">
-                  <p>Register an existing application. Ensure the app is already running and reachable on the target node before continuing.</p>
+                <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-200/80 text-sm flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <p>Registering an existing application. <strong>Note:</strong> In this mode, automated infrastructure actions (Redeploy, Undeploy, Restart) are disabled as the service is managed externally.</p>
                 </div>
               )}
 
               {/* Config */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Application Name</label>
-                  <Input value={appName} onChange={e => setAppName(e.target.value)} placeholder="app-name" className="bg-black/20 border-white/10" required />
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Application Name</label>
+                    <Input value={appName} onChange={e => setAppName(e.target.value)} placeholder="app-name" className="bg-black/20 border-white/10" required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Application Type</label>
+                    {onboardingType === 'AUTOMATIC' ? (
+                      <Input value={selectedApp?.type || ''} readOnly className="bg-black/30 border-white/5 text-muted-foreground cursor-not-allowed" />
+                    ) : (
+                      <div className="flex p-1 bg-black/20 rounded-lg border border-white/10 h-10">
+                        {['BACKEND', 'FRONTEND'].map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              setManualType(t);
+                              if (detectedApps[0]) {
+                                const n = [...detectedApps];
+                                n[0].type = t;
+                                setDetectedApps(n);
+                              }
+                            }}
+                            className={`flex-1 text-[10px] font-bold uppercase tracking-widest rounded-md transition-all ${manualType === t ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-muted-foreground hover:text-white hover:bg-white/5'}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework / Language</label>
+                    {onboardingType === 'AUTOMATIC' ? (
+                      <Input value={selectedApp?.framework || ''} readOnly className="bg-black/30 border-white/5 text-muted-foreground cursor-not-allowed" />
+                    ) : (
+                      <select 
+                        value={manualFramework} 
+                        onChange={e => {
+                          setManualFramework(e.target.value);
+                          const defaults = FRAMEWORK_DEFAULTS[e.target.value] || { port: '8080', containerPort: '8080' };
+                          setPort(defaults.port);
+                          setContainerPort(defaults.containerPort);
+                          if (detectedApps[0]) {
+                            const n = [...detectedApps];
+                            n[0].framework = e.target.value;
+                            setDetectedApps(n);
+                          }
+                        }}
+                        className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white"
+                      >
+                        {Object.keys(FRAMEWORK_DEFAULTS).map(f => <option key={f} value={f} className="bg-slate-900">{f}</option>)}
+                      </select>
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Framework / Language</label>
-                  {onboardingType === 'AUTOMATIC' ? (
-                    <Input value={selectedApp?.framework || ''} readOnly className="bg-black/30 border-white/5 text-muted-foreground cursor-not-allowed" />
-                  ) : (
-                    <select 
-                      value={manualFramework} 
-                      onChange={e => {
-                        setManualFramework(e.target.value);
-                        const defaults = FRAMEWORK_DEFAULTS[e.target.value] || { port: '8080', containerPort: '8080' };
-                        setPort(defaults.port);
-                        setContainerPort(defaults.containerPort);
-                        if (detectedApps[0]) {
-                          const n = [...detectedApps];
-                          n[0].framework = e.target.value;
-                          setDetectedApps(n);
-                        }
-                      }}
-                      className="w-full h-10 px-3 rounded-lg bg-black/20 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white"
-                    >
-                      {Object.keys(FRAMEWORK_DEFAULTS).map(f => <option key={f} value={f}>{f}</option>)}
-                    </select>
-                  )}
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port (Host)</label>
-                  <Input type="number" value={port} onChange={e => setPort(e.target.value)} className="bg-black/20 border-white/10" required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port (Container)</label>
-                  <Input type="number" value={containerPort} onChange={e => setContainerPort(e.target.value)} className="bg-black/20 border-white/10" required />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-muted-foreground">Exposed Port (Host)</label>
+                    <Input type="number" value={port} onChange={e => setPort(e.target.value)} className="bg-black/20 border-white/10" required />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-muted-foreground">Internal Port (Container)</label>
+                    <Input type="number" value={containerPort} onChange={e => setContainerPort(e.target.value)} className="bg-black/20 border-white/10" required />
+                  </div>
                 </div>
               </div>
 
               {/* Target Node */}
               <div className="p-4 bg-black/20 border border-white/5 rounded-lg space-y-3">
                 <h3 className="text-sm font-bold flex items-center gap-2"><Server className="w-4 h-4 text-primary" />Infrastructure Target</h3>
-                <select value={targetNode} onChange={e => setTargetNode(e.target.value)} className="w-full h-10 px-3 rounded-lg bg-black/40 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none" required>
-                  <option value="">Select a node...</option>
-                  {nodes.map((n: any) => <option key={n.ip} value={n.ip}>{n.hostname || n.ip}</option>)}
+                <select value={targetNode} onChange={e => setTargetNode(e.target.value)} className="w-full h-10 px-3 rounded-lg bg-slate-900 border border-white/10 text-sm focus:outline-none focus:border-primary/50 text-white appearance-none" required>
+                  <option value="" className="bg-slate-900">Select a node...</option>
+                  {nodes.map((n: any) => <option key={n.ip} value={n.ip} className="bg-slate-900">{n.hostname || n.ip}</option>)}
                 </select>
 
                 {onboardingType === 'MANUAL' && (

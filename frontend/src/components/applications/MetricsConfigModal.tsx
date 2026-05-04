@@ -70,14 +70,29 @@ const MetricsConfigModal: React.FC<MetricsConfigModalProps> = ({ app, onClose, o
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-white text-sm font-medium">Metrics Port</label>
+              <Input
+                type="number"
+                placeholder="e.g. 8080"
+                value={port}
+                onChange={(e) => {
+                  setPort(e.target.value);
+                  setTestResult(null); 
+                }}
+                className="bg-black/50 border-white/10"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">The port where the application exposes telemetry.</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-white text-sm font-medium">Metrics Path</label>
               <div className="flex gap-2">
                 <Input
-                  type="number"
-                  placeholder="e.g. 8080"
-                  value={port}
+                  type="text"
+                  placeholder="/metrics or /actuator/prometheus"
+                  value={path}
                   onChange={(e) => {
-                    setPort(e.target.value);
-                    setTestResult(null); 
+                    setPath(e.target.value);
+                    setTestResult(null);
                   }}
                   className="bg-black/50 border-white/10"
                 />
@@ -90,18 +105,6 @@ const MetricsConfigModal: React.FC<MetricsConfigModalProps> = ({ app, onClose, o
                   {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Play className="w-4 h-4 mr-2" /> Test</>}
                 </Button>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">The port where the application exposes telemetry.</p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-white text-sm font-medium">Metrics Path</label>
-              <Input
-                type="text"
-                placeholder="/metrics or /actuator/prometheus"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                className="bg-black/50 border-white/10"
-              />
               <p className="text-[10px] text-muted-foreground mt-1">Detected automatically for <span className="text-indigo-300 font-bold">{app.appLanguage || 'this stack'}</span>.</p>
             </div>
 

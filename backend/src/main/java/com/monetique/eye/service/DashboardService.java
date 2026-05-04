@@ -65,8 +65,10 @@ public class DashboardService {
                         .build())
                 .collect(Collectors.toList());
         
-        // Calculate Stability Index (mocking aggregation across all apps for simplicity here)
-        double averageStability = 98.5; 
+        // Calculate Stability Index from central-node telemetry
+        double averageStability = aggregationRepository.findFirstByNodeOrderByWindowEndDesc("central-node")
+                .map(LogAggregationWindow::getStabilityScore)
+                .orElse(100.0); 
         
         if (healthStream.isEmpty()) {
             healthStream.add("> SYS-OK: all services operational [global]");
@@ -83,7 +85,12 @@ public class DashboardService {
         return DashboardOverviewResponse.builder()
                 .totalNodes(uniqueNodes.size())
                 .stabilityIndex(averageStability)
-                .openTickets((int) ticketRepository.findAll().stream().filter(t -> "OPEN".equals(t.getStatus())).count())
+                .openTickets((int) ticketRepository.findAll().stream()
+                        .filter(t -> t.getStatus() == com.monetique.eye.entity.enums.TicketStatus.OPEN || 
+                                     t.getStatus() == com.monetique.eye.entity.enums.TicketStatus.IN_PROGRESS ||
+                                     t.getStatus() == com.monetique.eye.entity.enums.TicketStatus.REOPENED ||
+                                     t.getStatus() == com.monetique.eye.entity.enums.TicketStatus.ESCALATED)
+                        .count())
                 .recentActivity(activities)
                 .healthStream(healthStream)
                 .systemLoad(topLoads)

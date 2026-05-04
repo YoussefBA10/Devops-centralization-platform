@@ -374,13 +374,13 @@ const ApplicationsPage: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-1">
                       {canDelete && <button onClick={() => handleDelete(app.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-white transition-all" title="Delete Record (DB only)"><Trash2 className="w-3.5 h-3.5" /></button>}
-                      {canDelete && <button onClick={() => handleUndeploy(app)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all" title="Undeploy & Delete"><X className="w-3.5 h-3.5" /></button>}
+                      {canDelete && app.repoUrl !== 'local' && <button onClick={() => handleUndeploy(app)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all" title="Undeploy & Delete"><X className="w-3.5 h-3.5" /></button>}
                     </div>
                   </div>
 
-                  <a href={app.repoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-primary transition-colors mb-4 truncate group/repo">
+                  <a href={app.repoUrl === 'local' ? '#' : app.repoUrl} target="_blank" rel="noreferrer" className={`flex items-center gap-2 text-[11px] text-muted-foreground hover:text-primary transition-colors mb-4 truncate group/repo ${app.repoUrl === 'local' ? 'pointer-events-none' : ''}`}>
                     <GitBranch className="w-3.5 h-3.5 group-hover/repo:scale-110 transition-transform" />
-                    {app.repoUrl?.replace('https://github.com/', '') || 'No Repository'}
+                    {app.repoUrl === 'local' ? 'Manual Registration' : (app.repoUrl?.replace('https://github.com/', '') || 'No Repository')}
                   </a>
 
                   <div className="space-y-4 mb-5">
@@ -430,8 +430,8 @@ const ApplicationsPage: React.FC = () => {
                     <div className="grid grid-cols-2 gap-2">
                       <Button variant="outline" size="sm" className={`h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20 ${app.status === 'FAILED' ? 'border-red-500/30 hover:border-red-500/60 text-red-400' : ''}`} onClick={() => handleViewLogs(app)}>{app.status === 'FAILED' ? <><AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> View Error</> : <><Terminal className="w-3.5 h-3.5 mr-1.5" /> Logs</>}</Button>
                       {canEdit && <Button variant="outline" size="sm" className="h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" onClick={() => handleEditApp(app)}><Settings2 className="w-3.5 h-3.5 mr-1.5" /> Edit</Button>}
-                      {canEdit && <Button variant="outline" size="sm" className="h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRedeploy(app)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> Redeploy</Button>}
-                      {canEdit && <Button variant="outline" size="sm" className="h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><Zap className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> Restart</Button>}
+                      {canEdit && app.repoUrl !== 'local' && <Button variant="outline" size="sm" className="h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRedeploy(app)}><RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> Redeploy</Button>}
+                      {canEdit && app.repoUrl !== 'local' && <Button variant="outline" size="sm" className="h-8 text-[11px] bg-black/20 border-white/5 hover:border-white/20" disabled={app.status === 'DEPLOYING' || app.status === 'DELETING'} onClick={() => handleRestart(app.id)}><Zap className={`w-3.5 h-3.5 mr-1.5 ${app.status === 'DEPLOYING' || app.status === 'DELETING' ? 'animate-spin' : ''}`} /> Restart</Button>}
                     </div>
                   </div>
                 </div>

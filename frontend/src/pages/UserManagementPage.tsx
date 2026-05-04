@@ -42,8 +42,8 @@ interface Environment {
 
 interface PermissionState {
   userId: string;
-  environmentAccess: boolean;
-  allowedEnvironmentIds: string[];
+  clusterAccess: boolean;
+  allowedClusterIds: string[];
   monitoring: {
     observability: boolean;
     logs: boolean;
@@ -200,15 +200,15 @@ const UserManagementPage: React.FC = () => {
     });
   };
 
-  const toggleEnvironment = (envId: string) => {
+  const toggleCluster = (clusterId: string) => {
     if (!permissions) return;
     setPermissions(prev => {
       if (!prev) return null;
-      const allowed = [...prev.allowedEnvironmentIds];
-      const index = allowed.indexOf(envId);
+      const allowed = [...prev.allowedClusterIds];
+      const index = allowed.indexOf(clusterId);
       if (index > -1) allowed.splice(index, 1);
-      else allowed.push(envId);
-      return { ...prev, allowedEnvironmentIds: allowed };
+      else allowed.push(clusterId);
+      return { ...prev, allowedClusterIds: allowed };
     });
   };
 
@@ -345,38 +345,38 @@ const UserManagementPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6">
-                  {/* 1. Environment Access */}
+                  {/* 1. Cluster Access */}
                   <Card className="p-6 space-y-6 border-white/5 bg-card/30">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Globe className="w-5 h-5 text-emerald-500" />
                         <div>
-                          <h3 className="font-bold">Environment Access</h3>
-                          <p className="text-xs text-muted-foreground">Select which environments the user can see</p>
+                          <h3 className="font-bold">Cluster Access</h3>
+                          <p className="text-xs text-muted-foreground">Select which clusters the user can see</p>
                         </div>
                       </div>
                       <div 
-                        onClick={() => togglePermission('environmentAccess')}
-                        className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${permissions.environmentAccess ? 'bg-primary' : 'bg-secondary'}`}
+                        onClick={() => togglePermission('clusterAccess')}
+                        className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${permissions.clusterAccess ? 'bg-primary' : 'bg-secondary'}`}
                       >
-                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${permissions.environmentAccess ? 'translate-x-6' : ''}`} />
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${permissions.clusterAccess ? 'translate-x-6' : ''}`} />
                       </div>
                     </div>
-
-                    {permissions.environmentAccess && (
+ 
+                    {permissions.clusterAccess && (
                       <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/5">
                         {environments.map(env => (
                           <button
                             key={env.id}
-                            onClick={() => toggleEnvironment(env.id.toString())}
+                            onClick={() => toggleCluster(env.id.toString())}
                             className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                              permissions.allowedEnvironmentIds.includes(env.id.toString())
+                              permissions.allowedClusterIds.includes(env.id.toString())
                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
                                 : 'bg-secondary/30 border-white/5 text-muted-foreground hover:border-white/10'
                             }`}
                           >
                             <span className="text-sm font-medium">{env.name}</span>
-                            {permissions.allowedEnvironmentIds.includes(env.id.toString()) ? (
+                            {permissions.allowedClusterIds.includes(env.id.toString()) ? (
                               <CheckCircle2 className="w-4 h-4" />
                             ) : (
                               <div className="w-4 h-4 rounded-full border border-current opacity-20" />
@@ -629,7 +629,7 @@ const UserManagementPage: React.FC = () => {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteUser}
         title="Delete User"
-        message={`Are you sure you want to delete "${userToDelete?.username}"? This will also remove all their associated permissions and environment access. This action cannot be undone.`}
+        message={`Are you sure you want to delete "${userToDelete?.username}"? This will also remove all their associated permissions and cluster access. This action cannot be undone.`}
         confirmText="Delete User"
         type="danger"
       />

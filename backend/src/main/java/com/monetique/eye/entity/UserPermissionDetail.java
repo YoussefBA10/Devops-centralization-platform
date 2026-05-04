@@ -17,7 +17,7 @@ public class UserPermissionDetail {
     @Column(unique = true, nullable = false)
     private String userId;
 
-    private boolean environmentAccess;
+    private boolean clusterAccess;
 
     // Monitoring
     private boolean monitoringObservability;
