@@ -27,8 +27,8 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLoading(true);
     try {
       const response = await api.get('/clusters');
-      const data = response.data;
-      setClusters(Array.isArray(data) ? data : []);
+      const data = (Array.isArray(response.data) ? response.data : []) as Cluster[];
+      setClusters(data);
       
       const storedId = localStorage.getItem('selectedClusterId');
       if (data.length > 0) {
