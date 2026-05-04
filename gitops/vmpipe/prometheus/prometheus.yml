@@ -27,6 +27,7 @@ scrape_configs:
         labels:
           environment: "central-node"
           nodename: "central-node"
+          app_id: "1"
 
   # 2. Central Node (central-node) - Self monitoring
   - job_name: 'central-node'
