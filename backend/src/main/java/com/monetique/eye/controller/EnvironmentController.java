@@ -252,7 +252,7 @@ public class EnvironmentController {
                 .name((String) payload.get("name"))
                 .description((String) payload.get("description"))
                 .prometheusLabel((String) payload.get("prometheusLabel"))
-                .centralNodeIp((String) payload.get("centralNodeIp"))
+                .centralNodeIp(com.monetique.eye.util.IpSanitizer.sanitizeIp((String) payload.get("centralNodeIp")))
                 .build();
         
         if (payload.get("clusterId") != null) {
@@ -286,7 +286,7 @@ public class EnvironmentController {
         existing.setName((String) payload.get("name"));
         existing.setDescription((String) payload.get("description"));
         existing.setPrometheusLabel((String) payload.get("prometheusLabel"));
-        existing.setCentralNodeIp((String) payload.get("centralNodeIp"));
+        existing.setCentralNodeIp(com.monetique.eye.util.IpSanitizer.sanitizeIp((String) payload.get("centralNodeIp")));
         
         if (payload.containsKey("clusterId")) {
             if (payload.get("clusterId") != null) {
@@ -329,7 +329,7 @@ public class EnvironmentController {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        String targetIp = request.get("targetIp");
+        String targetIp = com.monetique.eye.util.IpSanitizer.sanitizeIp(request.get("targetIp"));
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
         String osFamily = request.getOrDefault("osFamily", "ubuntu");

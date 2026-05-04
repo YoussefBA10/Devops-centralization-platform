@@ -139,7 +139,7 @@ public class ApplicationController {
         app.setType(request.getType());
         app.setAppLanguage(request.getAppLanguage());
         app.setRepoUrl(request.getRepoUrl());
-        app.setTargetNode(request.getTargetNode());
+        app.setTargetNode(com.monetique.eye.util.IpSanitizer.sanitizeIp(request.getTargetNode()));
         app.setBranch(request.getBranch());
         app.setPort(request.getPort());
         app.setSrcPath(request.getSrcPath());
