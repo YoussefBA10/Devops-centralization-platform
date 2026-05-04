@@ -35,7 +35,7 @@ interface User {
   role: string;
 }
 
-interface Environment {
+interface Cluster {
   id: number;
   name: string;
 }
@@ -72,7 +72,7 @@ interface PermissionState {
 
 const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [clusters, setClusters] = useState<Cluster[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [permissions, setPermissions] = useState<PermissionState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,12 +93,12 @@ const UserManagementPage: React.FC = () => {
 
   const fetchInitialData = async () => {
     try {
-      const [usersRes, envsRes] = await Promise.all([
+      const [usersRes, clustersRes] = await Promise.all([
         api.get('/admin/users'),
-        api.get('/admin/permissions/environments')
+        api.get('/admin/permissions/clusters')
       ]);
       setUsers(usersRes.data);
-      setEnvironments(envsRes.data);
+      setClusters(clustersRes.data);
     } catch (err) {
       console.error("Failed to fetch initial data", err);
     } finally {
@@ -365,18 +365,18 @@ const UserManagementPage: React.FC = () => {
  
                     {permissions.clusterAccess && (
                       <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/5">
-                        {environments.map(env => (
+                        {clusters.map(cluster => (
                           <button
-                            key={env.id}
-                            onClick={() => toggleCluster(env.id.toString())}
+                            key={cluster.id}
+                            onClick={() => toggleCluster(cluster.id.toString())}
                             className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                              permissions.allowedClusterIds.includes(env.id.toString())
+                              permissions.allowedClusterIds.includes(cluster.id.toString())
                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
                                 : 'bg-secondary/30 border-white/5 text-muted-foreground hover:border-white/10'
                             }`}
                           >
-                            <span className="text-sm font-medium">{env.name}</span>
-                            {permissions.allowedClusterIds.includes(env.id.toString()) ? (
+                            <span className="text-sm font-medium">{cluster.name}</span>
+                            {permissions.allowedClusterIds.includes(cluster.id.toString()) ? (
                               <CheckCircle2 className="w-4 h-4" />
                             ) : (
                               <div className="w-4 h-4 rounded-full border border-current opacity-20" />
