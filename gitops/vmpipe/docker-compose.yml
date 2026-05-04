@@ -18,7 +18,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - /data/monetique-eye/data/mysql:/var/lib/mysql
+      - ./../../data/mysql:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -37,14 +37,14 @@ services:
       env: "central-node"
       node: "central-node"
     volumes:
-      - /data/monetique-eye/gitops/vmpipe/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - /data/monetique-eye/gitops/vmpipe/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
-      - /data/monetique-eye/gitops/vmpipe/prometheus/prediction_rules.yml:/etc/prometheus/prediction_rules.yml
-      - /data/monetique-eye/gitops/vmpipe/prometheus/file_sd:/etc/prometheus/file_sd
-      - /data/monetique-eye/gitops/vmpipe/prometheus/conf.d:/etc/prometheus/conf.d
-      - /data/monetique-eye/gitops/vmpipe/prometheus/rules:/etc/prometheus/rules
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - ./prometheus/prediction_rules.yml:/etc/prometheus/prediction_rules.yml
+      - ./prometheus/file_sd:/etc/prometheus/file_sd
+      - ./prometheus/conf.d:/etc/prometheus/conf.d
+      - ./prometheus/rules:/etc/prometheus/rules
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /data/monetique-eye/data/prometheus:/prometheus
+      - ./../../data/prometheus:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -119,7 +119,7 @@ services:
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /data/monetique-eye/gitops/vmpipe/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
     command: filebeat -e -strict.perms=false
     ports:
       - "5066:5066"
@@ -140,7 +140,7 @@ services:
     ports:
       - "9115:9115"
     volumes:
-      - /data/monetique-eye/gitops/vmpipe/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml
+      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml
     command:
       - '--config.file=/etc/blackbox_exporter/config.yml'
     networks:
@@ -172,8 +172,8 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - /data/monetique-eye/gitops/vmpipe/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - /data/monetique-eye/gitops/vmpipe/alertmanager/templates:/etc/alertmanager/templates
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager/templates:/etc/alertmanager/templates
     networks:
       - monetique-eye-net
   
@@ -191,7 +191,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - /data/monetique-eye/gitops/vmpipe/grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       prometheus:
         condition: service_healthy
@@ -212,7 +212,7 @@ services:
     ports:
       - "9200:9200"
     volumes:
-      - /data/monetique-eye/data/elasticsearch:/usr/share/elasticsearch/data
+      - ./../../data/elasticsearch:/usr/share/elasticsearch/data
     networks:
       - monetique-eye-net
 
@@ -225,7 +225,7 @@ services:
       env: "central-node"
       node: "central-node"
     volumes:
-      - /data/monetique-eye/gitops/vmpipe/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
     ports:
         - "5044:5044"
         - "5045:5045"
@@ -267,9 +267,9 @@ services:
       com.monetique.environment: "central-node"
       com.monetique.category: "backend"
     volumes:
-      - /data/monetique-eye/gitops:/app/gitops
-      - /data/monetique-eye/gitops/vmpipe/prometheus/conf.d:/opt/monitoring/prometheus/conf.d
-      - /data/monetique-eye/gitops/vmpipe/prometheus/rules:/opt/monitoring/prometheus/rules
+      - ./../../gitops:/app/gitops
+      - ./prometheus/conf.d:/opt/monitoring/prometheus/conf.d
+      - ./prometheus/rules:/opt/monitoring/prometheus/rules
     environment:
       SERVER_PORT: ${SERVER_PORT}
       NODE_NAME: "central-node"
@@ -290,7 +290,7 @@ services:
       MONITORING_BLACKBOX_EXPORTER_URL: "blackbox-exporter:9115"
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
-      MONETIQUE_GITOPS_PATH: "/data/monetique-eye/gitops"
+      MONETIQUE_GITOPS_PATH: "../../gitops"
     ports:
       - "8880:8880"
       - "9001:9001"
