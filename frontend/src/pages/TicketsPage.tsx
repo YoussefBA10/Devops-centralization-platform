@@ -127,10 +127,20 @@ const TicketsPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteTicket = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this incident ticket?')) return;
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const confirmDelete = (id: number) => {
+    setDeleteId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteTicket = async () => {
+    if (!deleteId) return;
     try {
-      await api.delete(`/tickets/${id}`);
+      await api.delete(`/tickets/${deleteId}`);
+      setIsDeleteModalOpen(false);
+      setDeleteId(null);
       fetchTickets();
     } catch (error) {
       console.error('Failed to delete ticket', error);
@@ -263,6 +273,34 @@ const TicketsPage: React.FC = () => {
           </Card>
         </div>
       )}
+ 
+       {/* Delete Confirmation Modal */}
+       {isDeleteModalOpen && (
+         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+           <Card className="w-full max-w-sm bg-card border-destructive/20 shadow-2xl animate-in zoom-in-95 duration-200">
+             <CardContent className="p-6 space-y-6">
+               <div className="flex flex-col items-center text-center space-y-4">
+                 <div className="w-12 h-12 bg-destructive/10 rounded-full flex items-center justify-center">
+                   <Trash2 className="w-6 h-6 text-destructive" />
+                 </div>
+                 <div>
+                   <h3 className="text-xl font-bold tracking-tight">Delete Incident?</h3>
+                   <p className="text-sm text-muted-foreground mt-2">
+                     Are you sure you want to permanently remove ticket #{deleteId}? This action cannot be undone.
+                   </p>
+                 </div>
+               </div>
+               
+               <div className="flex gap-3 pt-2">
+                 <Button variant="ghost" className="flex-1" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+                 <Button variant="destructive" className="flex-1 shadow-lg shadow-destructive/20" onClick={handleDeleteTicket}>
+                   Delete
+                 </Button>
+               </div>
+             </CardContent>
+           </Card>
+         </div>
+       )}
 
       {/* Kanban/List Layout */}
       <div className="flex flex-col gap-6">
@@ -372,7 +410,7 @@ const TicketsPage: React.FC = () => {
                           variant="ghost" 
                           size="icon" 
                           className="h-9 w-9 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDeleteTicket(ticket.id)}
+                          onClick={() => confirmDelete(ticket.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
