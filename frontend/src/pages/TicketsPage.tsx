@@ -117,11 +117,7 @@ const TicketsPage: React.FC = () => {
   const handleEditClick = (ticket: Ticket) => {
     setNewTicket({
       title: ticket.title,
-<<<<<<< HEAD
-      description: ticket.description,
-=======
       description: ticket.description || '',
->>>>>>> 4345ee2a6c552c01f7065aa214602f381994a67f
       priority: ticket.priority || 'LOW',
       node: ticket.node || '',
       applicationId: ticket.application?.id?.toString() || ''
