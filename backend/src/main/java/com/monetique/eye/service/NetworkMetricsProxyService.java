@@ -177,7 +177,7 @@ public class NetworkMetricsProxyService {
                                         (centralIp != null && cleanIp.equals(centralIp));
                     
                     if (isCentral) {
-                        return "instance=~\"localhost:.*|node-exporter:.*|central-node:.*\"";
+                        return "instance=~\"localhost:.*|node-exporter:.*|central-node:.*|cadvisor:.*\"";
                     }
                     return "instance=~\"" + cleanIp + ":.*\"";
                 })

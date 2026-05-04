@@ -75,14 +75,14 @@ public class EnvironmentController {
     public List<Environment> getAll(@RequestParam(required = false) Long clusterId) {
         User user = securityService.getCurrentUser();
         List<Environment> all;
-        
+
         if (user.getRole() == Role.ADMIN) {
             all = environmentRepository.findAll();
         } else {
             List<String> allowedIds = clusterAccessRepository.findByUserId(user.getUsername()).stream()
                     .map(ClusterAccess::getClusterId)
                     .collect(Collectors.toList());
-            
+
             all = environmentRepository.findAll().stream()
                     .filter(env -> allowedIds.contains(env.getId().toString()))
                     .collect(Collectors.toList());
@@ -93,7 +93,7 @@ public class EnvironmentController {
                     .filter(env -> env.getCluster() != null && env.getCluster().getId().equals(clusterId))
                     .collect(Collectors.toList());
         }
-        
+
         return all;
     }
 
@@ -114,7 +114,7 @@ public class EnvironmentController {
 
         String label = getLabelValue(env.getPrometheusLabel());
         long totalNodes = managedNodeRepository.countByEnvironment(env);
-        
+
         return ResponseEntity.ok(Map.of(
                 "cpuUsage", prometheusClient.getCpuUsage(label),
                 "ramUsagePercent", prometheusClient.getMemoryUsagePercent(label),
@@ -133,7 +133,7 @@ public class EnvironmentController {
         if (label == null || label.isBlank()) {
             label = env.getSafeName();
         }
-        
+
         List<Map<String, Object>> resultNodes = new ArrayList<>();
 
         // 1. Fetch Agents (node-exporter, cadvisor, filebeat)
@@ -159,7 +159,8 @@ public class EnvironmentController {
             String nodeKey = rawIp;
             String nodeDisplayName = "node-" + rawIp.replaceAll(".*\\.", ""); // e.g., node-131
 
-            // Only collapse into "central-node" if it's an internal service name or the central node IP
+            // Only collapse into "central-node" if it's an internal service name or the
+            // central node IP
             if ("central-node".equals(label) && ("node-exporter".equals(rawIp) ||
                     "cadvisor".equals(rawIp) ||
                     "filebeat".equals(rawIp) ||
@@ -191,7 +192,8 @@ public class EnvironmentController {
             }
             if (!exists) {
                 services.add(new HashMap<>(
-                        Map.of("name", job, "status", "1.0".equals(value) || "1".equals(value) ? "Online" : "Offline", "type", "AGENT")));
+                        Map.of("name", job, "status", "1.0".equals(value) || "1".equals(value) ? "Online" : "Offline",
+                                "type", "AGENT")));
             }
 
             if ("node-exporter".equals(job) && ("1.0".equals(value) || "1".equals(value))) {
@@ -252,9 +254,9 @@ public class EnvironmentController {
                 .name((String) payload.get("name"))
                 .description((String) payload.get("description"))
                 .prometheusLabel((String) payload.get("prometheusLabel"))
-                .centralNodeIp(com.monetique.eye.util.IpSanitizer.sanitizeIp((String) payload.get("centralNodeIp")))
+                .centralNodeIp((String) payload.get("centralNodeIp"))
                 .build();
-        
+
         if (payload.get("clusterId") != null) {
             clusterRepository.findById(Long.valueOf(payload.get("clusterId").toString()))
                     .ifPresent(env::setCluster);
@@ -262,7 +264,7 @@ public class EnvironmentController {
 
         Environment saved = environmentRepository.save(env);
         activityLogService.logActivity("Environment Created: " + env.getName(), "environment", env.getName());
-        
+
         // Auto-assign the creator to the new environment
         User currentUser = securityService.getCurrentUser();
         if (currentUser != null && currentUser.getRole() != Role.ADMIN) {
@@ -272,7 +274,7 @@ public class EnvironmentController {
                     .build();
             clusterAccessRepository.save(access);
         }
-        
+
         return saved;
     }
 
@@ -281,13 +283,13 @@ public class EnvironmentController {
     public Environment update(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         Environment existing = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
-        
+
         // Update only metadata fields
         existing.setName((String) payload.get("name"));
         existing.setDescription((String) payload.get("description"));
         existing.setPrometheusLabel((String) payload.get("prometheusLabel"));
-        existing.setCentralNodeIp(com.monetique.eye.util.IpSanitizer.sanitizeIp((String) payload.get("centralNodeIp")));
-        
+        existing.setCentralNodeIp((String) payload.get("centralNodeIp"));
+
         if (payload.containsKey("clusterId")) {
             if (payload.get("clusterId") != null) {
                 clusterRepository.findById(Long.valueOf(payload.get("clusterId").toString()))
@@ -296,7 +298,7 @@ public class EnvironmentController {
                 existing.setCluster(null);
             }
         }
-        
+
         Environment saved = environmentRepository.save(existing);
         activityLogService.logActivity("Environment Updated: " + saved.getName(), "environment", saved.getName());
         return saved;
@@ -306,8 +308,9 @@ public class EnvironmentController {
     @RequiresPermission("ENV_DEPLOYMENT_DELETE")
     public void delete(@PathVariable Long id) {
         environmentRepository.findById(id).ifPresent(env -> {
-            activityLogService.logActivity("Environment Deletion Started: " + env.getName(), "environment", env.getName());
-            
+            activityLogService.logActivity("Environment Deletion Started: " + env.getName(), "environment",
+                    env.getName());
+
             // 1. Undeploy all nodes associated with this environment
             java.util.List<com.monetique.eye.entity.ManagedNode> nodes = managedNodeRepository.findByEnvironment(env);
             for (com.monetique.eye.entity.ManagedNode node : nodes) {
@@ -316,7 +319,7 @@ public class EnvironmentController {
 
             // 2. Clean up inventory group
             deploymentService.removeEnvironmentFromInventory(env.getName());
-            
+
             // 3. Delete the environment record (and related records via cascade)
             environmentRepository.deleteById(id);
         });
@@ -329,7 +332,7 @@ public class EnvironmentController {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        String targetIp = com.monetique.eye.util.IpSanitizer.sanitizeIp(request.get("targetIp"));
+        String targetIp = request.get("targetIp");
         String sshUser = request.get("sshUser");
         String sshPassword = request.get("sshPassword");
         String osFamily = request.getOrDefault("osFamily", "ubuntu");
@@ -341,9 +344,9 @@ public class EnvironmentController {
         // Task 1: Check if node already exists
         if (managedNodeRepository.findByEnvironmentAndIp(env, targetIp).isPresent()) {
             return ResponseEntity.status(400).body(Map.of(
-                "message", "Node with IP " + targetIp + " is already registered in environment '" + env.getName() + "'.",
-                "status", "ERROR"
-            ));
+                    "message",
+                    "Node with IP " + targetIp + " is already registered in environment '" + env.getName() + "'.",
+                    "status", "ERROR"));
         }
 
         CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser,
@@ -365,12 +368,13 @@ public class EnvironmentController {
 
         // Fetch credentials from ManagedNode
         Optional<com.monetique.eye.entity.ManagedNode> nodeOpt = managedNodeRepository.findByEnvironmentAndIp(env, ip);
-        
+
         if (nodeOpt.isPresent()) {
             com.monetique.eye.entity.ManagedNode node = nodeOpt.get();
             deploymentService.undeployAgentAsync(env, ip, node.getSshUser(), node.getSshPassword());
         } else {
-            // If credentials are missing, we can still attempt to clean up Prometheus and Inventory records
+            // If credentials are missing, we can still attempt to clean up Prometheus and
+            // Inventory records
             deploymentService.undeployAgentAsync(env, ip, null, null);
         }
 
@@ -412,8 +416,7 @@ public class EnvironmentController {
                         "status", log.getStatus(),
                         "log", log.getLogOutput(),
                         "shortError", log.getShortError() != null ? log.getShortError() : "",
-                        "executedAt", log.getExecutedAt().toString()
-                )))
+                        "executedAt", log.getExecutedAt().toString())))
                 .orElse(ResponseEntity.ok(Map.of("log", "No logs found for this node.", "status", "NONE")));
     }
 }

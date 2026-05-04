@@ -17,17 +17,16 @@ public class DataCleanupRunner implements CommandLineRunner {
 
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
-    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
     private final DeploymentService deploymentService;
 
     @Override
     public void run(String... args) throws Exception {
         log.info("--- STARTING DATABASE IP CLEANUP ---");
-        
+
         environmentRepository.findAll().forEach(env -> {
             String ip = env.getCentralNodeIp();
             if (ip != null && (ip.contains("http") || ip.contains("/"))) {
-                String clean = com.monetique.eye.util.IpSanitizer.sanitizeIp(ip);
+                String clean = ip.replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
                 log.info("Cleaning Environment IP: {} -> {}", ip, clean);
                 env.setCentralNodeIp(clean);
                 environmentRepository.save(env);
@@ -37,25 +36,15 @@ public class DataCleanupRunner implements CommandLineRunner {
         applicationRepository.findAll().forEach(app -> {
             String ip = app.getTargetNode();
             if (ip != null && (ip.contains("http") || ip.contains("/"))) {
-                String clean = com.monetique.eye.util.IpSanitizer.sanitizeIp(ip);
+                String clean = ip.replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
                 log.info("Cleaning Application Target Node: {} -> {}", ip, clean);
                 app.setTargetNode(clean);
                 applicationRepository.save(app);
             }
         });
 
-        managedNodeRepository.findAll().forEach(node -> {
-            String ip = node.getIp();
-            if (ip != null && (ip.contains("http") || ip.contains("/"))) {
-                String clean = com.monetique.eye.util.IpSanitizer.sanitizeIp(ip);
-                log.info("Cleaning Managed Node IP: {} -> {}", ip, clean);
-                node.setIp(clean);
-                managedNodeRepository.save(node);
-            }
-        });
-
         log.info("--- DATABASE IP CLEANUP COMPLETED ---");
-        
+
         log.info("Triggering automatic monitoring synchronization...");
         try {
             deploymentService.syncMonitoring();
