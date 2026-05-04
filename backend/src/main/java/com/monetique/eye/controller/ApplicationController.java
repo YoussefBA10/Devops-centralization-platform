@@ -256,10 +256,23 @@ public class ApplicationController {
         return ResponseEntity.ok(Map.of("message", "Restart process started."));
     }
 
-    /** Remove an application record from the database. */
+    /** Remove an application record from the database ONLY. Does not trigger remote undeployment. */
     @DeleteMapping("/{id}")
     @RequiresPermission("APP_DEPLOYMENT_DELETE")
-    public ResponseEntity<?> deleteApplication(@PathVariable Long id) {
+    public ResponseEntity<?> deleteApplicationRecord(@PathVariable Long id) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+
+        applicationRepository.delete(app);
+        activityLogService.logActivity("Application Record Deleted (DB Only): " + app.getName(), "management", app.getEnvironment().getName());
+        
+        return ResponseEntity.ok(Map.of("message", "Application record removed from database."));
+    }
+
+    /** Trigger remote undeployment and then remove the application record. */
+    @PostMapping("/{id}/undeploy")
+    @RequiresPermission("APP_DEPLOYMENT_DELETE")
+    public ResponseEntity<?> undeployApplication(@PathVariable Long id) {
         Application app = applicationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
 
@@ -267,7 +280,7 @@ public class ApplicationController {
         app.setStatus("DELETING");
         applicationRepository.save(app);
 
-        // Trigger remote undeployment
+        // Trigger remote undeployment (this will also delete the record after success/failure)
         deploymentService.undeployApplicationFull(id);
 
         return ResponseEntity.ok(Map.of("message", "Undeployment started. Application will be removed shortly."));

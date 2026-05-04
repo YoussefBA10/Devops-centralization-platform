@@ -79,6 +79,7 @@ export const checkRunning = (data: { targetIp: string; appName: string; port: st
 export const restartApplication = (appId: number) => api.post(`/applications/${appId}/restart`);
 export const getApplicationLogs = (appId: number) => api.get(`/applications/${appId}/logs`);
 export const getApplicationStatus = (appId: number) => api.get(`/applications/${appId}/status`);
+export const undeployApplication = (appId: number) => api.post(`/applications/${appId}/undeploy`);
 export const redeployApplication = (appId: number) => api.post(`/applications/${appId}/redeploy`);
 export const deleteApplicationRecord = (appId: number) => api.delete(`/applications/${appId}`);
 export const promoteApplication = (envId: number, appId: number) => 

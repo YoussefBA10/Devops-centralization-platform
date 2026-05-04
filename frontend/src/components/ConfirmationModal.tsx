@@ -13,6 +13,8 @@ interface ConfirmationModalProps {
   cancelText?: string;
   type?: 'danger' | 'warning' | 'info' | 'success';
   loading?: boolean;
+  requiresConfirmationText?: string;
+  confirmationPlaceholder?: string;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -24,9 +26,19 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   type = 'warning',
-  loading = false
+  loading = false,
+  requiresConfirmationText,
+  confirmationPlaceholder = 'Type here to confirm...'
 }) => {
+  const [inputValue, setInputValue] = React.useState('');
+
+  React.useEffect(() => {
+    if (isOpen) setInputValue('');
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const isConfirmDisabled = loading || (requiresConfirmationText && inputValue !== requiresConfirmationText);
 
   const getIcon = () => {
     switch (type) {
@@ -38,6 +50,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   };
 
   const getButtonClass = () => {
+    if (isConfirmDisabled) return 'bg-zinc-800 text-zinc-500 cursor-not-allowed';
     switch (type) {
       case 'danger': return 'bg-rose-500 hover:bg-rose-600 text-white';
       case 'warning': return 'bg-amber-500 hover:bg-amber-600 text-white';
@@ -56,9 +69,25 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">
+              <p className="text-zinc-400 text-sm leading-relaxed mb-4">
                 {message}
               </p>
+
+              {requiresConfirmationText && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-[10px] uppercase font-bold text-zinc-500 tracking-widest">
+                    To confirm, please type: <span className="text-white select-all">{requiresConfirmationText}</span>
+                  </p>
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    placeholder={confirmationPlaceholder}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                    autoFocus
+                  />
+                </div>
+              )}
             </div>
             <button 
               onClick={onClose} 
@@ -82,6 +111,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           <Button 
             onClick={onConfirm} 
             loading={loading}
+            disabled={!!isConfirmDisabled}
             className={getButtonClass()}
           >
             {confirmText}

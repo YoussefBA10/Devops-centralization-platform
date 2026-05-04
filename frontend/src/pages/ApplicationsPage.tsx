@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
-import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, redeployApplication /*, getGitHubInstallUrl, disconnectGitHub */ } from '../services/api';
+import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, undeployApplication, redeployApplication /*, getGitHubInstallUrl, disconnectGitHub */ } from '../services/api';
 import { Search, Plus, GitBranch, RefreshCw, Terminal, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
@@ -32,12 +32,16 @@ const ApplicationsPage: React.FC = () => {
     type: 'danger' | 'warning' | 'info';
     onConfirm: () => void;
     loading?: boolean;
+    requiresConfirmationText?: string;
+    confirmationPlaceholder?: string;
   }>({
     isOpen: false,
     title: '',
     message: '',
     type: 'warning',
-    onConfirm: () => {}
+    onConfirm: () => {},
+    requiresConfirmationText: undefined,
+    confirmationPlaceholder: undefined
   });
 
   // Log viewer state
@@ -194,15 +198,37 @@ const ApplicationsPage: React.FC = () => {
   const handleDelete = async (appId: number) => {
     setConfirmModal({
       isOpen: true,
-      title: 'Undeploy & Remove',
-      message: 'This will stop the running container and remove its data from the remote host. The application record will be permanently deleted. This action cannot be undone. Continue?',
-      type: 'danger',
+      title: 'Remove Record Only',
+      message: 'This will only remove the application record from the database. It will NOT stop or delete the running container on the remote node. Use this if you have manually undeployed or just want to clean up the dashboard. Continue?',
+      type: 'warning',
       onConfirm: async () => {
         try {
           setConfirmModal(prev => ({ ...prev, loading: true }));
           await deleteApplicationRecord(appId);
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
-          setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: 'DELETING' } : a));
+          fetchApps();
+        } catch (e) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          throw e;
+        }
+      }
+    });
+  };
+
+  const handleUndeploy = async (app: any) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Undeploy & Delete',
+      message: `This will trigger a remote undeployment of '${app.name}'. The container will be stopped and removed from the host. Once finished, the database record will also be deleted. This action is destructive and cannot be undone.`,
+      type: 'danger',
+      requiresConfirmationText: app.name,
+      confirmationPlaceholder: 'Enter app name to confirm...',
+      onConfirm: async () => {
+        try {
+          setConfirmModal(prev => ({ ...prev, loading: true }));
+          await undeployApplication(app.id);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
+          setApplications(prev => prev.map(a => a.id === app.id ? { ...a, status: 'DELETING' } : a));
           fetchApps();
         } catch (e) {
           setConfirmModal(prev => ({ ...prev, isOpen: false, loading: false }));
@@ -346,7 +372,10 @@ const ApplicationsPage: React.FC = () => {
                         <span className="text-[10px] text-muted-foreground">{app.appLanguage}</span>
                       </div>
                     </div>
-                    {canDelete && <button onClick={() => handleDelete(app.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>}
+                    <div className="flex items-center gap-1">
+                      {canDelete && <button onClick={() => handleDelete(app.id)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-white/5 text-muted-foreground hover:text-white transition-all" title="Delete Record (DB only)"><Trash2 className="w-3.5 h-3.5" /></button>}
+                      {canDelete && <button onClick={() => handleUndeploy(app)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-all" title="Undeploy & Delete"><X className="w-3.5 h-3.5" /></button>}
+                    </div>
                   </div>
 
                   <a href={app.repoUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-primary transition-colors mb-4 truncate group/repo">
@@ -477,6 +506,8 @@ const ApplicationsPage: React.FC = () => {
         message={confirmModal.message}
         type={confirmModal.type as any}
         loading={confirmModal.loading}
+        requiresConfirmationText={confirmModal.requiresConfirmationText}
+        confirmationPlaceholder={confirmModal.confirmationPlaceholder}
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
       />
