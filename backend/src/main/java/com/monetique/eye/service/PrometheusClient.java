@@ -16,7 +16,24 @@ public class PrometheusClient {
     private final WebClient webClient;
 
     public PrometheusClient(@Value("${prometheus.url}") String prometheusUrl, WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.baseUrl(prometheusUrl).build();
+        // Configure explicit timeouts and force system DNS resolver
+        io.netty.channel.ChannelOption<Integer> connectTimeout = io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
+        
+        // Force Netty to use the system's DNS resolver and prefer IPv4
+        // This often fixes "ConnectTimeoutException" in Docker environments where system tools (wget) work but Netty doesn't.
+        reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create()
+                .resolver(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE) 
+                .option(connectTimeout, 10000)
+                .responseTimeout(java.time.Duration.ofSeconds(15))
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new io.netty.handler.timeout.ReadTimeoutHandler(15))
+                        .addHandlerLast(new io.netty.handler.timeout.WriteTimeoutHandler(15)));
+
+        this.webClient = webClientBuilder
+                .baseUrl(prometheusUrl)
+                .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .build();
     }
 
     public Double queryMetric(String query) {
