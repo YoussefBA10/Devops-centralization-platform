@@ -160,10 +160,15 @@ public class NetworkMetricsProxyService {
         return managedNodeRepository.findById(nodeId)
                 .map(node -> {
                     String ip = node.getIp();
-                    if (ip.equals("127.0.0.1") || ip.equals("localhost")) {
+                    if (ip == null) return "instance=\"unknown\"";
+                    
+                    // CLEAN IP ON THE FLY
+                    String cleanIp = ip.replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
+                    
+                    if (cleanIp.equals("127.0.0.1") || cleanIp.equals("localhost") || cleanIp.equals("central-node")) {
                         return "instance=~\"localhost:.*|node-exporter:.*|central-node:.*\"";
                     }
-                    return "instance=~\"" + ip + ":.*\"";
+                    return "instance=~\"" + cleanIp + ":.*\"";
                 })
                 .orElse("node_id=\"" + nodeId + "\""); // Fallback
     }
