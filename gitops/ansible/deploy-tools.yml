@@ -32,6 +32,7 @@
         -v /sys:/sys:ro,z \
         -v /var/lib/docker/:/var/lib/docker:ro,z \
         -v /dev/disk/:/dev/disk:ro,z \
+        -v /data:/data:ro,z \
         gcr.io/cadvisor/cadvisor:latest
       args:
         executable: /bin/bash
@@ -42,6 +43,7 @@
         --restart=always \
         -p 9100:9100 \
         -v /:/host:ro,rslave,z \
+        -v /data:/data:ro,z \
         prom/node-exporter:latest \
         --path.rootfs=/host
       args:
