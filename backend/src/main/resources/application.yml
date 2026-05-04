@@ -20,6 +20,7 @@ spring:
     enabled: true
     baseline-on-migrate: true
     baseline-version: "1"
+    repair-on-migrate: true
   
   elasticsearch:
     uris: ${ELASTICSEARCH_URL:http://192.168.126.130:9200}
