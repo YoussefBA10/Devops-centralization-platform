@@ -290,6 +290,7 @@ services:
       MONITORING_BLACKBOX_EXPORTER_URL: "blackbox-exporter:9115"
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
+      SPRING_FLYWAY_REPAIR_ON_MIGRATE: "true"
       MONETIQUE_GITOPS_PATH: "../../gitops"
     ports:
       - "8880:8880"
