@@ -14,16 +14,19 @@
 
   tasks:
     # -----------------------------
-    # Cleanup & Run Containers
     # -----------------------------
-    - name: Remove old containers if exist
-      shell: "docker rm -f cadvisor node-exporter filebeat || true"
-      args:
-        executable: /bin/bash
-      changed_when: false
+    # Check & Run Containers
+    # -----------------------------
+    - name: Check if cAdvisor is already running
+      wait_for:
+        port: 8081
+        timeout: 1
+      register: cadvisor_port_check
+      ignore_errors: yes
 
     - name: Run cAdvisor
       shell: |
+        docker rm -f cadvisor || true
         docker run -d --name cadvisor \
         --restart=always \
         -p 8081:8080 \
@@ -36,9 +39,18 @@
         gcr.io/cadvisor/cadvisor:latest
       args:
         executable: /bin/bash
+      when: cadvisor_port_check.failed
+
+    - name: Check if Node Exporter is already running
+      wait_for:
+        port: 9100
+        timeout: 1
+      register: node_exporter_port_check
+      ignore_errors: yes
 
     - name: Run Node Exporter
       shell: |
+        docker rm -f node-exporter || true
         docker run -d --name node-exporter \
         --restart=always \
         -p 9100:9100 \
@@ -48,9 +60,18 @@
         --path.rootfs=/host
       args:
         executable: /bin/bash
+      when: node_exporter_port_check.failed
+
+    - name: Check if Filebeat is already running
+      wait_for:
+        port: 5066
+        timeout: 1
+      register: filebeat_port_check
+      ignore_errors: yes
 
     - name: Run Filebeat
       shell: |
+        docker rm -f filebeat || true
         docker run -d --name filebeat \
         --restart=always \
         --user root \
@@ -66,3 +87,4 @@
         -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
       args:
         executable: /bin/bash
+      when: filebeat_port_check.failed
