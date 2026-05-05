@@ -132,6 +132,38 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
+            
+            // Extract dynamic cAdvisor and Node Exporter ports from logs if present
+            Integer detectedCadvisorPort = 8085; // Default fallback
+            Integer detectedNodeExporterPort = 9100; // Default fallback
+            String fullLog = deploymentLog.getLogOutput();
+            
+            if (fullLog != null) {
+                // Parse cAdvisor
+                if (fullLog.contains("FINAL_CADVISOR_PORT=")) {
+                    try {
+                        int start = fullLog.indexOf("FINAL_CADVISOR_PORT=") + 20;
+                        int end = fullLog.indexOf("\"", start);
+                        if (end == -1) end = fullLog.indexOf("\n", start);
+                        if (end != -1) {
+                            detectedCadvisorPort = Integer.parseInt(fullLog.substring(start, end).trim());
+                        }
+                    } catch (Exception ex) { log.warn("Failed to parse cAdvisor port: {}", ex.getMessage()); }
+                }
+                // Parse Node Exporter
+                if (fullLog.contains("FINAL_NODE_EXPORTER_PORT=")) {
+                    try {
+                        int start = fullLog.indexOf("FINAL_NODE_EXPORTER_PORT=") + 25;
+                        int end = fullLog.indexOf("\"", start);
+                        if (end == -1) end = fullLog.indexOf("\n", start);
+                        if (end != -1) {
+                            detectedNodeExporterPort = Integer.parseInt(fullLog.substring(start, end).trim());
+                        }
+                    } catch (Exception ex) { log.warn("Failed to parse Node Exporter port: {}", ex.getMessage()); }
+                }
+                log.info("Detected dynamic ports for IP {}: cAdvisor={}, NodeExporter={}", targetIp, detectedCadvisorPort, detectedNodeExporterPort);
+            }
+
             // Persist Managed Node credentials
             com.monetique.eye.entity.ManagedNode managedNode = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
                     .orElse(com.monetique.eye.entity.ManagedNode.builder()
@@ -142,6 +174,8 @@ public class DeploymentService {
             managedNode.setSshUser(sshUser);
             managedNode.setSshPassword(sshPassword);
             managedNode.setNodeName(nodeName);
+            managedNode.setCadvisorPort(detectedCadvisorPort);
+            managedNode.setNodeExporterPort(detectedNodeExporterPort);
             managedNode = managedNodeRepository.save(managedNode);
 
             // Register in Prometheus with the persisted node ID
@@ -877,9 +911,17 @@ public class DeploymentService {
 
             String nodeName = finalIp.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + finalIp.replace(".", "-");
 
-            // Determine targets based on whether the IP matches the central node
-            String nodeExporterTarget = finalIp + ":9100";
-            String cadvisorTarget = finalIp + ":8085";
+            // Fetch dynamic ports from ManagedNode if possible
+            Integer nodeExporterPort = 9100;
+            Integer cadvisorPort = 8085;
+            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findById(nodeId).orElse(null);
+            if (node != null) {
+                if (node.getNodeExporterPort() != null) nodeExporterPort = node.getNodeExporterPort();
+                if (node.getCadvisorPort() != null) cadvisorPort = node.getCadvisorPort();
+            }
+
+            String nodeExporterTarget = finalIp + ":" + nodeExporterPort;
+            String cadvisorTarget = finalIp + ":" + cadvisorPort;
             String filebeatTarget = finalIp + ":5066";
 
             if (ip.equals(environment.getCentralNodeIp())) {

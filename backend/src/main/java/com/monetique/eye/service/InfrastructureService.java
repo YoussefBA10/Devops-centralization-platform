@@ -523,7 +523,7 @@ public class InfrastructureService {
                     } catch (Exception e) {}
 
                     String instance = labels.get("instance");
-                    if (instance != null && instance.endsWith(":8085")) {
+                    if (instance != null && instance.contains(":")) {
                         instance = instance.substring(0, instance.lastIndexOf(":"));
                     }
 

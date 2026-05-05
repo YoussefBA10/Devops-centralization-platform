@@ -14,22 +14,26 @@
 
   tasks:
     # -----------------------------
-    # -----------------------------
-    # Check & Run Containers
-    # -----------------------------
-    - name: Check if cAdvisor is already running
-      wait_for:
-        port: 8085
-        timeout: 1
-      register: cadvisor_port_check
+    - name: Detect existing cAdvisor port
+      shell: |
+        docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}' cadvisor || echo ""
+      register: existing_cadvisor_port
+      changed_when: false
       ignore_errors: yes
 
-    - name: Run cAdvisor
+    - name: Set cAdvisor Port Fact
+      set_fact:
+        final_cadvisor_port: "{{ existing_cadvisor_port.stdout | default('8085') }}"
+
+    - name: Output Final cAdvisor Port for Backend
+      debug:
+        msg: "FINAL_CADVISOR_PORT={{ final_cadvisor_port }}"
+
+    - name: Run cAdvisor (Only if not already running)
       shell: |
-        docker rm -f cadvisor || true
         docker run -d --name cadvisor \
         --restart=always \
-        -p 8085:8080 \
+        -p {{ final_cadvisor_port }}:8080 \
         -v /:/rootfs:ro,z \
         -v /var/run:/var/run:ro,z \
         -v /sys:/sys:ro,z \
@@ -39,28 +43,35 @@
         gcr.io/cadvisor/cadvisor:latest
       args:
         executable: /bin/bash
-      when: cadvisor_port_check.failed
+      when: existing_cadvisor_port.stdout == ""
 
-    - name: Check if Node Exporter is already running
-      wait_for:
-        port: 9100
-        timeout: 1
-      register: node_exporter_port_check
+    - name: Detect existing Node Exporter port
+      shell: |
+        docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}' node-exporter || echo ""
+      register: existing_node_exporter_port
+      changed_when: false
       ignore_errors: yes
 
-    - name: Run Node Exporter
+    - name: Set Node Exporter Port Fact
+      set_fact:
+        final_node_exporter_port: "{{ existing_node_exporter_port.stdout | default('9100') }}"
+
+    - name: Output Final Node Exporter Port for Backend
+      debug:
+        msg: "FINAL_NODE_EXPORTER_PORT={{ final_node_exporter_port }}"
+
+    - name: Run Node Exporter (Only if not already running)
       shell: |
-        docker rm -f node-exporter || true
         docker run -d --name node-exporter \
         --restart=always \
-        -p 9100:9100 \
+        -p {{ final_node_exporter_port }}:9100 \
         -v /:/host:ro,rslave,z \
         -v /data:/data:ro,z \
         prom/node-exporter:latest \
         --path.rootfs=/host
       args:
         executable: /bin/bash
-      when: node_exporter_port_check.failed
+      when: existing_node_exporter_port.stdout == ""
 
     - name: Check if Filebeat is already running
       wait_for:
