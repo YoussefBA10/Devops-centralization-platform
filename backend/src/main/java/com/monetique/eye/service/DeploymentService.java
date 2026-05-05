@@ -1,4 +1,6 @@
 package com.monetique.eye.service;
+import jakarta.annotation.PostConstruct;
+
 
 import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.DeploymentLog;
@@ -43,7 +45,17 @@ public class DeploymentService {
     @Value("${monetique.gitops.path}")
     private String gitopsPath;
 
+    @PostConstruct
+    public void init() {
+        if (gitopsPath != null) {
+            File f = new File(gitopsPath);
+            this.gitopsPath = f.getAbsolutePath();
+            log.info("Resolved gitops path to: {}", this.gitopsPath);
+        }
+    }
+
     private final com.monetique.eye.service.ActivityLogService activityLogService;
+
 
     private String getSafeGroupName(String name) {
         if (name == null) return "unknown";
