@@ -29,7 +29,10 @@ public class ElasticsearchLogQueryService {
     private String elasticsearchBaseUrl;
 
     public List<Map<String, Object>> queryLogs(String env, String vmId, String linkId, String level, String from, String to, String q, int page, int size) {
-        String indexPattern = "monetique-logs-" + env + "-*";
+        // Aligned with Logstash output index pattern: app-logs-<env>-<date>
+        // Using lowercase for env to match Logstash normalization
+        String normalizedEnv = (env != null) ? env.toLowerCase() : "unknown";
+        String indexPattern = "app-logs-" + normalizedEnv + "-*";
         String url = elasticsearchBaseUrl + "/" + indexPattern + "/_search";
 
         // Build ES query
@@ -38,7 +41,8 @@ public class ElasticsearchLogQueryService {
         List<Map<String, Object>> must = new ArrayList<>();
 
         if (vmId != null && !vmId.isEmpty()) {
-            must.add(Map.of("match", Map.of("vm_id", vmId)));
+            // Map vmId to 'node' field which is used in Logstash normalization
+            must.add(Map.of("match", Map.of("node", vmId)));
         }
         
         if (linkId != null && !linkId.isEmpty()) {
@@ -46,7 +50,13 @@ public class ElasticsearchLogQueryService {
         }
 
         if (level != null && !level.isEmpty()) {
-            must.add(Map.of("match", Map.of("log.level", level)));
+            // Search both 'level' and 'severity' for compatibility
+            Map<String, Object> levelQuery = new HashMap<>();
+            List<Map<String, Object>> levelShould = new ArrayList<>();
+            levelShould.add(Map.of("match", Map.of("level", level)));
+            levelShould.add(Map.of("match", Map.of("severity", level)));
+            levelQuery.put("bool", Map.of("should", levelShould, "minimum_should_match", 1));
+            must.add(levelQuery);
         }
 
         if (q != null && !q.isEmpty()) {
@@ -87,9 +97,17 @@ public class ElasticsearchLogQueryService {
                     JsonNode source = hit.path("_source");
                     Map<String, Object> logEntry = new HashMap<>();
                     logEntry.put("timestamp", source.path("@timestamp").asText());
-                    logEntry.put("level", source.path("log").path("level").asText("INFO"));
-                    logEntry.put("message", source.path("message").asText());
-                    logEntry.put("vm_id", source.path("vm_id").asText());
+                    
+                    // Priority for 'level' then 'severity'
+                    String detectedLevel = source.has("level") ? source.path("level").asText() : source.path("severity").asText("INFO");
+                    logEntry.put("level", detectedLevel);
+                    
+                    // Priority for 'message' then 'raw_message'
+                    String detectedMsg = source.has("message") ? source.path("message").asText() : source.path("raw_message").asText();
+                    logEntry.put("message", detectedMsg);
+                    
+                    // Map back 'node' to 'vm_id' for frontend consistency
+                    logEntry.put("vm_id", source.has("node") ? source.path("node").asText() : source.path("vm_id").asText());
                     results.add(logEntry);
                 }
             }

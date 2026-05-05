@@ -80,6 +80,38 @@
       register: filebeat_port_check
       ignore_errors: yes
 
+    - name: Create Filebeat config directory
+      file:
+        path: /etc/filebeat
+        state: directory
+        mode: '0755'
+
+    - name: Create Filebeat configuration
+      copy:
+        dest: /etc/filebeat/filebeat.yml
+        content: |
+          filebeat.inputs:
+            - type: container
+              paths:
+                - '/var/lib/docker/containers/*/*.log'
+          
+          processors:
+            - add_docker_metadata: ~
+            - add_host_metadata: ~
+          
+          fields:
+            environment: "{{ env_label }}"
+            node: "{{ nodename }}"
+          fields_under_root: true
+          
+          output.logstash:
+            hosts: ["{{ central_logstash_ip }}:5045"]
+          
+          http.enabled: true
+          http.host: 0.0.0.0
+          http.port: 5066
+        mode: '0644'
+
     - name: Run Filebeat
       shell: |
         docker rm -f filebeat || true
@@ -89,13 +121,9 @@
         -p 5066:5066 \
         -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
         -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
+        -v /etc/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,z \
         docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
-        filebeat -e \
-        -E "http.enabled=true" \
-        -E "http.host=0.0.0.0" \
-        -E "output.elasticsearch.enabled=false" \
-        -E "output.logstash.hosts=['{{ central_logstash_ip }}:5045']" \
-        -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]"
+        filebeat -e -strict.perms=false
       args:
         executable: /bin/bash
       when: filebeat_port_check.failed
