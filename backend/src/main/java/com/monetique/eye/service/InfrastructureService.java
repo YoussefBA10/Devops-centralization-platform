@@ -228,7 +228,10 @@ public class InfrastructureService {
 
             Double cpu = isUp ? prometheusClient.getCpuUsageForInstance(nodeInstance) : 0.0;
             Double ram = isUp ? prometheusClient.getMemoryUsagePercentForInstance(nodeInstance) : 0.0;
-            Double disk = isUp ? prometheusClient.queryMetric(String.format("max(1 - (node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/\"} / node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/\"})) * 100", ip, ip)) : 0.0;
+            Double disk = isUp ? prometheusClient.queryMetric(String.format(
+                "max(1 - ((node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/data\"} or ignoring(mountpoint, device, fstype) node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/\"}) / " +
+                "(node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/data\"} or ignoring(mountpoint, device, fstype) node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/\"}))) * 100", 
+                ip, ip, ip, ip)) : 0.0;
             if (disk == null) disk = 0.0;
 
             if (isUp && (cpu == 0.0 || ram == 0.0)) {
