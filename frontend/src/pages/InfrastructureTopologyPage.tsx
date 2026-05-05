@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   Panel,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   Handle,
   Position,
   type Node as FlowNode,
@@ -24,7 +26,8 @@ import {
   Layers,
   Network,
   Box,
-  Maximize2
+  Maximize2,
+  XCircle
 } from 'lucide-react';
 import { getAllInfrastructureTopology, getGlobalInfrastructureStats } from '../services/api';
 import type { Node as TopologyNode, ClusterGroup } from '../types/index';
@@ -123,12 +126,18 @@ const nodeTypes = {
   server: ServerNode,
 };
 
-const InfrastructureTopologyPage: React.FC = () => {
+// -----------------------------------------------------------------------
+// Inner component — must live INSIDE ReactFlowProvider to use useReactFlow
+// -----------------------------------------------------------------------
+const InfrastructureGraphInner: React.FC = () => {
+  const { fitView } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(true);
   const [globalStats, setGlobalStats] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [notFound, setNotFound] = useState(false);
+  const [foundNodeId, setFoundNodeId] = useState<string | null>(null);
 
   const transformToFlow = useCallback((clusters: ClusterGroup[]) => {
     const newNodes: FlowNode[] = [];
@@ -230,15 +239,82 @@ const InfrastructureTopologyPage: React.FC = () => {
 
   const onSearch = (query: string) => {
     setSearchQuery(query);
+    setNotFound(false);
+    if (!query) {
+      setFoundNodeId(null);
+      setNodes((nds) => nds.map((node) => ({
+        ...node,
+        selected: false,
+        style: { ...node.style, opacity: 1, boxShadow: undefined },
+      })));
+      return;
+    }
+    // dim non-matches live as the user types
     setNodes((nds) => nds.map((node) => {
       if (node.type !== 'server') return node;
-      const match = node.data.label?.toLowerCase().includes(query.toLowerCase()) || 
-                    node.data.ip?.includes(query);
+      const match =
+        node.data.label?.toLowerCase().includes(query.toLowerCase()) ||
+        node.data.ip?.includes(query);
       return {
         ...node,
-        style: { ...node.style, opacity: query && !match ? 0.2 : 1 }
+        style: { ...node.style, opacity: match ? 1 : 0.2 },
       };
     }));
+  };
+
+  // Called on Enter key or clicking the search button
+  const onFindNode = () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    const matched = nodes.find(
+      (node) =>
+        node.type === 'server' &&
+        (node.data.label?.toLowerCase().includes(q.toLowerCase()) ||
+          node.data.ip?.includes(q))
+    );
+
+    if (!matched) {
+      setNotFound(true);
+      setFoundNodeId(null);
+      return;
+    }
+
+    setNotFound(false);
+    setFoundNodeId(matched.id);
+
+    // Select the matched node and deselect all others; apply glow ring
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.type !== 'server') return node;
+        const isTarget = node.id === matched.id;
+        return {
+          ...node,
+          selected: isTarget,
+          style: {
+            ...node.style,
+            opacity: isTarget ? 1 : 0.15,
+            outline: isTarget ? '3px solid #3b82f6' : 'none',
+            outlineOffset: '4px',
+            borderRadius: isTarget ? '1.5rem' : undefined,
+            boxShadow: isTarget
+              ? '0 0 40px 10px rgba(59,130,246,0.4)'
+              : 'none',
+          },
+        };
+      })
+    );
+
+    // Fly camera to the found node
+    setTimeout(() => {
+      fitView({
+        nodes: [{ id: matched.id }],
+        duration: 800,
+        padding: 0.6,
+        minZoom: 0.8,
+        maxZoom: 1.5,
+      });
+    }, 50);
   };
 
   return (
@@ -268,18 +344,48 @@ const InfrastructureTopologyPage: React.FC = () => {
 
           <div className="mt-6 flex gap-2">
             <div className="relative flex-1 group">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-               <Input 
-                 placeholder="Find node by IP or label..." 
-                 className="pl-10 h-12 bg-white/5 border-white/5 focus:border-primary/40 rounded-xl transition-all font-medium"
+               <button
+                 onClick={onFindNode}
+                 className="absolute left-3 top-1/2 -translate-y-1/2 z-10 p-0 bg-transparent border-none cursor-pointer text-muted-foreground group-focus-within:text-primary hover:text-primary transition-colors"
+                 title="Find node"
+               >
+                 <Search className="w-4 h-4" />
+               </button>
+               <Input
+                 placeholder="Find node by IP or label..."
+                 className="pl-10 pr-9 h-12 bg-white/5 border-white/5 focus:border-primary/40 rounded-xl transition-all font-medium"
                  value={searchQuery}
                  onChange={(e) => onSearch(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === 'Enter') onFindNode(); }}
                />
+               {searchQuery && (
+                 <button
+                   onClick={() => onSearch('')}
+                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
+                   title="Clear search"
+                 >
+                   <XCircle className="w-4 h-4" />
+                 </button>
+               )}
             </div>
             <Button variant="outline" className="h-12 w-12 p-0 border-white/5 rounded-xl hover:bg-white/5" onClick={fetchData}>
                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
+
+          {/* Search feedback */}
+          {notFound && searchQuery && (
+            <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs font-bold animate-in slide-in-from-top-2 duration-200">
+              <XCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              No node found matching &ldquo;{searchQuery}&rdquo;
+            </div>
+          )}
+          {foundNodeId && !notFound && searchQuery && (
+            <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary text-xs font-bold animate-in slide-in-from-top-2 duration-200">
+              <Search className="w-3.5 h-3.5 flex-shrink-0" />
+              Node located — camera centered
+            </div>
+          )}
         </Card>
       </div>
 
@@ -345,5 +451,15 @@ const InfrastructureTopologyPage: React.FC = () => {
     </div>
   );
 };
+
+// -----------------------------------------------------------------------
+// Public export — wraps the inner component in ReactFlowProvider so
+// useReactFlow() works inside InfrastructureGraphInner
+// -----------------------------------------------------------------------
+const InfrastructureTopologyPage: React.FC = () => (
+  <ReactFlowProvider>
+    <InfrastructureGraphInner />
+  </ReactFlowProvider>
+);
 
 export default InfrastructureTopologyPage;
