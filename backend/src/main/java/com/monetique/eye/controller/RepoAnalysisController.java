@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/repo")
+@RequestMapping("/api/v1/repo")
 public class RepoAnalysisController {
     
     @Value("${monetique.git.executable:git}")

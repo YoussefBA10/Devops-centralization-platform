@@ -23,7 +23,7 @@ import com.monetique.eye.entity.DeploymentLog;
 import com.monetique.eye.repository.DeploymentLogRepository;
 
 @RestController
-@RequestMapping("/api/environments")
+@RequestMapping("/api/v1/environments")
 public class EnvironmentController {
 
     private final EnvironmentRepository environmentRepository;

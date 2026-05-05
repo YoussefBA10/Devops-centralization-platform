@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/api/auth", "/auth"})
+@RequestMapping({"/api/v1/auth", "/auth"})
 public class AuthController {
 
     private final AuthenticationService authService;

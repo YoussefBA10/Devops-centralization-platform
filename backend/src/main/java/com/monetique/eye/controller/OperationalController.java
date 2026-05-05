@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/operational")
+@RequestMapping("/api/v1/operational")
 @RequiresPermission("MONITORING_OBSERVABILITY")
 public class OperationalController {
 

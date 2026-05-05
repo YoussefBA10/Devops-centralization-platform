@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/network")
+@RequestMapping("/api/v1/network")
 @RequiredArgsConstructor
 @Slf4j
 public class NetworkController {
