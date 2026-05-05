@@ -16,7 +16,7 @@
     # -----------------------------
     - name: Detect existing cAdvisor port
       shell: |
-        docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}' cadvisor || echo ""
+        docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' cadvisor || echo ""
       register: existing_cadvisor_port
       changed_when: false
       ignore_errors: yes
@@ -43,11 +43,11 @@
         gcr.io/cadvisor/cadvisor:latest
       args:
         executable: /bin/bash
-      when: existing_cadvisor_port.stdout == ""
+      when: existing_cadvisor_port.stdout | default('') == ""
 
     - name: Detect existing Node Exporter port
       shell: |
-        docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}' node-exporter || echo ""
+        docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' node-exporter || echo ""
       register: existing_node_exporter_port
       changed_when: false
       ignore_errors: yes
@@ -71,7 +71,7 @@
         --path.rootfs=/host
       args:
         executable: /bin/bash
-      when: existing_node_exporter_port.stdout == ""
+      when: existing_node_exporter_port.stdout | default('') == ""
 
     - name: Check if Filebeat is already running
       wait_for:
