@@ -879,7 +879,7 @@ public class DeploymentService {
 
             // Determine targets based on whether the IP matches the central node
             String nodeExporterTarget = finalIp + ":9100";
-            String cadvisorTarget = finalIp + ":8081";
+            String cadvisorTarget = finalIp + ":8085";
             String filebeatTarget = finalIp + ":5066";
 
             if (ip.equals(environment.getCentralNodeIp())) {

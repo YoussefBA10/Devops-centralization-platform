@@ -19,7 +19,7 @@
     # -----------------------------
     - name: Check if cAdvisor is already running
       wait_for:
-        port: 8081
+        port: 8085
         timeout: 1
       register: cadvisor_port_check
       ignore_errors: yes
@@ -29,7 +29,7 @@
         docker rm -f cadvisor || true
         docker run -d --name cadvisor \
         --restart=always \
-        -p 8081:8080 \
+        -p 8085:8080 \
         -v /:/rootfs:ro,z \
         -v /var/run:/var/run:ro,z \
         -v /sys:/sys:ro,z \
