@@ -22,7 +22,7 @@ public class Environment {
     private Long id;
 
     @Version
-    private Long version;
+    private Long version = 0L;
 
     @Column(nullable = false, unique = true)
     private String name;

@@ -133,4 +133,10 @@ export const getAlertRules = () => api.get(`/network/alert-rules`);
 export const addAlertRule = (data: any) => api.post(`/network/alert-rules`, data);
 export const deleteAlertRule = (id: string) => api.delete(`/network/alert-rules/${id}`);
 
+// CI/CD Deployment tracking
+export const getDeploymentEvents = (appId?: number, env?: string, page = 0, size = 20) =>
+  api.get(`/deployments`, { params: { appId, env, page, size } });
+export const triggerPipeline = (data: { jobName: string; appId: string; env: string; gitBranch?: string }) =>
+  api.post(`/cicd/trigger`, data);
+
 export default api;

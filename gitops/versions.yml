@@ -1,0 +1,6 @@
+prometheus:        v2.53.0
+victoriametrics:   v1.101.0
+elasticsearch:     8.14.3
+logstash:          8.14.3
+grafana:           11.1.0
+alertmanager:      v0.27.0

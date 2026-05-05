@@ -1,0 +1,211 @@
+pipeline {
+  agent any
+  options { timestamps(); timeout(time: 30, unit: 'MINUTES') }
+  stages {
+
+    stage('Checkout') {
+      steps {
+        git branch: 'main', url: env.GITOPS_REPO_URL
+        script {
+          env.CHANGED = sh(returnStdout: true,
+            script: 'git diff --name-only HEAD~1 HEAD 2>/dev/null || echo all').trim()
+        }
+      }
+    }
+
+    stage('Sync: Prometheus config') {
+      when { expression { env.CHANGED.contains('prometheus') || env.CHANGED.contains('all') } }
+      steps {
+        sh '''
+          cp -r gitops/vmpipe/prometheus/. /opt/monitoring/prometheus/
+          docker exec prometheus promtool check config /etc/prometheus/prometheus.yml
+          curl -sf -X POST http://localhost:9090/-/reload
+        '''
+      }
+    }
+
+    stage('Sync: Alertmanager config') {
+      when { expression { env.CHANGED.contains('alertmanager') || env.CHANGED.contains('all') } }
+      steps {
+        sh '''
+          cp gitops/vmpipe/alertmanager/alertmanager.yml /opt/monitoring/alertmanager/
+          curl -sf -X POST http://localhost:9093/-/reload
+        '''
+      }
+    }
+
+    stage('Sync: Logstash pipelines') {
+      when { expression { env.CHANGED.contains('logstash') || env.CHANGED.contains('all') } }
+      steps {
+        sh '''
+          cp -r gitops/vmpipe/logstash/. /opt/monitoring/logstash/
+          docker restart logstash
+          sleep 15
+          curl -sf http://localhost:9600/_node/stats > /dev/null
+        '''
+      }
+    }
+
+    stage('Sync: Grafana provisioning') {
+      when { expression { env.CHANGED.contains('grafana') || env.CHANGED.contains('all') } }
+      steps {
+        sh '''
+          cp -r gitops/vmpipe/grafana/. /opt/monitoring/grafana/
+          docker restart grafana
+          sleep 10
+          curl -sf http://localhost:3000/api/health | grep -q '"database":"ok"'
+        '''
+      }
+    }
+
+    stage('Version upgrades') {
+      when { expression { env.CHANGED.contains('versions.yml') || env.CHANGED.contains('all') } }
+      steps {
+        sh '''
+          PROM_VER=$(grep "^prometheus:" gitops/versions.yml | awk '{print $2}')
+          VM_VER=$(grep   "^victoriametrics:" gitops/versions.yml | awk '{print $2}')
+          ES_VER=$(grep   "^elasticsearch:" gitops/versions.yml | awk '{print $2}')
+          LS_VER=$(grep   "^logstash:" gitops/versions.yml | awk '{print $2}')
+          GF_VER=$(grep   "^grafana:" gitops/versions.yml | awk '{print $2}')
+          AM_VER=$(grep   "^alertmanager:" gitops/versions.yml | awk '{print $2}')
+        '''
+
+        // ── Backup first ──────────────────────────────────────────
+        sh '''
+          echo "=== Backing up before upgrade ==="
+
+          # VictoriaMetrics: use snapshot API
+          SNAP=$(curl -sf "http://localhost:8428/snapshot/create" | \
+            python3 -c "import sys,json; print(json.load(sys.stdin)['snapshotName'])")
+          echo "VictoriaMetrics snapshot: $SNAP"
+
+          # Elasticsearch: filesystem snapshot (mount /usr/share/elasticsearch/backups)
+          curl -sf -X PUT "http://localhost:9200/_snapshot/backup_repo" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"fs","settings":{"location":"/usr/share/elasticsearch/backups"}}' || true
+          SNAP_NAME="pre-upgrade-$(date +%Y%m%d-%H%M%S)"
+          RESULT=$(curl -sf -X PUT \
+            "http://localhost:9200/_snapshot/backup_repo/${SNAP_NAME}?wait_for_completion=true" \
+            -H "Content-Type: application/json" \
+            -d '{"indices":"monetique-*","include_global_state":false}')
+          echo $RESULT | python3 -c \
+            "import sys,json; s=json.load(sys.stdin)['snapshot']['state']; \
+             assert s=='SUCCESS', f'Snapshot failed: {s}'"
+          echo "Elasticsearch snapshot: $SNAP_NAME"
+        '''
+
+        // ── Upgrade stateless tools ────────────────────────────────
+        sh '''
+          # Prometheus
+          docker stop prometheus && docker rm prometheus
+          docker run -d --name prometheus --restart unless-stopped \
+            --network monitoring -p 9090:9090 \
+            -v prometheus_data:/prometheus \
+            -v /opt/monitoring/prometheus:/etc/prometheus:ro \
+            prom/prometheus:${PROM_VER} \
+            --config.file=/etc/prometheus/prometheus.yml \
+            --storage.tsdb.retention.time=15d \
+            --web.enable-lifecycle
+          sleep 10
+          curl -sf http://localhost:9090/-/ready
+        '''
+
+        sh '''
+          # Grafana
+          docker stop grafana && docker rm grafana
+          docker run -d --name grafana --restart unless-stopped \
+            --network monitoring -p 3000:3000 \
+            -v grafana_data:/var/lib/grafana \
+            -v /opt/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro \
+            grafana/grafana:${GF_VER}
+          sleep 10
+          curl -sf http://localhost:3000/api/health | grep -q '"database":"ok"'
+        '''
+
+        sh '''
+          # Alertmanager
+          docker stop alertmanager && docker rm alertmanager
+          docker run -d --name alertmanager --restart unless-stopped \
+            --network monitoring -p 9093:9093 \
+            -v /opt/monitoring/alertmanager:/etc/alertmanager:ro \
+            prom/alertmanager:${AM_VER}
+          sleep 5
+          curl -sf http://localhost:9093/-/ready
+        '''
+
+        // ── Upgrade VictoriaMetrics ────────────────────────────────
+        sh '''
+          docker stop victoriametrics && docker rm victoriametrics
+          docker run -d --name victoriametrics --restart unless-stopped \
+            --network monitoring -p 8428:8428 \
+            -v vm_data:/victoria-metrics-data \
+            victoriametrics/victoria-metrics:${VM_VER} \
+            -storageDataPath=/victoria-metrics-data \
+            -retentionPeriod=12
+          sleep 10
+          curl -sf http://localhost:8428/-/ready
+        '''
+
+        // ── Upgrade Elasticsearch ──────────────────────────────────
+        sh '''
+          docker stop elasticsearch && docker rm elasticsearch
+          docker run -d --name elasticsearch --restart unless-stopped \
+            --network monitoring -p 9200:9200 \
+            -v es_data:/usr/share/elasticsearch/data \
+            -v es_backups:/usr/share/elasticsearch/backups \
+            -e discovery.type=single-node \
+            -e ES_JAVA_OPTS="-Xms1g -Xmx1g" \
+            -e xpack.security.enabled=false \
+            docker.elastic.co/elasticsearch/elasticsearch:${ES_VER}
+
+          # Wait up to 90s for healthy
+          for i in $(seq 1 18); do
+            sleep 5
+            STATUS=$(curl -sf "http://localhost:9200/_cluster/health" | \
+              python3 -c "import sys,json; print(json.load(sys.stdin)['status'])" 2>/dev/null || echo red)
+            [ "$STATUS" = "yellow" ] || [ "$STATUS" = "green" ] && break
+            [ $i -eq 18 ] && echo "Elasticsearch failed to start" && exit 1
+          done
+        '''
+
+        // ── Upgrade Logstash ───────────────────────────────────────
+        sh '''
+          docker stop logstash && docker rm logstash
+          docker run -d --name logstash --restart unless-stopped \
+            --network monitoring -p 5044:5044 \
+            -v /opt/monitoring/logstash:/usr/share/logstash/config:ro \
+            docker.elastic.co/logstash/logstash:${LS_VER}
+          sleep 20
+          curl -sf http://localhost:9600/_node/stats > /dev/null
+        '''
+      }
+    }
+
+    stage('Final health check') {
+      steps {
+        sh '''
+          echo "=== Health check after changes ==="
+          curl -sf http://localhost:9090/-/ready  && echo "Prometheus    OK" || echo "Prometheus    FAIL"
+          curl -sf http://localhost:8428/-/ready  && echo "Victoria      OK" || echo "Victoria      FAIL"
+          curl -sf http://localhost:9200/_cluster/health && echo "Elasticsearch OK" || echo "Elasticsearch FAIL"
+          curl -sf http://localhost:9600/_node/stats     && echo "Logstash      OK" || echo "Logstash      FAIL"
+          curl -sf http://localhost:3000/api/health      && echo "Grafana       OK" || echo "Grafana       FAIL"
+          curl -sf http://localhost:9093/-/ready         && echo "Alertmanager  OK" || echo "Alertmanager  FAIL"
+        '''
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo """
+        ╔══════════════════════════════════════════╗
+        ║  GITOPS PIPELINE FAILED — rollback steps ║
+        ╚══════════════════════════════════════════╝
+        VictoriaMetrics: curl 'http://localhost:8428/snapshot/restore?snapshot=<name>'
+        Elasticsearch:   POST http://localhost:9200/_snapshot/backup_repo/<name>/_restore
+        Other tools:     revert versions.yml in Git and re-run the pipeline.
+      """
+    }
+  }
+}
