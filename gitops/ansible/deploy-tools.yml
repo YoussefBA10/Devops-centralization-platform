@@ -220,8 +220,8 @@
     #  Filebeat
     # =========================
     - name: Check if Filebeat container is already running
-      shell: "docker inspect -f '{{.State.Running}}' filebeat 2>/dev/null || echo 'false'"
-      register: filebeat_running_check
+      shell: "docker inspect -f '{{.State.Status}}' filebeat 2>/dev/null || echo 'none'"
+      register: filebeat_status_check
       changed_when: false
       ignore_errors: yes
 
@@ -230,18 +230,18 @@
         src: "{{ image_cache_dir }}/filebeat.tar"
         dest: "{{ remote_image_dir }}/filebeat.tar"
         mode: '0644'
-      when: filebeat_running_check.stdout | default('false') != 'true'
+      when: filebeat_status_check.stdout != 'running'
 
     - name: Load Filebeat image into Docker
       shell: "docker load -i ~/monetique-images/filebeat.tar"
-      when: filebeat_running_check.stdout | default('false') != 'true'
+      when: filebeat_status_check.stdout != 'running'
 
     - name: Transfer Filebeat config for remote node
       template:
         src: "../vmpipe/filebeat/remote_filebeat.yml"
         dest: "/home/{{ ansible_user }}/filebeat.yml"
         mode: '0644'
-      when: filebeat_running_check.stdout | default('false') != 'true'
+      when: filebeat_status_check.stdout != 'running'
 
     - name: Run Filebeat
       shell: |
@@ -253,16 +253,16 @@
         -v /home/{{ ansible_user }}/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,z \
         -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
         -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
-        docker.elastic.co/beats/filebeat:{{ filebeat_version }}
+        docker.elastic.co/beats/filebeat:{{ filebeat_version }} -e strict.perms=false
       args:
         executable: /bin/bash
-      when: filebeat_running_check.stdout | default('false') != 'true'
+      when: filebeat_status_check.stdout != 'running'
 
     - name: Cleanup Filebeat tarball from remote
       file:
         path: "{{ remote_image_dir }}/filebeat.tar"
         state: absent
-      when: filebeat_running_check.stdout | default('false') != 'true'
+      when: filebeat_status_check.stdout != 'running'
 
     # =========================
     #  Final Cleanup
