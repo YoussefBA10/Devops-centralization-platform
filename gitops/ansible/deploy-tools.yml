@@ -253,7 +253,7 @@
         -v /home/{{ ansible_user }}/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,z \
         -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
         -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
-        docker.elastic.co/beats/filebeat:{{ filebeat_version }}
+        docker.elastic.co/beats/filebeat:{{ filebeat_version }} --strict.perms=false
       args:
         executable: /bin/bash
       when: filebeat_status_check.stdout != 'running'
