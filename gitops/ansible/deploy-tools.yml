@@ -5,8 +5,9 @@
 
   vars:
     filebeat_version: "8.11.1"
-    central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
-    management_node: "{{ management_host | default('localhost') }}"
+    # Defaulting management node to the known central hub IP
+    management_node: "{{ management_host | default('192.168.126.130') }}"
+    central_logstash_ip: "{{ management_node }}"
     env_label: "{{ environment_label | default('production') }}"
     cadvisor_image: "gcr.io/cadvisor/cadvisor:latest"
     node_exporter_image: "prom/node-exporter:latest"
