@@ -22,16 +22,20 @@
 
     - name: Find Docker binary on central node
       shell: |
-        if command -v docker >/dev/null 2>&1; then
-          command -v docker
-        elif [ -f /usr/bin/docker ]; then
-          echo "/usr/bin/docker"
-        elif [ -f /usr/local/bin/docker ]; then
-          echo "/usr/local/bin/docker"
-        else
-          echo "docker"
+        for p in "$(which docker 2>/dev/null)" "/usr/bin/docker" "/usr/local/bin/docker" "/snap/bin/docker" "/bin/docker"; do
+          if [ -x "$p" ]; then
+            echo "$p"
+            exit 0
+          fi
+        done
+        SEARCH=$(find /usr/bin /usr/local/bin /snap/bin /bin -name docker -type f -executable 2>/dev/null | head -n 1)
+        if [ -n "$SEARCH" ]; then
+          echo "$SEARCH"
+          exit 0
         fi
+        echo "docker"
       delegate_to: localhost
+      become: no
       run_once: true
       register: central_docker_bin
       changed_when: false
@@ -90,34 +94,38 @@
             - name: Check if image exists on central node
               shell: "{{ final_central_docker }} image inspect {{ cadvisor_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
               delegate_to: localhost
+              become: no
               run_once: true
               register: cadvisor_central_check
 
             - name: Ensure cAdvisor image exists on central node (Pull if missing)
               shell: "{{ final_central_docker }} pull {{ cadvisor_image }}"
               delegate_to: localhost
+              become: no
               run_once: true
               when: cadvisor_central_check.stdout == 'missing'
               ignore_errors: yes
 
             - name: Save cAdvisor image to archive
-              shell: "{{ final_central_docker }} save {{ cadvisor_image }} -o /tmp/cadvisor.tar"
+              shell: "{{ final_central_docker }} save {{ cadvisor_image }} -o ~/cadvisor.tar"
               delegate_to: localhost
+              become: no
               run_once: true
 
             - name: Copy cAdvisor image to remote node
               copy:
-                src: /tmp/cadvisor.tar
-                dest: /tmp/cadvisor.tar
+                src: ~/cadvisor.tar
+                dest: ~/cadvisor.tar
 
             - name: Load cAdvisor image on remote node
-              shell: docker load -i /tmp/cadvisor.tar
+              shell: docker load -i ~/cadvisor.tar
 
             - name: Clean up cAdvisor archives
               block:
-                - file: { path: /tmp/cadvisor.tar, state: absent }
-                - file: { path: /tmp/cadvisor.tar, state: absent }
+                - file: { path: ~/cadvisor.tar, state: absent }
+                - file: { path: ~/cadvisor.tar, state: absent }
                   delegate_to: localhost
+                  become: no
                   run_once: true
           when: cadvisor_image_check.stdout == "missing"
       when: cadvisor_running != "true"
@@ -183,34 +191,38 @@
             - name: Check if image exists on central node
               shell: "{{ final_central_docker }} image inspect {{ node_exporter_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
               delegate_to: localhost
+              become: no
               run_once: true
               register: node_exporter_central_check
 
             - name: Ensure Node Exporter image exists on central node (Pull if missing)
               shell: "{{ final_central_docker }} pull {{ node_exporter_image }}"
               delegate_to: localhost
+              become: no
               run_once: true
               when: node_exporter_central_check.stdout == 'missing'
               ignore_errors: yes
 
             - name: Save Node Exporter image to archive
-              shell: "{{ final_central_docker }} save {{ node_exporter_image }} -o /tmp/node-exporter.tar"
+              shell: "{{ final_central_docker }} save {{ node_exporter_image }} -o ~/node-exporter.tar"
               delegate_to: localhost
+              become: no
               run_once: true
 
             - name: Copy Node Exporter image to remote node
               copy:
-                src: /tmp/node-exporter.tar
-                dest: /tmp/node-exporter.tar
+                src: ~/node-exporter.tar
+                dest: ~/node-exporter.tar
 
             - name: Load Node Exporter image on remote node
-              shell: docker load -i /tmp/node-exporter.tar
+              shell: docker load -i ~/node-exporter.tar
 
             - name: Clean up Node Exporter archives
               block:
-                - file: { path: /tmp/node-exporter.tar, state: absent }
-                - file: { path: /tmp/node-exporter.tar, state: absent }
+                - file: { path: ~/node-exporter.tar, state: absent }
+                - file: { path: ~/node-exporter.tar, state: absent }
                   delegate_to: localhost
+                  become: no
                   run_once: true
           when: node_exporter_image_check.stdout == "missing"
       when: node_exporter_running != "true"
@@ -273,34 +285,38 @@
             - name: Check if image exists on central node
               shell: "{{ final_central_docker }} image inspect {{ filebeat_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
               delegate_to: localhost
+              become: no
               run_once: true
               register: filebeat_central_check
 
             - name: Ensure Filebeat image exists on central node (Pull if missing)
               shell: "{{ final_central_docker }} pull {{ filebeat_image }}"
               delegate_to: localhost
+              become: no
               run_once: true
               when: filebeat_central_check.stdout == 'missing'
               ignore_errors: yes
 
             - name: Save Filebeat image to archive
-              shell: "{{ final_central_docker }} save {{ filebeat_image }} -o /tmp/filebeat.tar"
+              shell: "{{ final_central_docker }} save {{ filebeat_image }} -o ~/filebeat.tar"
               delegate_to: localhost
+              become: no
               run_once: true
 
             - name: Copy Filebeat image to remote node
               copy:
-                src: /tmp/filebeat.tar
-                dest: /tmp/filebeat.tar
+                src: ~/filebeat.tar
+                dest: ~/filebeat.tar
 
             - name: Load Filebeat image on remote node
-              shell: docker load -i /tmp/filebeat.tar
+              shell: docker load -i ~/filebeat.tar
 
             - name: Clean up Filebeat archives
               block:
-                - file: { path: /tmp/filebeat.tar, state: absent }
-                - file: { path: /tmp/filebeat.tar, state: absent }
+                - file: { path: ~/filebeat.tar, state: absent }
+                - file: { path: ~/filebeat.tar, state: absent }
                   delegate_to: localhost
+                  become: no
                   run_once: true
           when: filebeat_image_check.stdout == "missing"
       when: filebeat_running != "true"
