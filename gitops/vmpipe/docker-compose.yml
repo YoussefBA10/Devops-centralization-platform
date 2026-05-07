@@ -270,6 +270,7 @@ services:
       - ./../../gitops:/app/gitops
       - ./prometheus/conf.d:/opt/monitoring/prometheus/conf.d
       - ./prometheus/rules:/opt/monitoring/prometheus/rules
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       SERVER_PORT: ${SERVER_PORT}
       NODE_NAME: "central-node"
