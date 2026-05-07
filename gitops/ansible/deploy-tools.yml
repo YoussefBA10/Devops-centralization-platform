@@ -220,7 +220,7 @@
     #  Filebeat
     # =========================
     - name: Check if Filebeat container is already running
-      shell: "docker inspect -f '{{.State.Status}}' filebeat 2>/dev/null || echo 'none'"
+      shell: "docker inspect -f '{% raw %}{{.State.Status}}{% endraw %}' filebeat 2>/dev/null || echo 'none'"
       register: filebeat_status_check
       changed_when: false
       ignore_errors: yes
