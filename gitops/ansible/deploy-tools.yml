@@ -1,4 +1,60 @@
 ---
+# =============================================================================
+# Play 1: Prepare Docker Images on the Controller (localhost)
+# =============================================================================
+# The controller node (where the backend runs) already has all images pulled
+# from the central docker-compose stack. We export them as .tar files so they
+# can be transferred to air-gapped remote nodes via SSH.
+# =============================================================================
+- name: Prepare Docker Images on Controller
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    image_cache_dir: "/tmp/monetique-image-cache"
+    filebeat_version: "8.11.1"
+    images:
+      - name: "gcr.io/cadvisor/cadvisor:latest"
+        filename: "cadvisor.tar"
+      - name: "prom/node-exporter:latest"
+        filename: "node-exporter.tar"
+      - name: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
+        filename: "filebeat.tar"
+
+  tasks:
+    - name: Ensure image cache directory exists
+      file:
+        path: "{{ image_cache_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check if image tarballs already exist
+      stat:
+        path: "{{ image_cache_dir }}/{{ item.filename }}"
+      register: image_tar_check
+      loop: "{{ images }}"
+
+    - name: Export Docker images to tarballs (only if not cached)
+      shell: "docker save -o {{ image_cache_dir }}/{{ item.item.filename }} {{ item.item.name }}"
+      loop: "{{ image_tar_check.results }}"
+      when: not item.stat.exists
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    - name: Ensure tarballs are readable
+      file:
+        path: "{{ image_cache_dir }}/{{ item.filename }}"
+        mode: '0644'
+      loop: "{{ images }}"
+
+# =============================================================================
+# Play 2: Deploy Observability Tools to the Remote Agent Node
+# =============================================================================
+# Transfers pre-exported image tarballs to the remote node, loads them into
+# Docker, and runs the containers. No internet access required on the remote.
+# The remote user only needs docker group membership.
+# =============================================================================
 - name: Deploy Observability Tools to Agent Node
   hosts: "{{ target_host | default('all') }}"
   any_errors_fatal: yes
@@ -7,14 +63,35 @@
     filebeat_version: "8.11.1"
     central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
     env_label: "{{ environment_label | default('production') }}"
+    image_cache_dir: "/tmp/monetique-image-cache"
+    remote_image_dir: "/tmp/monetique-images"
+    images:
+      cadvisor:
+        filename: "cadvisor.tar"
+        full_name: "gcr.io/cadvisor/cadvisor:latest"
+      node_exporter:
+        filename: "node-exporter.tar"
+        full_name: "prom/node-exporter:latest"
+      filebeat:
+        filename: "filebeat.tar"
+        full_name: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
 
   pre_tasks:
     - name: Pre-flight Check - Verify connectivity
       ping:
 
   tasks:
-    # -----------------------------
-    - name: Detect existing cAdvisor port
+    # =========================
+    #  Image Transfer & Load
+    # =========================
+    - name: Ensure remote image directory exists
+      file:
+        path: "{{ remote_image_dir }}"
+        state: directory
+        mode: '0755'
+
+    # --- cAdvisor ---
+    - name: Detect existing cAdvisor container
       shell: |
         docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' cadvisor || echo ""
       register: existing_cadvisor_port
@@ -28,6 +105,17 @@
     - name: Output Final cAdvisor Port for Backend
       debug:
         msg: "FINAL_CADVISOR_PORT={{ final_cadvisor_port }}"
+
+    - name: Transfer cAdvisor image to remote
+      copy:
+        src: "{{ image_cache_dir }}/{{ images.cadvisor.filename }}"
+        dest: "{{ remote_image_dir }}/{{ images.cadvisor.filename }}"
+        mode: '0644'
+      when: existing_cadvisor_port.stdout | default('') == ""
+
+    - name: Load cAdvisor image into Docker
+      shell: "docker load -i {{ remote_image_dir }}/{{ images.cadvisor.filename }}"
+      when: existing_cadvisor_port.stdout | default('') == ""
 
     - name: Run cAdvisor (Only if not already running)
       shell: |
@@ -45,7 +133,14 @@
         executable: /bin/bash
       when: existing_cadvisor_port.stdout | default('') == ""
 
-    - name: Detect existing Node Exporter port
+    - name: Cleanup cAdvisor tarball from remote
+      file:
+        path: "{{ remote_image_dir }}/{{ images.cadvisor.filename }}"
+        state: absent
+      when: existing_cadvisor_port.stdout | default('') == ""
+
+    # --- Node Exporter ---
+    - name: Detect existing Node Exporter container
       shell: |
         docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' node-exporter || echo ""
       register: existing_node_exporter_port
@@ -60,6 +155,17 @@
       debug:
         msg: "FINAL_NODE_EXPORTER_PORT={{ final_node_exporter_port }}"
 
+    - name: Transfer Node Exporter image to remote
+      copy:
+        src: "{{ image_cache_dir }}/{{ images.node_exporter.filename }}"
+        dest: "{{ remote_image_dir }}/{{ images.node_exporter.filename }}"
+        mode: '0644'
+      when: existing_node_exporter_port.stdout | default('') == ""
+
+    - name: Load Node Exporter image into Docker
+      shell: "docker load -i {{ remote_image_dir }}/{{ images.node_exporter.filename }}"
+      when: existing_node_exporter_port.stdout | default('') == ""
+
     - name: Run Node Exporter (Only if not already running)
       shell: |
         docker run -d --name node-exporter \
@@ -73,12 +179,30 @@
         executable: /bin/bash
       when: existing_node_exporter_port.stdout | default('') == ""
 
+    - name: Cleanup Node Exporter tarball from remote
+      file:
+        path: "{{ remote_image_dir }}/{{ images.node_exporter.filename }}"
+        state: absent
+      when: existing_node_exporter_port.stdout | default('') == ""
+
+    # --- Filebeat ---
     - name: Check if Filebeat is already running
       wait_for:
         port: 5066
         timeout: 1
       register: filebeat_port_check
       ignore_errors: yes
+
+    - name: Transfer Filebeat image to remote
+      copy:
+        src: "{{ image_cache_dir }}/{{ images.filebeat.filename }}"
+        dest: "{{ remote_image_dir }}/{{ images.filebeat.filename }}"
+        mode: '0644'
+      when: filebeat_port_check.failed
+
+    - name: Load Filebeat image into Docker
+      shell: "docker load -i {{ remote_image_dir }}/{{ images.filebeat.filename }}"
+      when: filebeat_port_check.failed
 
     - name: Run Filebeat
       shell: |
@@ -102,3 +226,14 @@
       args:
         executable: /bin/bash
       when: filebeat_port_check.failed
+
+    - name: Cleanup Filebeat tarball from remote
+      file:
+        path: "{{ remote_image_dir }}/{{ images.filebeat.filename }}"
+        state: absent
+      when: filebeat_port_check.failed
+
+    # --- Final Cleanup ---
+    - name: Remove remote image directory if empty
+      shell: "rmdir {{ remote_image_dir }} 2>/dev/null || true"
+      changed_when: false
