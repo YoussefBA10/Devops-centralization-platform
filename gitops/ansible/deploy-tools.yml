@@ -20,14 +20,32 @@
     - name: Pre-flight Check - Verify connectivity
       ping:
 
+    - name: Debug Environment on Central Node
+      shell: |
+        echo "User: $(id)"
+        echo "Path: $PATH"
+        echo "PWD: $(pwd)"
+        ls -l /usr/bin/docker /usr/local/bin/docker /snap/bin/docker /bin/docker 2>/dev/null || echo "No standard docker binaries found"
+      delegate_to: localhost
+      become: no
+      run_once: true
+      register: central_env_debug
+
+    - name: Show Central Environment Debug
+      debug:
+        var: central_env_debug.stdout_lines
+      run_once: true
+
     - name: Find Docker binary on central node
       shell: |
-        for p in "$(which docker 2>/dev/null)" "/usr/bin/docker" "/usr/local/bin/docker" "/snap/bin/docker" "/bin/docker"; do
-          if [ -x "$p" ]; then
+        # Try to find it via common paths first
+        for p in "/usr/bin/docker" "/usr/local/bin/docker" "/snap/bin/docker" "/bin/docker" "$(which docker 2>/dev/null)"; do
+          if [ -n "$p" ] && [ -x "$p" ]; then
             echo "$p"
             exit 0
           fi
         done
+        # Last ditch effort
         SEARCH=$(find /usr/bin /usr/local/bin /snap/bin /bin -name docker -type f -executable 2>/dev/null | head -n 1)
         if [ -n "$SEARCH" ]; then
           echo "$SEARCH"
