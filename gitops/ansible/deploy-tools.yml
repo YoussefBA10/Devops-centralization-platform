@@ -6,6 +6,7 @@
   vars:
     filebeat_version: "8.11.1"
     central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
+    management_node: "{{ management_host | default('localhost') }}"
     env_label: "{{ environment_label | default('production') }}"
     cadvisor_image: "gcr.io/cadvisor/cadvisor:latest"
     node_exporter_image: "prom/node-exporter:latest"
@@ -20,51 +21,43 @@
     - name: Pre-flight Check - Verify connectivity
       ping:
 
-    - name: Debug Environment on Central Node
+    - name: Debug Environment on Management Node
       shell: |
         echo "User: $(id)"
         echo "Path: $PATH"
-        echo "PWD: $(pwd)"
         ls -l /usr/bin/docker /usr/local/bin/docker /snap/bin/docker /bin/docker 2>/dev/null || echo "No standard docker binaries found"
-      delegate_to: localhost
+      delegate_to: "{{ management_node }}"
       become: no
       run_once: true
       register: central_env_debug
 
-    - name: Show Central Environment Debug
+    - name: Show Management Node Environment Debug
       debug:
         var: central_env_debug.stdout_lines
       run_once: true
 
-    - name: Find Docker binary on central node
+    - name: Find Docker binary on Management node
       shell: |
-        # Try to find it via common paths first
         for p in "/usr/bin/docker" "/usr/local/bin/docker" "/snap/bin/docker" "/bin/docker" "$(which docker 2>/dev/null)"; do
           if [ -n "$p" ] && [ -x "$p" ]; then
             echo "$p"
             exit 0
           fi
         done
-        # Last ditch effort
-        SEARCH=$(find /usr/bin /usr/local/bin /snap/bin /bin -name docker -type f -executable 2>/dev/null | head -n 1)
-        if [ -n "$SEARCH" ]; then
-          echo "$SEARCH"
-          exit 0
-        fi
         echo "docker"
-      delegate_to: localhost
+      delegate_to: "{{ management_node }}"
       become: no
       run_once: true
       register: central_docker_bin
       changed_when: false
 
-    - name: Set Central Docker Path Fact
+    - name: Set Management Docker Path Fact
       set_fact:
         final_central_docker: "{{ central_docker_bin.stdout | trim | default('docker') }}"
 
-    - name: Debug Central Docker Path
+    - name: Debug Management Docker Path
       debug:
-        msg: "Using Docker binary at: {{ final_central_docker }}"
+        msg: "Using Docker binary at: {{ final_central_docker }} on host {{ management_node }}"
       run_once: true
 
   tasks:
@@ -107,18 +100,18 @@
           register: cadvisor_image_check
           changed_when: false
 
-        - name: Transfer cAdvisor image from central node
+        - name: Transfer cAdvisor image from management node
           block:
-            - name: Check if image exists on central node
+            - name: Check if image exists on management node
               shell: "{{ final_central_docker }} image inspect {{ cadvisor_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
               register: cadvisor_central_check
 
-            - name: Ensure cAdvisor image exists on central node (Pull if missing)
+            - name: Ensure cAdvisor image exists on management node (Pull if missing)
               shell: "{{ final_central_docker }} pull {{ cadvisor_image }}"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
               when: cadvisor_central_check.stdout == 'missing'
@@ -126,7 +119,7 @@
 
             - name: Save cAdvisor image to archive
               shell: "{{ final_central_docker }} save {{ cadvisor_image }} -o ~/cadvisor.tar"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
 
@@ -142,7 +135,7 @@
               block:
                 - file: { path: ~/cadvisor.tar, state: absent }
                 - file: { path: ~/cadvisor.tar, state: absent }
-                  delegate_to: localhost
+                  delegate_to: "{{ management_node }}"
                   become: no
                   run_once: true
           when: cadvisor_image_check.stdout == "missing"
@@ -204,18 +197,18 @@
           register: node_exporter_image_check
           changed_when: false
 
-        - name: Transfer Node Exporter image from central node
+        - name: Transfer Node Exporter image from management node
           block:
-            - name: Check if image exists on central node
+            - name: Check if image exists on management node
               shell: "{{ final_central_docker }} image inspect {{ node_exporter_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
               register: node_exporter_central_check
 
-            - name: Ensure Node Exporter image exists on central node (Pull if missing)
+            - name: Ensure Node Exporter image exists on management node (Pull if missing)
               shell: "{{ final_central_docker }} pull {{ node_exporter_image }}"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
               when: node_exporter_central_check.stdout == 'missing'
@@ -223,7 +216,7 @@
 
             - name: Save Node Exporter image to archive
               shell: "{{ final_central_docker }} save {{ node_exporter_image }} -o ~/node-exporter.tar"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
 
@@ -239,7 +232,7 @@
               block:
                 - file: { path: ~/node-exporter.tar, state: absent }
                 - file: { path: ~/node-exporter.tar, state: absent }
-                  delegate_to: localhost
+                  delegate_to: "{{ management_node }}"
                   become: no
                   run_once: true
           when: node_exporter_image_check.stdout == "missing"
@@ -298,18 +291,18 @@
           register: filebeat_image_check
           changed_when: false
 
-        - name: Transfer Filebeat image from central node
+        - name: Transfer Filebeat image from management node
           block:
-            - name: Check if image exists on central node
+            - name: Check if image exists on management node
               shell: "{{ final_central_docker }} image inspect {{ filebeat_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
               register: filebeat_central_check
 
-            - name: Ensure Filebeat image exists on central node (Pull if missing)
+            - name: Ensure Filebeat image exists on management node (Pull if missing)
               shell: "{{ final_central_docker }} pull {{ filebeat_image }}"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
               when: filebeat_central_check.stdout == 'missing'
@@ -317,7 +310,7 @@
 
             - name: Save Filebeat image to archive
               shell: "{{ final_central_docker }} save {{ filebeat_image }} -o ~/filebeat.tar"
-              delegate_to: localhost
+              delegate_to: "{{ management_node }}"
               become: no
               run_once: true
 
@@ -333,7 +326,7 @@
               block:
                 - file: { path: ~/filebeat.tar, state: absent }
                 - file: { path: ~/filebeat.tar, state: absent }
-                  delegate_to: localhost
+                  delegate_to: "{{ management_node }}"
                   become: no
                   run_once: true
           when: filebeat_image_check.stdout == "missing"
