@@ -21,6 +21,9 @@
       shell: |
         docker run -d --name {{ appName }} \
         --restart=always \
+        --label com.monetique.service={{ appName }} \
+        --label com.monetique.environment={{ env_label | default('production') }} \
+        --label node={{ ansible_hostname }} \
         -p 8880:8880 \
         -p 9001:9001 \
         -e SERVER_PORT=8880 \

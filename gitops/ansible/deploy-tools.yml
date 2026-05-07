@@ -199,6 +199,23 @@
         state: absent
       when: existing_node_exporter_port.stdout | default('') == ""
 
+    - name: Debug Central Logstash IP
+      debug:
+        msg: "Attempting to connect to central Logstash at {{ central_logstash_ip }}:5045"
+
+    - name: Verify connectivity to central Logstash
+      wait_for:
+        host: "{{ central_logstash_ip }}"
+        port: 5045
+        timeout: 5
+      register: logstash_conn_check
+      ignore_errors: yes
+
+    - name: Fail if Logstash is unreachable
+      fail:
+        msg: "CRITICAL: Cannot reach central Logstash at {{ central_logstash_ip }}:5045. Please check firewall rules on central node."
+      when: logstash_conn_check.failed
+
     # =========================
     #  Filebeat
     # =========================
