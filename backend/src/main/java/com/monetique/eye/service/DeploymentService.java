@@ -680,9 +680,16 @@ public class DeploymentService {
     }
 
     private String getCentralIp(Environment environment) {
+        // 1. Try finding central-node in the current environment
         return managedNodeRepository.findByEnvironmentAndNodeName(environment, "central-node")
                 .map(com.monetique.eye.entity.ManagedNode::getIp)
-                .orElseGet(() -> environment.getCentralNodeIp() != null ? environment.getCentralNodeIp() : "192.168.126.130");
+                // 2. Fallback to searching globally for any node named central-node
+                .or(() -> managedNodeRepository.findAll().stream()
+                        .filter(n -> "central-node".equalsIgnoreCase(n.getNodeName()))
+                        .map(com.monetique.eye.entity.ManagedNode::getIp)
+                        .findFirst())
+                // 3. Fallback to the environment's configured central node IP
+                .orElseGet(() -> environment.getCentralNodeIp());
     }
 
     public void updateInventory(String envName, String targetIp, String sshUser) {
