@@ -70,7 +70,7 @@
     - name: Check if Filebeat tarball is cached
       stat:
         path: "{{ image_cache_dir }}/filebeat.tar"
-      register: filebeat_tar_check
+      register: filebeat_cache_check
       delegate_to: localhost
       run_once: true
 
@@ -78,7 +78,7 @@
       shell: "docker save -o {{ image_cache_dir }}/filebeat.tar docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
       delegate_to: localhost
       run_once: true
-      when: not filebeat_tar_check.stat.exists
+      when: not filebeat_cache_check.stat.exists
 
     - name: Ensure tarballs are readable
       file:
@@ -202,11 +202,10 @@
     # =========================
     #  Filebeat
     # =========================
-    - name: Check if Filebeat is already running
-      wait_for:
-        port: 5066
-        timeout: 1
-      register: filebeat_port_check
+    - name: Check if Filebeat container is already running
+      shell: "docker inspect -f '{{.State.Running}}' filebeat 2>/dev/null || echo 'false'"
+      register: filebeat_running_check
+      changed_when: false
       ignore_errors: yes
 
     - name: Transfer Filebeat image to remote
@@ -214,11 +213,18 @@
         src: "{{ image_cache_dir }}/filebeat.tar"
         dest: "{{ remote_image_dir }}/filebeat.tar"
         mode: '0644'
-      when: filebeat_port_check.failed
+      when: filebeat_running_check.stdout | default('false') != 'true'
 
     - name: Load Filebeat image into Docker
       shell: "docker load -i ~/monetique-images/filebeat.tar"
-      when: filebeat_port_check.failed
+      when: filebeat_running_check.stdout | default('false') != 'true'
+
+    - name: Transfer Filebeat config for remote node
+      template:
+        src: "../vmpipe/filebeat/remote_filebeat.yml"
+        dest: "/home/{{ ansible_user }}/filebeat.yml"
+        mode: '0644'
+      when: filebeat_running_check.stdout | default('false') != 'true'
 
     - name: Run Filebeat
       shell: |
@@ -227,27 +233,19 @@
         --restart=always \
         --user root \
         -p 5066:5066 \
+        -v /home/{{ ansible_user }}/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro,z \
         -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
         -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
-        docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
-        filebeat -e \
-        -E "http.enabled=true" \
-        -E "http.host=0.0.0.0" \
-        -E "output.elasticsearch.enabled=false" \
-        -E "output.logstash.hosts=['{{ central_logstash_ip }}:5045']" \
-        -E "filebeat.inputs=[{type: container, paths: ['/var/lib/docker/containers/*/*.log']}]" \
-        -E "fields.environment={{ env_label }}" \
-        -E "fields.node={{ nodename }}" \
-        -E "fields_under_root=true"
+        docker.elastic.co/beats/filebeat:{{ filebeat_version }}
       args:
         executable: /bin/bash
-      when: filebeat_port_check.failed
+      when: filebeat_running_check.stdout | default('false') != 'true'
 
     - name: Cleanup Filebeat tarball from remote
       file:
         path: "{{ remote_image_dir }}/filebeat.tar"
         state: absent
-      when: filebeat_port_check.failed
+      when: filebeat_running_check.stdout | default('false') != 'true'
 
     # =========================
     #  Final Cleanup

@@ -149,8 +149,13 @@ const InfrastructureGraphInner: React.FC = () => {
       const clusterId = `cluster-${cluster.id}`;
       
       const envCount = cluster.environments.length;
-      const clusterWidth = Math.max(1200, envCount * 450 + 100);
-      const clusterHeight = 1100;
+      
+      // Calculate max nodes in any env to determine cluster height
+      const maxNodesInAnyEnv = cluster.environments.reduce((max, env) => Math.max(max, env.nodes.length), 0);
+      const calculatedMaxEnvHeight = Math.max(400, maxNodesInAnyEnv * 280 + 120);
+      
+      const clusterWidth = Math.max(500, envCount * 450 + 50);
+      const clusterHeight = calculatedMaxEnvHeight + 150;
 
       newNodes.push({
         id: clusterId,
@@ -166,7 +171,7 @@ const InfrastructureGraphInner: React.FC = () => {
       cluster.environments.forEach((env) => {
         const envId = `env-${env.id}`;
         const envWidth = 400;
-        const envHeight = 900;
+        const envHeight = Math.max(400, env.nodes.length * 280 + 120);
 
         newNodes.push({
           id: envId,
@@ -186,7 +191,7 @@ const InfrastructureGraphInner: React.FC = () => {
             parentId: envId,
             type: 'server',
             data: { ...node },
-            position: { x: 60, y: 80 + nodeIdx * 270 },
+            position: { x: 60, y: 80 + nodeIdx * 280 },
             extent: 'parent',
           });
 
@@ -207,7 +212,7 @@ const InfrastructureGraphInner: React.FC = () => {
         envX += envWidth + 50;
       });
 
-      currentX += clusterWidth + 300;
+      currentX += clusterWidth + 200;
     });
 
     return { newNodes, newEdges };
@@ -320,29 +325,29 @@ const InfrastructureGraphInner: React.FC = () => {
   return (
     <div className="h-full flex flex-col relative animate-in fade-in duration-700 bg-[#0a0a0b]">
       {/* Top Overlay UI */}
-      <div className="absolute top-8 left-8 z-10 w-96 space-y-4">
-        <Card className="bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5 shadow-3xl p-6">
-          <div className="flex items-center gap-3 text-primary mb-3">
-             <Network className="w-5 h-5" />
-             <span className="text-xs font-black uppercase tracking-[0.3em]">Core Topology</span>
+      <div className="absolute top-8 left-8 z-10 w-80 space-y-4">
+        <Card className="bg-[#0c0c0e]/80 backdrop-blur-xl border-white/5 shadow-3xl p-5">
+          <div className="flex items-center gap-3 text-primary mb-2">
+             <Network className="w-4 h-4" />
+             <span className="text-[10px] font-black uppercase tracking-[0.3em]">Core Topology</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter">Global Graph</h1>
+          <h1 className="text-2xl font-black tracking-tighter">Global Graph</h1>
           <p className="text-xs text-muted-foreground mt-2 leading-relaxed opacity-60 font-medium">
             Interactive neural map of distributed clusters. Zoom to inspect metrics, drag clusters to re-organize your perspective.
           </p>
           
-          <div className="mt-8 grid grid-cols-2 gap-4">
+          <div className="mt-5 grid grid-cols-2 gap-4">
              <div className="space-y-1 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Agents</p>
-                <p className="text-2xl font-black">{globalStats?.activeAgents || 0}</p>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Total Agents</p>
+                <p className="text-xl font-black">{globalStats?.activeAgents || 0}</p>
              </div>
              <div className="space-y-1 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Avg Health</p>
-                <p className="text-2xl font-black text-emerald-500">{globalStats?.avgStability?.toFixed(1) || 99.9}%</p>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Avg Health</p>
+                <p className="text-xl font-black text-emerald-500">{globalStats?.avgStability?.toFixed(1) || 99.9}%</p>
              </div>
           </div>
 
-          <div className="mt-6 flex gap-2">
+          <div className="mt-5 flex gap-2">
             <div className="relative flex-1 group">
                <button
                  onClick={onFindNode}
