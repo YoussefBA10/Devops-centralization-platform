@@ -5,7 +5,6 @@
 
   vars:
     filebeat_version: "8.11.1"
-    # Defaulting management node to the known central hub IP
     management_node: "{{ management_host | default('192.168.126.130') }}"
     central_logstash_ip: "{{ management_node }}"
     env_label: "{{ environment_label | default('production') }}"
@@ -21,21 +20,6 @@
   pre_tasks:
     - name: Pre-flight Check - Verify connectivity
       ping:
-
-    - name: Debug Environment on Management Node
-      shell: |
-        echo "User: $(id)"
-        echo "Path: $PATH"
-        ls -l /usr/bin/docker /usr/local/bin/docker /snap/bin/docker /bin/docker 2>/dev/null || echo "No standard docker binaries found"
-      delegate_to: "{{ management_node }}"
-      become: no
-      run_once: true
-      register: central_env_debug
-
-    - name: Show Management Node Environment Debug
-      debug:
-        var: central_env_debug.stdout_lines
-      run_once: true
 
     - name: Find Docker binary on Management node
       shell: |
@@ -55,11 +39,6 @@
     - name: Set Management Docker Path Fact
       set_fact:
         final_central_docker: "{{ central_docker_bin.stdout | trim | default('docker') }}"
-
-    - name: Debug Management Docker Path
-      debug:
-        msg: "Using Docker binary at: {{ final_central_docker }} on host {{ management_node }}"
-      run_once: true
 
   tasks:
     # ===================================================================
@@ -83,16 +62,7 @@
 
     - name: Show cAdvisor Status Message
       debug:
-        msg: >-
-          {% if cadvisor_running == "true" %}
-            {% if cadvisor_env == env_label %}
-              cAdvisor is already deployed in this env ({{ env_label }}) on port {{ final_cadvisor_port }}
-            {% else %}
-              cAdvisor is already deployed in a different env: {{ cadvisor_env }} on port {{ final_cadvisor_port }}
-            {% endif %}
-          {% else %}
-            cAdvisor is not deployed. Proceeding with deployment...
-          {% endif %}
+        msg: "cAdvisor status: Running={{ cadvisor_running }}, Env={{ cadvisor_env }}, Port={{ final_cadvisor_port }}"
 
     - name: Handle cAdvisor Image Transfer
       block:
@@ -101,7 +71,7 @@
           register: cadvisor_image_check
           changed_when: false
 
-        - name: Transfer cAdvisor image from management node
+        - name: Transfer cAdvisor image (Management -> Controller -> Remote)
           block:
             - name: Check if image exists on management node
               shell: "{{ final_central_docker }} image inspect {{ cadvisor_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
@@ -110,7 +80,7 @@
               run_once: true
               register: cadvisor_central_check
 
-            - name: Ensure cAdvisor image exists on management node (Pull if missing)
+            - name: Pull cAdvisor image on management node if missing
               shell: "{{ final_central_docker }} pull {{ cadvisor_image }}"
               delegate_to: "{{ management_node }}"
               become: no
@@ -118,15 +88,24 @@
               when: cadvisor_central_check.stdout == 'missing'
               ignore_errors: yes
 
-            - name: Save cAdvisor image to archive
+            - name: Save cAdvisor image to archive on management node
               shell: "{{ final_central_docker }} save {{ cadvisor_image }} -o ~/cadvisor.tar"
               delegate_to: "{{ management_node }}"
               become: no
               run_once: true
 
-            - name: Copy cAdvisor image to remote node
-              copy:
+            - name: Fetch cAdvisor archive to Ansible controller
+              fetch:
                 src: ~/cadvisor.tar
+                dest: /tmp/cadvisor.tar
+                flat: yes
+              delegate_to: "{{ management_node }}"
+              become: no
+              run_once: true
+
+            - name: Copy cAdvisor archive to remote agent
+              copy:
+                src: /tmp/cadvisor.tar
                 dest: ~/cadvisor.tar
 
             - name: Load cAdvisor image on remote node
@@ -135,6 +114,9 @@
             - name: Clean up cAdvisor archives
               block:
                 - file: { path: ~/cadvisor.tar, state: absent }
+                - file: { path: /tmp/cadvisor.tar, state: absent }
+                  delegate_to: localhost
+                  run_once: true
                 - file: { path: ~/cadvisor.tar, state: absent }
                   delegate_to: "{{ management_node }}"
                   become: no
@@ -180,16 +162,7 @@
 
     - name: Show Node Exporter Status Message
       debug:
-        msg: >-
-          {% if node_exporter_running == "true" %}
-            {% if node_exporter_env == env_label %}
-              Node Exporter is already deployed in this env ({{ env_label }}) on port {{ final_node_exporter_port }}
-            {% else %}
-              Node Exporter is already deployed in a different env: {{ node_exporter_env }} on port {{ final_node_exporter_port }}
-            {% endif %}
-          {% else %}
-            Node Exporter is not deployed. Proceeding with deployment...
-          {% endif %}
+        msg: "Node Exporter status: Running={{ node_exporter_running }}, Env={{ node_exporter_env }}, Port={{ final_node_exporter_port }}"
 
     - name: Handle Node Exporter Image Transfer
       block:
@@ -198,7 +171,7 @@
           register: node_exporter_image_check
           changed_when: false
 
-        - name: Transfer Node Exporter image from management node
+        - name: Transfer Node Exporter image (Management -> Controller -> Remote)
           block:
             - name: Check if image exists on management node
               shell: "{{ final_central_docker }} image inspect {{ node_exporter_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
@@ -207,7 +180,7 @@
               run_once: true
               register: node_exporter_central_check
 
-            - name: Ensure Node Exporter image exists on management node (Pull if missing)
+            - name: Pull Node Exporter image on management node if missing
               shell: "{{ final_central_docker }} pull {{ node_exporter_image }}"
               delegate_to: "{{ management_node }}"
               become: no
@@ -215,15 +188,24 @@
               when: node_exporter_central_check.stdout == 'missing'
               ignore_errors: yes
 
-            - name: Save Node Exporter image to archive
+            - name: Save Node Exporter image to archive on management node
               shell: "{{ final_central_docker }} save {{ node_exporter_image }} -o ~/node-exporter.tar"
               delegate_to: "{{ management_node }}"
               become: no
               run_once: true
 
-            - name: Copy Node Exporter image to remote node
-              copy:
+            - name: Fetch Node Exporter archive to Ansible controller
+              fetch:
                 src: ~/node-exporter.tar
+                dest: /tmp/node-exporter.tar
+                flat: yes
+              delegate_to: "{{ management_node }}"
+              become: no
+              run_once: true
+
+            - name: Copy Node Exporter archive to remote agent
+              copy:
+                src: /tmp/node-exporter.tar
                 dest: ~/node-exporter.tar
 
             - name: Load Node Exporter image on remote node
@@ -232,6 +214,9 @@
             - name: Clean up Node Exporter archives
               block:
                 - file: { path: ~/node-exporter.tar, state: absent }
+                - file: { path: /tmp/node-exporter.tar, state: absent }
+                  delegate_to: localhost
+                  run_once: true
                 - file: { path: ~/node-exporter.tar, state: absent }
                   delegate_to: "{{ management_node }}"
                   become: no
@@ -274,16 +259,7 @@
 
     - name: Show Filebeat Status Message
       debug:
-        msg: >-
-          {% if filebeat_running == "true" %}
-            {% if filebeat_env == env_label %}
-              Filebeat is already deployed in this env ({{ env_label }}) on port {{ final_filebeat_port }}
-            {% else %}
-              Filebeat is already deployed in a different env: {{ filebeat_env }} on port {{ final_filebeat_port }}
-            {% endif %}
-          {% else %}
-            Filebeat is not deployed. Proceeding with deployment...
-          {% endif %}
+        msg: "Filebeat status: Running={{ filebeat_running }}, Env={{ filebeat_env }}, Port={{ final_filebeat_port }}"
 
     - name: Handle Filebeat Image Transfer
       block:
@@ -292,7 +268,7 @@
           register: filebeat_image_check
           changed_when: false
 
-        - name: Transfer Filebeat image from management node
+        - name: Transfer Filebeat image (Management -> Controller -> Remote)
           block:
             - name: Check if image exists on management node
               shell: "{{ final_central_docker }} image inspect {{ filebeat_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
@@ -301,7 +277,7 @@
               run_once: true
               register: filebeat_central_check
 
-            - name: Ensure Filebeat image exists on management node (Pull if missing)
+            - name: Pull Filebeat image on management node if missing
               shell: "{{ final_central_docker }} pull {{ filebeat_image }}"
               delegate_to: "{{ management_node }}"
               become: no
@@ -309,15 +285,24 @@
               when: filebeat_central_check.stdout == 'missing'
               ignore_errors: yes
 
-            - name: Save Filebeat image to archive
+            - name: Save Filebeat image to archive on management node
               shell: "{{ final_central_docker }} save {{ filebeat_image }} -o ~/filebeat.tar"
               delegate_to: "{{ management_node }}"
               become: no
               run_once: true
 
-            - name: Copy Filebeat image to remote node
-              copy:
+            - name: Fetch Filebeat archive to Ansible controller
+              fetch:
                 src: ~/filebeat.tar
+                dest: /tmp/filebeat.tar
+                flat: yes
+              delegate_to: "{{ management_node }}"
+              become: no
+              run_once: true
+
+            - name: Copy Filebeat archive to remote agent
+              copy:
+                src: /tmp/filebeat.tar
                 dest: ~/filebeat.tar
 
             - name: Load Filebeat image on remote node
@@ -326,6 +311,9 @@
             - name: Clean up Filebeat archives
               block:
                 - file: { path: ~/filebeat.tar, state: absent }
+                - file: { path: /tmp/filebeat.tar, state: absent }
+                  delegate_to: localhost
+                  run_once: true
                 - file: { path: ~/filebeat.tar, state: absent }
                   delegate_to: "{{ management_node }}"
                   become: no
