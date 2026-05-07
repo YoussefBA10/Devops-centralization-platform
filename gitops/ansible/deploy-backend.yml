@@ -6,7 +6,7 @@
     # Defaults that should be overridden by extra-vars from the backend
     appName: "backend"
     image_tag: "v1"
-    central_ip: "192.168.126.130"
+    central_ip: "" # Overridden by backend
     db_name: "monetique-eye-db"
     db_user: "youss"
     db_pass: "youss123"

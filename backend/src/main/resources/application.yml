@@ -5,7 +5,7 @@ spring:
   codec:
     max-in-memory-size: 10MB
   datasource:
-    url: ${DB_URL:jdbc:mysql://192.168.126.130:3306/monetique-eye-db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false}
+    url: ${DB_URL:jdbc:mysql://mysql:3306/monetique-eye-db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false}
     username: ${DB_USERNAME:youss}
     password: ${DB_PASSWORD:youss123}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
@@ -25,7 +25,7 @@ spring:
     repair-on-migrate: true
   
   elasticsearch:
-    uris: ${ELASTICSEARCH_URL:http://192.168.126.130:9200}
+    uris: ${ELASTICSEARCH_URL:http://elasticsearch:9200}
 
 jwt:
   secret: ${JWT_SECRET}
@@ -33,15 +33,15 @@ jwt:
 
 # Integration endpoints
 logstash:
-  host: ${LOGSTASH_HOST:192.168.126.130}
+  host: ${LOGSTASH_HOST:logstash}
   port: ${LOGSTASH_PORT:5044}
 
 elasticsearch:
-  url: ${ELASTICSEARCH_URL:http://192.168.126.130:9200}
+  url: ${ELASTICSEARCH_URL:http://elasticsearch:9200}
 
 
 prometheus:
-  url: ${PROMETHEUS_URL:http://192.168.126.130:9090}
+  url: ${PROMETHEUS_URL:http://prometheus:9090}
 
 management:
   endpoints:

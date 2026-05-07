@@ -111,10 +111,9 @@ public class DeploymentService {
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
             String envLabel = environment.getSafeName();
-            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
-                    : "192.168.126.130";
+            String centralIp = getCentralIp(environment);
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
+            String nodeName = targetIp.equals(centralIp) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
             executeProcessSecure(new String[] {
@@ -285,10 +284,9 @@ public class DeploymentService {
 
             String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
-                    : "192.168.126.130";
+            String centralIp = getCentralIp(environment);
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
+            String nodeName = targetIp.equals(centralIp) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
             // Fetch credentials from ManagedNode
@@ -544,7 +542,8 @@ public class DeploymentService {
             log.info("Deployment Details - Name: {}, Previous: {}, oldAppName: '{}', isCanary: {}, hostPort: {}, autoPromote: {}, targetNode: {}", 
                     request.getName(), previousName, oldAppName, isCanary, hostPort, request.getAutoPromote(), request.getTargetNode());
 
-            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "central-node"
+            String centralIp = getCentralIp(environment);
+            String nodeName = request.getTargetNode().equals(centralIp) ? "central-node"
                     : "node-" + request.getTargetNode().replace(".", "-");
 
             String buildArgsStr = "";
@@ -678,6 +677,12 @@ public class DeploymentService {
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
+    }
+
+    private String getCentralIp(Environment environment) {
+        return managedNodeRepository.findByEnvironmentAndNodeName(environment, "central-node")
+                .map(com.monetique.eye.entity.ManagedNode::getIp)
+                .orElseGet(() -> environment.getCentralNodeIp() != null ? environment.getCentralNodeIp() : "192.168.126.130");
     }
 
     public void updateInventory(String envName, String targetIp, String sshUser) {
@@ -909,7 +914,8 @@ public class DeploymentService {
             }
             final String finalIp = cleanIp;
 
-            String nodeName = finalIp.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + finalIp.replace(".", "-");
+            String centralIp = getCentralIp(environment);
+            String nodeName = finalIp.equals(centralIp) ? "central-node" : "node-" + finalIp.replace(".", "-");
 
             // Fetch dynamic ports from ManagedNode if possible
             Integer nodeExporterPort = 9100;
@@ -924,7 +930,7 @@ public class DeploymentService {
             String cadvisorTarget = finalIp + ":" + cadvisorPort;
             String filebeatTarget = finalIp + ":5066";
 
-            if (ip.equals(environment.getCentralNodeIp())) {
+            if (ip.equals(centralIp)) {
                 log.info("Node {} is detected as Central Node. Using internal service names.", ip);
                 nodeExporterTarget = "node-exporter:9100";
                 cadvisorTarget = "cadvisor:8080";
@@ -1008,7 +1014,8 @@ public class DeploymentService {
             }
             final String finalIp = cleanIp;
 
-            String nodeName = finalIp.equals(app.getEnvironment().getCentralNodeIp()) ? "central-node" : "node-" + finalIp.replace(".", "-");
+            String centralIp = getCentralIp(app.getEnvironment());
+            String nodeName = finalIp.equals(centralIp) ? "central-node" : "node-" + finalIp.replace(".", "-");
             String targetStr = finalIp + ":" + metricsPort;
             String jobName = app.getServiceNameKeyword() != null ? app.getServiceNameKeyword() : app.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
 

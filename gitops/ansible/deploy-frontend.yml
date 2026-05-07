@@ -5,7 +5,7 @@
   vars:
     appName: "frontend"
     image_tag: "v1"
-    central_ip: "192.168.126.130"
+    central_ip: "" # Overridden by backend
 
   tasks:
     - name: Remove old frontend container if exists
