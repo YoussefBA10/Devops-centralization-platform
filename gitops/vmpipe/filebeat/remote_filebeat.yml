@@ -7,6 +7,8 @@ filebeat.inputs:
     parsers:
       - container: ~
 
+strict.perms: false
+
 processors:
   - add_docker_metadata:
       host: "unix:///var/run/docker.sock"
