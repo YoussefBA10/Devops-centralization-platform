@@ -7,80 +7,198 @@
     filebeat_version: "8.11.1"
     central_logstash_ip: "{{ hostvars['localhost']['ansible_default_ipv4']['address'] | default('192.168.126.130') }}"
     env_label: "{{ environment_label | default('production') }}"
+    cadvisor_image: "gcr.io/cadvisor/cadvisor:latest"
+    node_exporter_image: "prom/node-exporter:latest"
+    filebeat_image: "docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
 
   pre_tasks:
     - name: Pre-flight Check - Verify connectivity
       ping:
 
   tasks:
-    # -----------------------------
-    - name: Detect existing cAdvisor port
+    # ===================================================================
+    #  1. cAdvisor
+    # ===================================================================
+    - name: Detect existing cAdvisor
       shell: |
-        docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' cadvisor || echo ""
-      register: existing_cadvisor_port
+        docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' cadvisor 2>/dev/null || echo ""
+      register: existing_cadvisor_status
       changed_when: false
       ignore_errors: yes
 
-    - name: Set cAdvisor Port Fact
-      set_fact:
-        final_cadvisor_port: "{{ existing_cadvisor_port.stdout | default('8085') }}"
+    - name: Handle cAdvisor Image Transfer
+      block:
+        - name: Check if cAdvisor image exists on remote
+          shell: docker image inspect {{ cadvisor_image }} > /dev/null 2>&1 && echo "exists" || echo "missing"
+          register: cadvisor_image_check
+          changed_when: false
 
-    - name: Output Final cAdvisor Port for Backend
-      debug:
-        msg: "FINAL_CADVISOR_PORT={{ final_cadvisor_port }}"
+        - name: Transfer cAdvisor image from central node
+          block:
+            - name: Ensure cAdvisor image exists on central node
+              shell: docker pull {{ cadvisor_image }}
+              delegate_to: localhost
+              run_once: true
+
+            - name: Save cAdvisor image to archive
+              shell: docker save {{ cadvisor_image }} -o /tmp/cadvisor.tar
+              delegate_to: localhost
+              run_once: true
+
+            - name: Copy cAdvisor image to remote node
+              copy:
+                src: /tmp/cadvisor.tar
+                dest: /tmp/cadvisor.tar
+
+            - name: Load cAdvisor image on remote node
+              shell: docker load -i /tmp/cadvisor.tar
+
+            - name: Clean up cAdvisor archive on remote
+              file:
+                path: /tmp/cadvisor.tar
+                state: absent
+
+            - name: Clean up cAdvisor archive on central
+              file:
+                path: /tmp/cadvisor.tar
+                state: absent
+              delegate_to: localhost
+              run_once: true
+          when: cadvisor_image_check.stdout == "missing"
+      when: existing_cadvisor_status.stdout != "true"
 
     - name: Run cAdvisor (Only if not already running)
       shell: |
         docker run -d --name cadvisor \
         --restart=always \
-        -p {{ final_cadvisor_port }}:8080 \
+        -p 8181:8080 \
         -v /:/rootfs:ro,z \
         -v /var/run:/var/run:ro,z \
         -v /sys:/sys:ro,z \
         -v /var/lib/docker/:/var/lib/docker:ro,z \
         -v /dev/disk/:/dev/disk:ro,z \
         -v /data:/data:ro,z \
-        gcr.io/cadvisor/cadvisor:latest
+        {{ cadvisor_image }}
       args:
         executable: /bin/bash
-      when: existing_cadvisor_port.stdout | default('') == ""
+      when: existing_cadvisor_status.stdout != "true"
 
-    - name: Detect existing Node Exporter port
+    # ===================================================================
+    #  2. Node Exporter
+    # ===================================================================
+    - name: Detect existing Node Exporter
       shell: |
-        docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' node-exporter || echo ""
-      register: existing_node_exporter_port
+        docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' node-exporter 2>/dev/null || echo ""
+      register: existing_node_exporter_status
       changed_when: false
       ignore_errors: yes
 
-    - name: Set Node Exporter Port Fact
-      set_fact:
-        final_node_exporter_port: "{{ existing_node_exporter_port.stdout | default('9100') }}"
+    - name: Handle Node Exporter Image Transfer
+      block:
+        - name: Check if Node Exporter image exists on remote
+          shell: docker image inspect {{ node_exporter_image }} > /dev/null 2>&1 && echo "exists" || echo "missing"
+          register: node_exporter_image_check
+          changed_when: false
 
-    - name: Output Final Node Exporter Port for Backend
-      debug:
-        msg: "FINAL_NODE_EXPORTER_PORT={{ final_node_exporter_port }}"
+        - name: Transfer Node Exporter image from central node
+          block:
+            - name: Ensure Node Exporter image exists on central node
+              shell: docker pull {{ node_exporter_image }}
+              delegate_to: localhost
+              run_once: true
+
+            - name: Save Node Exporter image to archive
+              shell: docker save {{ node_exporter_image }} -o /tmp/node-exporter.tar
+              delegate_to: localhost
+              run_once: true
+
+            - name: Copy Node Exporter image to remote node
+              copy:
+                src: /tmp/node-exporter.tar
+                dest: /tmp/node-exporter.tar
+
+            - name: Load Node Exporter image on remote node
+              shell: docker load -i /tmp/node-exporter.tar
+
+            - name: Clean up Node Exporter archive on remote
+              file:
+                path: /tmp/node-exporter.tar
+                state: absent
+
+            - name: Clean up Node Exporter archive on central
+              file:
+                path: /tmp/node-exporter.tar
+                state: absent
+              delegate_to: localhost
+              run_once: true
+          when: node_exporter_image_check.stdout == "missing"
+      when: existing_node_exporter_status.stdout != "true"
 
     - name: Run Node Exporter (Only if not already running)
       shell: |
         docker run -d --name node-exporter \
         --restart=always \
-        -p {{ final_node_exporter_port }}:9100 \
+        -p 9100:9100 \
         -v /:/host:ro,rslave,z \
         -v /data:/data:ro,z \
-        prom/node-exporter:latest \
+        {{ node_exporter_image }} \
         --path.rootfs=/host
       args:
         executable: /bin/bash
-      when: existing_node_exporter_port.stdout | default('') == ""
+      when: existing_node_exporter_status.stdout != "true"
 
-    - name: Check if Filebeat is already running
-      wait_for:
-        port: 5066
-        timeout: 1
-      register: filebeat_port_check
+    # ===================================================================
+    #  3. Filebeat
+    # ===================================================================
+    - name: Detect existing Filebeat
+      shell: |
+        docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' filebeat 2>/dev/null || echo ""
+      register: existing_filebeat_status
+      changed_when: false
       ignore_errors: yes
 
-    - name: Run Filebeat
+    - name: Handle Filebeat Image Transfer
+      block:
+        - name: Check if Filebeat image exists on remote
+          shell: docker image inspect {{ filebeat_image }} > /dev/null 2>&1 && echo "exists" || echo "missing"
+          register: filebeat_image_check
+          changed_when: false
+
+        - name: Transfer Filebeat image from central node
+          block:
+            - name: Ensure Filebeat image exists on central node
+              shell: docker pull {{ filebeat_image }}
+              delegate_to: localhost
+              run_once: true
+
+            - name: Save Filebeat image to archive
+              shell: docker save {{ filebeat_image }} -o /tmp/filebeat.tar
+              delegate_to: localhost
+              run_once: true
+
+            - name: Copy Filebeat image to remote node
+              copy:
+                src: /tmp/filebeat.tar
+                dest: /tmp/filebeat.tar
+
+            - name: Load Filebeat image on remote node
+              shell: docker load -i /tmp/filebeat.tar
+
+            - name: Clean up Filebeat archive on remote
+              file:
+                path: /tmp/filebeat.tar
+                state: absent
+
+            - name: Clean up Filebeat archive on central
+              file:
+                path: /tmp/filebeat.tar
+                state: absent
+              delegate_to: localhost
+              run_once: true
+          when: filebeat_image_check.stdout == "missing"
+      when: existing_filebeat_status.stdout != "true"
+
+    - name: Run Filebeat (Only if not already running)
       shell: |
         docker rm -f filebeat || true
         docker run -d --name filebeat \
@@ -89,7 +207,7 @@
         -p 5066:5066 \
         -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
         -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
-        docker.elastic.co/beats/filebeat:{{ filebeat_version }} \
+        {{ filebeat_image }} \
         filebeat -e \
         -E "http.enabled=true" \
         -E "http.host=0.0.0.0" \
@@ -101,4 +219,5 @@
         -E "fields_under_root=true"
       args:
         executable: /bin/bash
-      when: filebeat_port_check.failed
+      when: existing_filebeat_status.stdout != "true"
+      ignore_errors: yes
