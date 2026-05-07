@@ -21,11 +21,29 @@
       ping:
 
     - name: Find Docker binary on central node
-      shell: which docker || find /usr/bin /usr/local/bin -name docker | head -n 1 || echo "docker"
+      shell: |
+        if command -v docker >/dev/null 2>&1; then
+          command -v docker
+        elif [ -f /usr/bin/docker ]; then
+          echo "/usr/bin/docker"
+        elif [ -f /usr/local/bin/docker ]; then
+          echo "/usr/local/bin/docker"
+        else
+          echo "docker"
+        fi
       delegate_to: localhost
       run_once: true
       register: central_docker_bin
       changed_when: false
+
+    - name: Set Central Docker Path Fact
+      set_fact:
+        final_central_docker: "{{ central_docker_bin.stdout | trim | default('docker') }}"
+
+    - name: Debug Central Docker Path
+      debug:
+        msg: "Using Docker binary at: {{ final_central_docker }}"
+      run_once: true
 
   tasks:
     # ===================================================================
@@ -70,20 +88,20 @@
         - name: Transfer cAdvisor image from central node
           block:
             - name: Check if image exists on central node
-              shell: "{{ central_docker_bin.stdout }} image inspect {{ cadvisor_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
+              shell: "{{ final_central_docker }} image inspect {{ cadvisor_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
               delegate_to: localhost
               run_once: true
               register: cadvisor_central_check
 
             - name: Ensure cAdvisor image exists on central node (Pull if missing)
-              shell: "{{ central_docker_bin.stdout }} pull {{ cadvisor_image }}"
+              shell: "{{ final_central_docker }} pull {{ cadvisor_image }}"
               delegate_to: localhost
               run_once: true
               when: cadvisor_central_check.stdout == 'missing'
               ignore_errors: yes
 
             - name: Save cAdvisor image to archive
-              shell: "{{ central_docker_bin.stdout }} save {{ cadvisor_image }} -o /tmp/cadvisor.tar"
+              shell: "{{ final_central_docker }} save {{ cadvisor_image }} -o /tmp/cadvisor.tar"
               delegate_to: localhost
               run_once: true
 
@@ -163,20 +181,20 @@
         - name: Transfer Node Exporter image from central node
           block:
             - name: Check if image exists on central node
-              shell: "{{ central_docker_bin.stdout }} image inspect {{ node_exporter_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
+              shell: "{{ final_central_docker }} image inspect {{ node_exporter_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
               delegate_to: localhost
               run_once: true
               register: node_exporter_central_check
 
             - name: Ensure Node Exporter image exists on central node (Pull if missing)
-              shell: "{{ central_docker_bin.stdout }} pull {{ node_exporter_image }}"
+              shell: "{{ final_central_docker }} pull {{ node_exporter_image }}"
               delegate_to: localhost
               run_once: true
               when: node_exporter_central_check.stdout == 'missing'
               ignore_errors: yes
 
             - name: Save Node Exporter image to archive
-              shell: "{{ central_docker_bin.stdout }} save {{ node_exporter_image }} -o /tmp/node-exporter.tar"
+              shell: "{{ final_central_docker }} save {{ node_exporter_image }} -o /tmp/node-exporter.tar"
               delegate_to: localhost
               run_once: true
 
@@ -253,20 +271,20 @@
         - name: Transfer Filebeat image from central node
           block:
             - name: Check if image exists on central node
-              shell: "{{ central_docker_bin.stdout }} image inspect {{ filebeat_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
+              shell: "{{ final_central_docker }} image inspect {{ filebeat_image }} > /dev/null 2>&1 && echo 'exists' || echo 'missing'"
               delegate_to: localhost
               run_once: true
               register: filebeat_central_check
 
             - name: Ensure Filebeat image exists on central node (Pull if missing)
-              shell: "{{ central_docker_bin.stdout }} pull {{ filebeat_image }}"
+              shell: "{{ final_central_docker }} pull {{ filebeat_image }}"
               delegate_to: localhost
               run_once: true
               when: filebeat_central_check.stdout == 'missing'
               ignore_errors: yes
 
             - name: Save Filebeat image to archive
-              shell: "{{ central_docker_bin.stdout }} save {{ filebeat_image }} -o /tmp/filebeat.tar"
+              shell: "{{ final_central_docker }} save {{ filebeat_image }} -o /tmp/filebeat.tar"
               delegate_to: localhost
               run_once: true
 
