@@ -28,7 +28,8 @@
       shell: |
         RUNNING=$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' cadvisor 2>/dev/null || echo "false")
         PORT=$(docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' cadvisor 2>/dev/null || echo "")
-        echo "$RUNNING|$PORT"
+        ENV=$(docker inspect -f '{% raw %}{{index .Config.Labels "com.monetique.environment"}}{% endraw %}' cadvisor 2>/dev/null || echo "unknown")
+        echo "$RUNNING|$PORT|$ENV"
       register: cadvisor_detect
       changed_when: false
       ignore_errors: yes
@@ -37,10 +38,20 @@
       set_fact:
         cadvisor_running: "{{ cadvisor_detect.stdout.split('|')[0] | default('false') }}"
         final_cadvisor_port: "{{ cadvisor_detect.stdout.split('|')[1] | default(default_cadvisor_port) if cadvisor_detect.stdout.split('|')[1] != '' else default_cadvisor_port }}"
+        cadvisor_env: "{{ cadvisor_detect.stdout.split('|')[2] | default('unknown') }}"
 
-    - name: Output Final cAdvisor Port
+    - name: Show cAdvisor Status Message
       debug:
-        msg: "FINAL_CADVISOR_PORT={{ final_cadvisor_port }}"
+        msg: >-
+          {% if cadvisor_running == "true" %}
+            {% if cadvisor_env == env_label %}
+              cAdvisor is already deployed in this env ({{ env_label }}) on port {{ final_cadvisor_port }}
+            {% else %}
+              cAdvisor is already deployed in a different env: {{ cadvisor_env }} on port {{ final_cadvisor_port }}
+            {% endif %}
+          {% else %}
+            cAdvisor is not deployed. Proceeding with deployment...
+          {% endif %}
 
     - name: Handle cAdvisor Image Transfer
       block:
@@ -82,6 +93,7 @@
       shell: |
         docker run -d --name cadvisor \
         --restart=always \
+        --label com.monetique.environment={{ env_label }} \
         -p {{ final_cadvisor_port }}:8080 \
         -v /:/rootfs:ro,z \
         -v /var/run:/var/run:ro,z \
@@ -101,7 +113,8 @@
       shell: |
         RUNNING=$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' node-exporter 2>/dev/null || echo "false")
         PORT=$(docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' node-exporter 2>/dev/null || echo "")
-        echo "$RUNNING|$PORT"
+        ENV=$(docker inspect -f '{% raw %}{{index .Config.Labels "com.monetique.environment"}}{% endraw %}' node-exporter 2>/dev/null || echo "unknown")
+        echo "$RUNNING|$PORT|$ENV"
       register: node_exporter_detect
       changed_when: false
       ignore_errors: yes
@@ -110,10 +123,20 @@
       set_fact:
         node_exporter_running: "{{ node_exporter_detect.stdout.split('|')[0] | default('false') }}"
         final_node_exporter_port: "{{ node_exporter_detect.stdout.split('|')[1] | default(default_node_exporter_port) if node_exporter_detect.stdout.split('|')[1] != '' else default_node_exporter_port }}"
+        node_exporter_env: "{{ node_exporter_detect.stdout.split('|')[2] | default('unknown') }}"
 
-    - name: Output Final Node Exporter Port
+    - name: Show Node Exporter Status Message
       debug:
-        msg: "FINAL_NODE_EXPORTER_PORT={{ final_node_exporter_port }}"
+        msg: >-
+          {% if node_exporter_running == "true" %}
+            {% if node_exporter_env == env_label %}
+              Node Exporter is already deployed in this env ({{ env_label }}) on port {{ final_node_exporter_port }}
+            {% else %}
+              Node Exporter is already deployed in a different env: {{ node_exporter_env }} on port {{ final_node_exporter_port }}
+            {% endif %}
+          {% else %}
+            Node Exporter is not deployed. Proceeding with deployment...
+          {% endif %}
 
     - name: Handle Node Exporter Image Transfer
       block:
@@ -155,6 +178,7 @@
       shell: |
         docker run -d --name node-exporter \
         --restart=always \
+        --label com.monetique.environment={{ env_label }} \
         -p {{ final_node_exporter_port }}:9100 \
         -v /:/host:ro,rslave,z \
         -v /data:/data:ro,z \
@@ -171,7 +195,8 @@
       shell: |
         RUNNING=$(docker inspect -f '{% raw %}{{.State.Running}}{% endraw %}' filebeat 2>/dev/null || echo "false")
         PORT=$(docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' filebeat 2>/dev/null || echo "")
-        echo "$RUNNING|$PORT"
+        ENV=$(docker inspect -f '{% raw %}{{index .Config.Labels "com.monetique.environment"}}{% endraw %}' filebeat 2>/dev/null || echo "unknown")
+        echo "$RUNNING|$PORT|$ENV"
       register: filebeat_detect
       changed_when: false
       ignore_errors: yes
@@ -180,10 +205,20 @@
       set_fact:
         filebeat_running: "{{ filebeat_detect.stdout.split('|')[0] | default('false') }}"
         final_filebeat_port: "{{ filebeat_detect.stdout.split('|')[1] | default(default_filebeat_port) if filebeat_detect.stdout.split('|')[1] != '' else default_filebeat_port }}"
+        filebeat_env: "{{ filebeat_detect.stdout.split('|')[2] | default('unknown') }}"
 
-    - name: Output Final Filebeat Port
+    - name: Show Filebeat Status Message
       debug:
-        msg: "FINAL_FILEBEAT_PORT={{ final_filebeat_port }}"
+        msg: >-
+          {% if filebeat_running == "true" %}
+            {% if filebeat_env == env_label %}
+              Filebeat is already deployed in this env ({{ env_label }}) on port {{ final_filebeat_port }}
+            {% else %}
+              Filebeat is already deployed in a different env: {{ filebeat_env }} on port {{ final_filebeat_port }}
+            {% endif %}
+          {% else %}
+            Filebeat is not deployed. Proceeding with deployment...
+          {% endif %}
 
     - name: Handle Filebeat Image Transfer
       block:
@@ -227,6 +262,7 @@
         docker run -d --name filebeat \
         --restart=always \
         --user root \
+        --label com.monetique.environment={{ env_label }} \
         -p {{ final_filebeat_port }}:5066 \
         -v /var/lib/docker/containers:/var/lib/docker/containers:ro,z \
         -v /var/run/docker.sock:/var/run/docker.sock:ro,z \
