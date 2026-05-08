@@ -17,7 +17,7 @@ const AppMetricsDashboard: React.FC = () => {
     memory: [],
     network: [],
     disk: [],
-    health: { status: 'UNKNOWN', message: '' }
+    health: { status: 'LOADING', message: 'Connecting to Prometheus...' }
   });
 
   const fetchAppInfo = async () => {
@@ -44,35 +44,35 @@ const AppMetricsDashboard: React.FC = () => {
       disk: `sum(container_fs_usage_bytes{container_label_com_monetique_app_id="${appId}"}) / 1024 / 1024`
     };
 
-    const newData: any = { cpu: [], memory: [], network: [], disk: [], health: { status: 'UNKNOWN', message: '' } };
+    const newData: any = { 
+      cpu: [], 
+      memory: [], 
+      network: [], 
+      disk: [], 
+      health: { status: 'UNKNOWN', message: 'Initializing metrics fetch...' } 
+    };
 
     try {
-      // 1. Check Scrape Health first
       try {
+        // Use a more reliable health signal: any metric with this app_id label
         const healthRes = await api.get(`/applications/${appId}/metrics`, {
-          params: { query: `container_last_seen{container_label_com_monetique_app_id="${appId}"}` }
+          params: { query: `count({container_label_com_monetique_app_id="${appId}"})` }
         });
 
-        // healthRes.data is a direct list from queryList
         if (Array.isArray(healthRes.data) && healthRes.data.length > 0) {
-          const val = parseFloat(healthRes.data[0].value);
           newData.health = {
-            status: val > 0 ? 'UP' : 'DOWN',
-            message: val > 0 ? 'Container is currently active and reporting to cAdvisor.' : 'Container is not currently visible to cAdvisor.'
+            status: 'UP',
+            message: 'Application is active and reporting infrastructure metrics.'
           };
         } else {
-          // If we have any metrics at all, it means it's discovered
-          const anyMetrics = await api.get(`/applications/${appId}/metrics`, {
-            params: { query: `count({container_label_com_monetique_app_id="${appId}"})` }
-          });
-          if (Array.isArray(anyMetrics.data) && anyMetrics.data.length > 0) {
-            newData.health = { status: 'UP', message: 'Prometheus is scraping, but the health signal is still stabilizing.' };
-          } else {
-            newData.health = { status: 'NOT_FOUND', message: 'Prometheus has not discovered this target yet.' };
-          }
+          newData.health = { 
+            status: 'NOT_FOUND', 
+            message: 'No container metrics found with this App ID. The container may be starting or not discovered yet.' 
+          };
         }
       } catch (e) {
         console.error('Failed to fetch health status', e);
+        newData.health = { status: 'ERROR', message: 'Failed to communicate with Prometheus.' };
       }
 
       // 2. Fetch all Golden Signals
@@ -93,9 +93,7 @@ const AppMetricsDashboard: React.FC = () => {
           }
         })
       );
-      if (newData.traffic.length > 0 && newData.errors.length === 0) {
-        newData.errors = newData.traffic.map((d: any) => ({ ...d, y: 0 }));
-      }
+
 
       setMetricsData(newData);
     } finally {
