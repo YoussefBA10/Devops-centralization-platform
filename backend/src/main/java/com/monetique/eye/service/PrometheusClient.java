@@ -92,9 +92,24 @@ public class PrometheusClient {
         return list;
     }
 
-    public Map<String, Object> queryRange(String query, String start, String end, String step) {
+    public Map<String, Object> proxyQuery(String query) {
         try {
-            Map result = webClient.get()
+            return webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
+                            .queryParam("query", "{query}")
+                            .build(query))
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+        } catch (Exception e) {
+            log.error("Prometheus proxy query failed: {}", query, e);
+            return Collections.singletonMap("status", "error");
+        }
+    }
+
+    public Map<String, Object> proxyQueryRange(String query, String start, String end, String step) {
+        try {
+            return webClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/api/v1/query_range")
                             .queryParam("query", "{query}")
                             .queryParam("start", start)
@@ -104,12 +119,16 @@ public class PrometheusClient {
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
-
-            if (result != null && "success".equals(result.get("status"))) {
-                return (Map<String, Object>) result.get("data");
-            }
         } catch (Exception e) {
-            log.error("Prometheus range query failed: {}", query, e);
+            log.error("Prometheus proxy range query failed: {}", query, e);
+            return Collections.singletonMap("status", "error");
+        }
+    }
+
+    public Map<String, Object> queryRange(String query, String start, String end, String step) {
+        Map result = proxyQueryRange(query, start, end, step);
+        if (result != null && "success".equals(result.get("status"))) {
+            return (Map<String, Object>) result.get("data");
         }
         return new HashMap<>();
     }

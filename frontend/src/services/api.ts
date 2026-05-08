@@ -133,4 +133,9 @@ export const getAlertRules = () => api.get(`/network/alert-rules`);
 export const addAlertRule = (data: any) => api.post(`/network/alert-rules`, data);
 export const deleteAlertRule = (id: string) => api.delete(`/network/alert-rules/${id}`);
 
+// Prometheus Proxy
+export const prometheusQuery = (query: string) => api.get('/prometheus/query', { params: { query } });
+export const prometheusQueryRange = (query: string, start: number, end: number, step: string) => 
+  api.get('/prometheus/query_range', { params: { query, start, end, step } });
+
 export default api;

@@ -19,6 +19,14 @@
   --color-input: #27272a;
   --color-ring: #3b82f6;
 
+  --color-healthy: #22c55e;
+  --color-warning: #f59e0b;
+  --color-critical: #ef4444;
+  --color-unknown: #6b7280;
+  --color-bg-dark: #0f1117;
+  --color-surface-dark: #1a1d27;
+  --color-border-dark: #2a2d3a;
+
   --radius-lg: 0.5rem;
   --radius-md: calc(0.5rem - 2px);
   --radius-sm: calc(0.5rem - 4px);
