@@ -283,7 +283,6 @@ const AppMetricsDashboard: React.FC = () => {
       const appId = selectedAppId;
       const appName = appInfo.name;
       const nodeId = String(appInfo.nodeId || '');
-      const node = appInfo.targetNode;
 
       // 1. Fetch Summary Stats (Instant)
       const [uptimeRes, cpuRes, memRes, oomRes, netRxRes, netTxRes, diskRes] = await Promise.all([
@@ -737,7 +736,7 @@ const AppMetricsDashboard: React.FC = () => {
                 />
                 <MetricPanel 
                   title="Packet Drops RX" 
-                  query={QUERIES.NETWORK_DROPS(String(appInfo?.nodeId || ''))} 
+                  query={QUERIES.NETWORK_DROPS(String(appInfo?.nodeId || '')).rx} 
                   timeRange={timeRange} 
                   unit=" /s" 
                   color="#f59e0b" 
@@ -745,7 +744,7 @@ const AppMetricsDashboard: React.FC = () => {
                 />
                 <MetricPanel 
                   title="Packet Drops TX" 
-                  query={QUERIES.NETWORK_DROPS(String(appInfo?.nodeId || ''))} 
+                  query={QUERIES.NETWORK_DROPS(String(appInfo?.nodeId || '')).tx} 
                   timeRange={timeRange} 
                   unit=" /s" 
                   color="#ef4444" 
