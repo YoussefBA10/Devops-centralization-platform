@@ -87,17 +87,12 @@ const AppMetricsDashboard: React.FC = () => {
                 x: new Date(v[0] * 1000),
                 y: parseFloat(v[1]) || 0
               }));
-            } else if (key === 'errors' || key === 'traffic') {
-              // For errors/traffic, if the result is empty but the app is UP, it's 0
-              newData[key] = [];
             }
           } catch (e) {
             console.error(`Failed to fetch ${key} metrics`, e);
           }
         })
       );
-
-      // Final polish: If we have traffic but no errors, errors = 0
       if (newData.traffic.length > 0 && newData.errors.length === 0) {
         newData.errors = newData.traffic.map((d: any) => ({ ...d, y: 0 }));
       }

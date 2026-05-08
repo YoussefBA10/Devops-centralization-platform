@@ -58,9 +58,6 @@ public class ApplicationController {
                 .lastErrorMessage(app.getLastErrorMessage())
                 .gitToken(app.getGitToken())
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
-                .metricsPort(app.getMetricsPort())
-                .metricsTestStatus(app.getMetricsTestStatus())
-                .metricsPath(app.getMetricsPath())
                 .environmentName(app.getEnvironment() != null ? app.getEnvironment().getName() : null)
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
@@ -92,9 +89,6 @@ public class ApplicationController {
                 .lastErrorMessage(app.getLastErrorMessage())
                 .gitToken(app.getGitToken())
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
-                .metricsPort(app.getMetricsPort())
-                .metricsTestStatus(app.getMetricsTestStatus())
-                .metricsPath(app.getMetricsPath())
                 .build();
         return ResponseEntity.ok(dto);
     }
@@ -381,115 +375,9 @@ public class ApplicationController {
         return ResponseEntity.ok(Map.of("isRunning", isRunning));
     }
 
-    @PostMapping("/{id}/metrics/test")
-    @RequiresPermission("APP_DEPLOYMENT_EDIT")
-    public ResponseEntity<?> testMetricsEndpoint(@PathVariable Long id, @RequestBody Map<String, Object> request) {
-        Application app = applicationRepository.findById(id).orElse(null);
-        if (app == null)
-            return ResponseEntity.notFound().build();
 
-        Integer port = request.get("port") != null ? Integer.valueOf(request.get("port").toString()) : null;
-        if (port == null)
-            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Port is required"));
 
-        String userPath = (String) request.get("path");
 
-        // Determine potential paths to try
-        java.util.List<String> pathsToTry = new java.util.ArrayList<>();
-        boolean isManualPath = false;
-
-        if (userPath != null && !userPath.trim().isEmpty()) {
-            userPath = userPath.trim();
-            if (!userPath.startsWith("/"))
-                userPath = "/" + userPath;
-            pathsToTry.add(userPath);
-            isManualPath = true;
-        } else {
-            // Default heuristics based on language
-            String lang = app.getAppLanguage() != null ? app.getAppLanguage().toLowerCase() : "";
-            if (lang.contains("java") || lang.contains("spring")) {
-                pathsToTry.add("/actuator/prometheus");
-                pathsToTry.add("/metrics");
-            } else {
-                pathsToTry.add("/metrics");
-                pathsToTry.add("/actuator/prometheus");
-            }
-        }
-
-        String successfulPath = null;
-        String lastError = "Could not reach host at any of the attempted paths.";
-
-        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
-        org.springframework.http.client.SimpleClientHttpRequestFactory factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(5000);
-        restTemplate.setRequestFactory(factory);
-
-        for (String path : pathsToTry) {
-            String host = app.getTargetNode();
-            if (host != null) {
-                // Strip protocols and trailing slashes if accidentally included in the IP field
-                host = host.replaceAll("^https?://", "").replaceAll("/$", "");
-            }
-            String url = "http://" + host + ":" + port + path;
-            try {
-                org.springframework.http.ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null &&
-                        (response.getBody().contains("# HELP") || response.getBody().contains("# TYPE"))) {
-                    successfulPath = path;
-                    break;
-                }
-            } catch (Exception e) {
-                lastError = "Connection failed for " + path + ": " + e.getMessage();
-                // If the user manually provided a path, don't try fallbacks - show them this
-                // specific error
-                if (isManualPath)
-                    break;
-            }
-        }
-
-        if (successfulPath != null) {
-            app.setMetricsPort(port);
-            app.setMetricsPath(successfulPath);
-            app.setMetricsTestStatus("SUCCESS");
-            app.setMetricsTestedAt(java.time.LocalDateTime.now());
-            applicationRepository.save(app);
-            return ResponseEntity.ok(Map.of("success", true, "message", "Successfully connected via " + successfulPath,
-                    "path", successfulPath));
-        } else {
-            return ResponseEntity.ok(Map.of("success", false, "message", lastError));
-        }
-    }
-
-    @PatchMapping("/{id}/metrics/config")
-    @RequiresPermission("APP_DEPLOYMENT_EDIT")
-    @Transactional
-    public ResponseEntity<?> updateMetricsConfig(@PathVariable Long id, @RequestBody Map<String, Object> request) {
-        log.info("Received metrics config update request for app ID: {}", id);
-        Application app = applicationRepository.findById(id).orElse(null);
-        if (app == null)
-            return ResponseEntity.notFound().build();
-
-        if (request.containsKey("metricsPort")) {
-            Object portObj = request.get("metricsPort");
-            app.setMetricsPort(portObj != null ? Integer.valueOf(portObj.toString()) : null);
-        }
-        if (request.containsKey("testStatus")) {
-            app.setMetricsTestStatus((String) request.get("testStatus"));
-        }
-        if (request.containsKey("metricsPath")) {
-            app.setMetricsPath((String) request.get("metricsPath"));
-        }
-        app.setMetricsTestedAt(java.time.LocalDateTime.now());
-
-        applicationRepository.save(app);
-
-//        if ("SUCCESS".equals(app.getMetricsTestStatus()) && app.getMetricsPort() != null) {
-//            deploymentService.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-//        }
-
-        return ResponseEntity.ok(Map.of("message", "Metrics configuration updated successfully"));
-    }
 
     @GetMapping("/{id}/metrics")
     @RequiresPermission("APP_DEPLOYMENT_VIEW")
@@ -502,10 +390,7 @@ public class ApplicationController {
         if (app == null)
             return ResponseEntity.notFound().build();
 
-        if (app.getMetricsPort() == null || !"SUCCESS".equals(app.getMetricsTestStatus())) {
-            return ResponseEntity.status(404).body(Map.of("error", "metrics_unavailable", "message",
-                    "Metrics endpoint not configured for this application."));
-        }
+
 
         // The query should already include the job label filter injected by the
         // frontend,

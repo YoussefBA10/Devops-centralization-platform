@@ -653,11 +653,7 @@ public class DeploymentService {
                 this.promoteApplication(environmentId, applicationId, userId);
             }
 
-//            // Task 3: Ensure metrics are registered in Prometheus if configured
-//            if (app.getMetricsPort() != null && "SUCCESS".equals(app.getMetricsTestStatus())) {
-//                log.info("App {} has metrics configured. Updating Prometheus targets...", app.getName());
-//                this.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-//            }
+
 
         } catch (Exception e) {
             log.error("Application full deployment failed: {}", e.getMessage());
@@ -977,83 +973,7 @@ public class DeploymentService {
     }
 
     @Async
-    @Transactional
-    public void registerAppInPrometheus(Long appId, String ip, Integer metricsPort) {
-        log.info("Starting background Prometheus registration for appId: {}", appId);
-        Application app = applicationRepository.findById(appId).orElse(null);
-        if (app == null) {
-            log.error("Cannot register app in Prometheus: App with ID {} not found", appId);
-            return;
-        }
-        
-        String envName = "unknown";
-        try {
-            envName = app.getEnvironment().getName();
-        } catch (Exception e) {
-            log.warn("Could not get environment name for app {}: {}", app.getName(), e.getMessage());
-        }
 
-        log.info("Registering app {} in Prometheus for environment {}", app.getName(), envName);
-        try {
-            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/app_targets.yml");
-            if (!configFile.getParentFile().exists()) {
-                log.info("Creating directory: {}", configFile.getParentFile().getAbsolutePath());
-                configFile.getParentFile().mkdirs();
-            }
-
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
-                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-            java.util.List<java.util.Map<String, Object>> targets;
-
-            if (configFile.exists() && configFile.length() > 0) {
-                targets = mapper.readValue(configFile,
-                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
-                        });
-            } else {
-                targets = new java.util.ArrayList<>();
-            }
-
-            String envLabel = app.getEnvironment().getSafeName();
-            
-            // SANITIZE IP
-            String cleanIp = ip;
-            if (cleanIp != null) {
-                cleanIp = cleanIp.replaceAll("^https?://", "").replaceAll("/$", "");
-            }
-            final String finalIp = cleanIp;
-
-            String centralIp = getCentralIp(app.getEnvironment());
-            String nodeName = finalIp.equals(centralIp) ? "central-node" : "node-" + finalIp.replace(".", "-");
-            String targetStr = finalIp + ":" + metricsPort;
-            String jobName = app.getServiceNameKeyword() != null ? app.getServiceNameKeyword() : app.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
-
-            java.util.Map<String, String> labels = new java.util.HashMap<>();
-            labels.put("job", jobName);
-            labels.put("environment", envLabel);
-            labels.put("nodename", nodeName);
-            
-            // Find node ID for this app
-            managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), ip)
-                .ifPresent(n -> labels.put("node_id", String.valueOf(n.getId())));
-            labels.put("app_id", String.valueOf(app.getId()));
-            if (app.getMetricsPath() != null) {
-                labels.put("metrics_path", app.getMetricsPath());
-            }
-
-            java.util.Map<String, Object> appTarget = new java.util.HashMap<>();
-            appTarget.put("targets", java.util.List.of(targetStr));
-            appTarget.put("labels", labels);
-
-            updateOrAdd(targets, appTarget);
-
-            mapper.writeValue(configFile, targets);
-            log.info("Updated Prometheus app targets in {}", configFile.getAbsolutePath());
-
-            triggerPrometheusReload();
-        } catch (Exception e) {
-            log.error("Failed to register app in Prometheus: {}", e.getMessage(), e);
-        }
-    }
 
     private void deregisterNodeFromPrometheus(String ip) {
         log.info("Deregistering node {} from Prometheus", ip);
@@ -1373,12 +1293,6 @@ public class DeploymentService {
             registerNodeInPrometheus(node.getEnvironment(), node.getIp(), node.getId());
         }
 
-//        List<Application> apps = applicationRepository.findAll();
-//        for (Application app : apps) {
-//            if (app.getTargetNode() != null && app.getMetricsPort() != null) {
-//                registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-//            }
-//        }
         log.info("Global monitoring synchronization complete.");
     }
 }
