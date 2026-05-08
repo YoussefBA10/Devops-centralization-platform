@@ -5,7 +5,7 @@ import 'chart.js/auto';
 import api from '../services/api';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
-import { ArrowLeft, RefreshCw, Activity, Zap, AlertTriangle, Cpu } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Activity, Zap, Cpu } from 'lucide-react';
 
 const AppMetricsDashboard: React.FC = () => {
   const { appId } = useParams();
