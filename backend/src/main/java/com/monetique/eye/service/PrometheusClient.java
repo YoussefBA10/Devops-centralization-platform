@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriUtils;
-import java.nio.charset.StandardCharsets;
+import org.springframework.web.util.UriComponentsBuilder;
+import java.net.URI;
 import java.util.*;
 
 @Service
@@ -14,13 +14,14 @@ public class PrometheusClient {
     private static final Logger log = LoggerFactory.getLogger(PrometheusClient.class);
 
     private final WebClient webClient;
+    private final String prometheusUrl;
 
     public PrometheusClient(@Value("${prometheus.url}") String prometheusUrl, WebClient.Builder webClientBuilder) {
+        this.prometheusUrl = prometheusUrl;
+        
         // Configure explicit timeouts and force system DNS resolver
         io.netty.channel.ChannelOption<Integer> connectTimeout = io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
         
-        // Force Netty to use the system's DNS resolver and prefer IPv4
-        // This often fixes "ConnectTimeoutException" in Docker environments where system tools (wget) work but Netty doesn't.
         reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create()
                 .resolver(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE) 
                 .option(connectTimeout, 10000)
@@ -38,14 +39,7 @@ public class PrometheusClient {
 
     public Double queryMetric(String query) {
         try {
-            Map result = webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", "{query}")
-                            .build(query))
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-
+            Map result = proxyQuery(query);
             if (result != null && "success".equals(result.get("status"))) {
                 Map data = (Map) result.get("data");
                 List results = (List) data.get("result");
@@ -64,14 +58,7 @@ public class PrometheusClient {
     public List<Map<String, Object>> queryList(String query) {
         List<Map<String, Object>> list = new ArrayList<>();
         try {
-            Map result = webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", "{query}")
-                            .build(query))
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-
+            Map result = proxyQuery(query);
             if (result != null && "success".equals(result.get("status"))) {
                 Map data = (Map) result.get("data");
                 List<Map> results = (List<Map>) data.get("result");
@@ -94,11 +81,15 @@ public class PrometheusClient {
 
     public Map<String, Object> proxyQuery(String query) {
         try {
-            String encodedQuery = UriUtils.encodeQueryParam(query, StandardCharsets.UTF_8);
+            URI uri = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
+                    .path("/api/v1/query")
+                    .queryParam("query", query)
+                    .build()
+                    .toUri();
+
+            log.debug("Proxying instant query to: {}", uri);
             return webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .query("query=" + encodedQuery)
-                            .build())
+                    .uri(uri)
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
@@ -113,11 +104,18 @@ public class PrometheusClient {
 
     public Map<String, Object> proxyQueryRange(String query, String start, String end, String step) {
         try {
-            String encodedQuery = UriUtils.encodeQueryParam(query, StandardCharsets.UTF_8);
+            URI uri = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
+                    .path("/api/v1/query_range")
+                    .queryParam("query", query)
+                    .queryParam("start", start)
+                    .queryParam("end", end)
+                    .queryParam("step", step)
+                    .build()
+                    .toUri();
+
+            log.debug("Proxying range query to: {}", uri);
             return webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query_range")
-                            .query("query=" + encodedQuery + "&start=" + start + "&end=" + end + "&step=" + step)
-                            .build())
+                    .uri(uri)
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
@@ -177,7 +175,6 @@ public class PrometheusClient {
     }
 
     public Double getAvgStability() {
-        // Mock stability or query instance uptime percentage
         return queryMetric("avg(avg_over_time(up{job=\"node-exporter\"}[1h])) * 100");
     }
 
