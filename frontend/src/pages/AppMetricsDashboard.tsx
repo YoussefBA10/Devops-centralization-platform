@@ -323,13 +323,14 @@ const AppMetricsDashboard: React.FC = () => {
       setMetrics((prev: any) => ({
         ...prev,
         summary: {
-          uptime: uptimeRes[0]?.value[1] ? formatUptime(parseFloat(uptimeRes[0].value[1])) : '0s',
+          uptime: uptimeRes[0]?.value[1] ? formatDuration(parseFloat(uptimeRes[0].value[1])) : 'N/A',
           cpu: safeParse(cpuRes, 1, 2),
           memory: safeParse(memRes, 1, 1),
           oom: safeParse(oomRes, 1, 0, '0'),
-          netRx: (parseFloat(netRxRes[0]?.value[1] || '0') / 1024).toFixed(1),
-          netTx: (parseFloat(netTxRes[0]?.value[1] || '0') / 1024).toFixed(1),
-          disk: safeParse(diskRes, 100, 1)
+          netRx: formatThroughput(parseFloat(netRxRes[0]?.value[1] || '0')),
+          netTx: formatThroughput(parseFloat(netTxRes[0]?.value[1] || '0')),
+          disk: safeParse(diskRes, 100, 1),
+          status: uptimeRes.length > 0 ? 'UP' : 'DOWN'
         },
         node: {
           cores,
@@ -379,12 +380,26 @@ const AppMetricsDashboard: React.FC = () => {
 
   // --- Helpers ---
 
-  const formatUptime = (seconds: number) => {
-    if (seconds === 0) return '0s';
+  const formatDuration = (seconds: number) => {
+    if (seconds === 0 || !isFinite(seconds)) return '0s';
     const d = Math.floor(seconds / (3600 * 24));
     const h = Math.floor((seconds % (3600 * 24)) / 3600);
     const m = Math.floor((seconds % 3600) / 60);
-    return `${d}d ${h}h ${m}m`;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+  };
+
+  const formatThroughput = (bytes: number) => {
+    if (bytes === 0 || !isFinite(bytes)) return '0 B/s';
+    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    let i = 0;
+    let val = bytes;
+    while (val >= 1024 && i < units.length - 1) {
+      val /= 1024;
+      i++;
+    }
+    return `${val.toFixed(1)} ${units[i]}`;
   };
 
   const calculateHealthScore = (cpu: number, mem: number, oom: number, disk: number) => {
@@ -612,16 +627,22 @@ const AppMetricsDashboard: React.FC = () => {
             </Card>
 
             <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <StatCard title="Uptime" value={metrics.summary.uptime || '0s'} icon={<Clock className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
-              <StatCard title="Restarts (1h)" value="0" icon={<RefreshCw className="w-4 h-4" />} color="var(--color-warning)" loading={loading} />
+              <StatCard title="Uptime" value={metrics.summary.uptime || 'N/A'} icon={<Clock className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
+              <StatCard title="Restarts (1h)" value={metrics.summary.restarts || '0'} icon={<RefreshCw className="w-4 h-4" />} color="var(--color-warning)" loading={loading} />
               <StatCard title="OOM Events" value={metrics.summary.oom || '0'} icon={<AlertTriangle className="w-4 h-4" />} color="var(--color-critical)" loading={loading} />
-              <StatCard title="Status" value={appInfo ? 'UP' : 'OFF'} icon={<Activity className="w-4 h-4" />} color="var(--color-healthy)" loading={loading} />
+              <StatCard 
+                title="Status" 
+                value={metrics.summary.status || 'DOWN'} 
+                icon={<Activity className="w-4 h-4" />} 
+                color={metrics.summary.status === 'UP' ? 'var(--color-healthy)' : 'var(--color-critical)'} 
+                loading={loading} 
+              />
               
               <div className="col-span-full grid grid-cols-2 sm:grid-cols-5 gap-4">
                 <StatCard title="CPU Avg" value={metrics.summary.cpu || '0'} unit="%" icon={<Cpu className="w-4 h-4" />} color="var(--color-healthy)" loading={loading} />
                 <StatCard title="Memory" value={metrics.summary.memory || '0'} unit="%" icon={<Zap className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
-                <StatCard title="Net RX" value={metrics.summary.netRx || '0'} unit="KB/s" icon={<Network className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
-                <StatCard title="Net TX" value={metrics.summary.netTx || '0'} unit="KB/s" icon={<Network className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
+                <StatCard title="Net RX" value={metrics.summary.netRx || '0 B/s'} icon={<Network className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
+                <StatCard title="Net TX" value={metrics.summary.netTx || '0 B/s'} icon={<Network className="w-4 h-4" />} color="var(--color-primary)" loading={loading} />
                 <StatCard title="Disk Used" value={metrics.summary.disk || '0'} unit="%" icon={<HardDrive className="w-4 h-4" />} color="var(--color-warning)" loading={loading} />
               </div>
             </div>
