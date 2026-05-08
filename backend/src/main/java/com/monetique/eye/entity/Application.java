@@ -65,7 +65,7 @@ public class Application {
     @Column(columnDefinition = "TEXT")
     private String envVarsJson; // Environment variables stored as JSON
 
-    private java.util.Map<String, String> labels = new java.util.HashMap<>();
+
     
     private java.time.LocalDateTime createdAt;
 
