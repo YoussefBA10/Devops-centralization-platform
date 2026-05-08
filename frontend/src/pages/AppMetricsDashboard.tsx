@@ -316,17 +316,23 @@ const AppMetricsDashboard: React.FC = () => {
       const memUsed = nodeMemUsedRes[0]?.value[1] ? parseFloat(nodeMemUsedRes[0].value[1]) : 0;
       const nodeInfo = nodeInfoRes[0]?.metric || {};
 
-      // Update state
+      // Helper to parse values safely with optional multiplier and precision
+      const safeParse = (res: any[], multiplier: number = 1, decimals: number = 1, fallback: string = '0.0') => {
+        if (!res || res.length === 0 || !res[0].value || res[0].value.length < 2) return fallback;
+        const val = parseFloat(res[0].value[1]) * multiplier;
+        return isFinite(val) ? val.toFixed(decimals) : fallback;
+      };
+
       setMetrics((prev: any) => ({
         ...prev,
         summary: {
-          uptime: formatUptime(uptimeVal),
-          cpu: cpuVal.toFixed(2),
-          memory: memVal.toFixed(1),
-          oom: oomVal,
-          netRx: netRxVal.toFixed(1),
-          netTx: netTxVal.toFixed(1),
-          disk: diskVal.toFixed(1)
+          uptime: uptimeRes[0]?.value[1] ? formatUptime(parseFloat(uptimeRes[0].value[1])) : '0s',
+          cpu: safeParse(cpuRes, 1, 2),
+          memory: safeParse(memRes, 1, 1),
+          oom: safeParse(oomRes, 1, 0, '0'),
+          netRx: (parseFloat(netRxRes[0]?.value[1] || '0') / 1024).toFixed(1),
+          netTx: (parseFloat(netTxRes[0]?.value[1] || '0') / 1024).toFixed(1),
+          disk: safeParse(diskRes, 100, 1)
         },
         node: {
           cores,

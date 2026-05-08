@@ -4,24 +4,25 @@
 export const QUERIES = {
   // A. CPU THROTTLING (%)
   CPU_THROTTLING: (appId: string, appName: string) => 
-    `(rate(container_cpu_throttled_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) / rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) * 100) or (rate(container_cpu_throttled_seconds_total{name="${appName}"}[5m]) / rate(container_cpu_usage_seconds_total{name="${appName}"}[5m]) * 100)`,
+    `((rate(container_cpu_throttled_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) / (rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) > 0) * 100) or (rate(container_cpu_throttled_seconds_total{name="${appName}"}[5m]) / (rate(container_cpu_usage_seconds_total{name="${appName}"}[5m]) > 0) * 100)) or on() vector(0)`,
 
   // B. CONTAINER RESTARTS (delta on start time)
   CONTAINER_RESTARTS: (appId: string, appName: string) => 
-    `changes(container_start_time_seconds{container_label_com_monetique_app_id="${appId}"}[1h]) or changes(container_start_time_seconds{name="${appName}"}[1h])`,
+    `(changes(container_start_time_seconds{container_label_com_monetique_app_id="${appId}"}[1h]) or changes(container_start_time_seconds{name="${appName}"}[1h])) or on() vector(0)`,
 
   // C. MEMORY PRESSURE (%)
+  // Handles unlimited containers by falling back to machine memory
   MEMORY_PRESSURE: (appId: string, appName: string) => 
-    `(container_memory_working_set_bytes{container_label_com_monetique_app_id="${appId}"} / container_spec_memory_limit_bytes{container_label_com_monetique_app_id="${appId}"} * 100) or (container_memory_working_set_bytes{name="${appName}"} / container_spec_memory_limit_bytes{name="${appName}"} * 100)`,
+    `(container_memory_working_set_bytes{container_label_com_monetique_app_id="${appId}"} / (container_spec_memory_limit_bytes{container_label_com_monetique_app_id="${appId}"} > 0 or on(instance) machine_memory_bytes) * 100) or (container_memory_working_set_bytes{name="${appName}"} / (container_spec_memory_limit_bytes{name="${appName}"} > 0 or on(instance) machine_memory_bytes) * 100) or on() vector(0)`,
 
   // D. OOM KILL EVENTS
   OOM_EVENTS: (appId: string, appName: string) => 
-    `container_oom_events_total{container_label_com_monetique_app_id="${appId}"} or container_oom_events_total{name="${appName}"}`,
+    `(container_oom_events_total{container_label_com_monetique_app_id="${appId}"} or container_oom_events_total{name="${appName}"}) or on() vector(0)`,
 
   // E. NETWORK PACKET DROPS (Host level fallback)
   NETWORK_DROPS: (node: string) => ({
-    rx: `rate(node_network_receive_drop_total{instance=~"${node}(:.*)?"}[5m])`,
-    tx: `rate(node_network_transmit_drop_total{instance=~"${node}(:.*)?"}[5m])`
+    rx: `rate(node_network_receive_drop_total{instance=~"${node}(:.*)?"}[5m]) or on() vector(0)`,
+    tx: `rate(node_network_transmit_drop_total{instance=~"${node}(:.*)?"}[5m]) or on() vector(0)`
   }),
 
   // F. FILESYSTEM SATURATION
@@ -33,7 +34,7 @@ export const QUERIES = {
 
   // G. LOAD AVERAGE RATIO
   LOAD_AVERAGE_RATIO: (node: string) => 
-    `node_load1{instance=~"${node}(:.*)?"} / count(node_cpu_seconds_total{instance=~"${node}(:.*)?", mode="idle"})`,
+    `(node_load1{instance=~"${node}(:.*)?"} / count(node_cpu_seconds_total{instance=~"${node}(:.*)?", mode="idle"})) or on() vector(0)`,
 
   // H. CONTAINER UPTIME
   CONTAINER_UPTIME: (appId: string, appName: string) => 
@@ -41,12 +42,12 @@ export const QUERIES = {
 
   // I. CPU USAGE TREND (Stacked Area)
   CPU_USAGE_STACKED: (appId: string, appName: string) => 
-    `rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) * 100 or rate(container_cpu_usage_seconds_total{name="${appName}"}[5m]) * 100`,
+    `(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) * 100 or rate(container_cpu_usage_seconds_total{name="${appName}"}[5m]) * 100) or on() vector(0)`,
 
   // J. NETWORK THROUGHPUT
   NETWORK_THROUGHPUT: (appId: string, appName: string) => ({
-    rx: `rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m]) or rate(container_network_receive_bytes_total{name="${appName}"}[5m])`,
-    tx: `rate(container_network_transmit_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m]) or rate(container_network_transmit_bytes_total{name="${appName}"}[5m])`
+    rx: `(rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m]) or rate(container_network_receive_bytes_total{name="${appName}"}[5m])) or on() vector(0)`,
+    tx: `(rate(container_network_transmit_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m]) or rate(container_network_transmit_bytes_total{name="${appName}"}[5m])) or on() vector(0)`
   }),
 
   // K. NODE INFO
