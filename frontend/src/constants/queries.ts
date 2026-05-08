@@ -10,13 +10,13 @@ export const QUERIES = {
   CONTAINER_RESTARTS: (appId: string, appName: string, nodeId: string, node: string) => 
     `(changes(container_start_time_seconds{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[1h]) or changes(container_start_time_seconds{name=~".*${appName}.*", node_id="${nodeId}"}[1h]) or changes(container_start_time_seconds{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[1h])) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
 
-  // C. MEMORY PRESSURE (%)
+  // C. MEMORY PRESSURE (%) - Working Set is the primary for OOM decisions
   MEMORY_PRESSURE: (appId: string, appName: string, nodeId: string, node: string) => 
     `((container_memory_working_set_bytes{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} / (container_spec_memory_limit_bytes{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} > 0 or on(node_id) machine_memory_bytes{job="cadvisor"})) * 100) or ((container_memory_working_set_bytes{name=~".*${appName}.*", node_id="${nodeId}"} / (container_spec_memory_limit_bytes{name=~".*${appName}.*", node_id="${nodeId}"} > 0 or on(node_id) machine_memory_bytes{job="cadvisor"})) * 100) or ((container_memory_working_set_bytes{name=~".*${appName}.*", instance=~"${node}(:.*)?"} / (container_spec_memory_limit_bytes{name=~".*${appName}.*", instance=~"${node}(:.*)?"} > 0 or on(instance) machine_memory_bytes{job="cadvisor"})) * 100) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
 
-  // D. OOM KILL EVENTS
+  // D. OOM KILL EVENTS - Container-level with Host-level fallback
   OOM_EVENTS: (appId: string, appName: string, nodeId: string, node: string) => 
-    `(container_oom_events_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} or container_oom_events_total{name=~".*${appName}.*", node_id="${nodeId}"} or container_oom_events_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
+    `(container_oom_events_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} or container_oom_events_total{name=~".*${appName}.*", node_id="${nodeId}"} or container_oom_events_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"} or node_vmstat_oom_kill{node_id="${nodeId}"} or node_vmstat_oom_kill{instance=~"${node}(:.*)?"}) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
 
   // E. NETWORK PACKET DROPS (Host level)
   NETWORK_DROPS: (nodeId: string, node: string) => ({
@@ -31,9 +31,9 @@ export const QUERIES = {
   INODE_USED: (nodeId: string, node: string) => 
     `1 - (node_filesystem_files_free{node_id="${nodeId}", mountpoint=~"/|/data" } / node_filesystem_files{node_id="${nodeId}", mountpoint=~"/|/data"}) or 1 - (node_filesystem_files_free{instance=~"${node}(:.*)?", mountpoint=~"/|/data" } / node_filesystem_files{instance=~"${node}(:.*)?", mountpoint=~"/|/data"})`,
 
-  // G. LOAD AVERAGE RATIO
+  // G. LOAD AVERAGE RATIO - Ratio > 1.0 means saturated
   LOAD_AVERAGE_RATIO: (nodeId: string, node: string) => 
-    `(node_load1{node_id="${nodeId}"} / count(node_cpu_seconds_total{node_id="${nodeId}", mode="idle"})) or (node_load1{instance=~"${node}(:.*)?"} / count(node_cpu_seconds_total{instance=~"${node}(:.*)?", mode="idle"})) or (up{job="node-exporter", node_id="${nodeId}"} * 0)`,
+    `(node_load1{node_id="${nodeId}"} / count without(cpu, mode) (node_cpu_seconds_total{node_id="${nodeId}", mode="idle"})) or (node_load1{instance=~"${node}(:.*)?"} / count without(cpu, mode) (node_cpu_seconds_total{instance=~"${node}(:.*)?", mode="idle"})) or (up{job="node-exporter", node_id="${nodeId}"} * 0)`,
 
   // H. CONTAINER UPTIME
   CONTAINER_UPTIME: (appId: string, appName: string, nodeId: string, node: string) => 
@@ -54,7 +54,7 @@ export const QUERIES = {
     `node_uname_info{node_id="${nodeId}"} or node_uname_info{instance=~"${node}(:.*)?"}`,
   
   NODE_RESOURCES: (nodeId: string, node: string) => ({
-    cpu_cores: `count(node_cpu_seconds_total{node_id="${nodeId}", mode="idle"}) or count(node_cpu_seconds_total{instance=~"${node}(:.*)?", mode="idle"})`,
+    cpu_cores: `count without(cpu, mode) (node_cpu_seconds_total{node_id="${nodeId}", mode="idle"}) or count without(cpu, mode) (node_cpu_seconds_total{instance=~"${node}(:.*)?", mode="idle"})`,
     memory_total: `node_memory_MemTotal_bytes{node_id="${nodeId}"} or node_memory_MemTotal_bytes{instance=~"${node}(:.*)?"}`,
     memory_used: `(node_memory_MemTotal_bytes{node_id="${nodeId}"} - node_memory_MemAvailable_bytes{node_id="${nodeId}"}) or (node_memory_MemTotal_bytes{instance=~"${node}(:.*)?"} - node_memory_MemAvailable_bytes{node_id="${nodeId}"})`
   })
