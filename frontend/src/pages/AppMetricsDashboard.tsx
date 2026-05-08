@@ -37,11 +37,14 @@ const AppMetricsDashboard: React.FC = () => {
     const start = end - 3600; // Last 1 hour
     const step = '60s';
 
+    const appName = appInfo?.name || '';
+    const containerFilter = `{container_label_com_monetique_app_id="${appId}"} or {name="${appName}"} or {name="${appName}-canary"}`;
+
     const queries = {
-      cpu: `sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m])) * 100`,
-      memory: `sum(container_memory_usage_bytes{container_label_com_monetique_app_id="${appId}"}) / 1024 / 1024`,
-      network: `sum(rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m])) / 1024`,
-      disk: `sum(container_fs_usage_bytes{container_label_com_monetique_app_id="${appId}"}) / 1024 / 1024`
+      cpu: `sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) or rate(container_cpu_usage_seconds_total{name="${appName}"}[5m]) or rate(container_cpu_usage_seconds_total{name="${appName}-canary"}[5m])) * 100`,
+      memory: `(sum(container_memory_usage_bytes{container_label_com_monetique_app_id="${appId}"}) or sum(container_memory_usage_bytes{name="${appName}"}) or sum(container_memory_usage_bytes{name="${appName}-canary"})) / 1024 / 1024`,
+      network: `(sum(rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m])) or sum(rate(container_network_receive_bytes_total{name="${appName}"}[5m])) or sum(rate(container_network_receive_bytes_total{name="${appName}-canary"}[5m]))) / 1024`,
+      disk: `(sum(container_fs_usage_bytes{container_label_com_monetique_app_id="${appId}"}) or sum(container_fs_usage_bytes{name="${appName}"}) or sum(container_fs_usage_bytes{name="${appName}-canary"})) / 1024 / 1024`
     };
 
     const newData: any = { 
@@ -54,9 +57,9 @@ const AppMetricsDashboard: React.FC = () => {
 
     try {
       try {
-        // Use a more reliable health signal: any metric with this app_id label
+        // Use a more reliable health signal: any metric with this app_id label OR the container name
         const healthRes = await api.get(`/applications/${appId}/metrics`, {
-          params: { query: `count({container_label_com_monetique_app_id="${appId}"})` }
+          params: { query: `count({container_label_com_monetique_app_id="${appId}"} or {name="${appName}"} or {name="${appName}-canary"})` }
         });
 
         if (Array.isArray(healthRes.data) && healthRes.data.length > 0) {
