@@ -295,12 +295,9 @@ const AppMetricsDashboard: React.FC = () => {
         prometheus.queryInstant(QUERIES.DISK_SPACE_USED(node))
       ]);
 
-      const uptimeVal = uptimeRes[0]?.value[1] ? parseFloat(uptimeRes[0].value[1]) : 0;
       const cpuVal = cpuRes[0]?.value[1] ? parseFloat(cpuRes[0].value[1]) : 0;
       const memVal = memRes[0]?.value[1] ? parseFloat(memRes[0].value[1]) : 0;
       const oomVal = oomRes[0]?.value[1] ? parseFloat(oomRes[0].value[1]) : 0;
-      const netRxVal = netRxRes[0]?.value[1] ? parseFloat(netRxRes[0].value[1]) / 1024 : 0;
-      const netTxVal = netTxRes[0]?.value[1] ? parseFloat(netTxRes[0].value[1]) / 1024 : 0;
       const diskVal = diskRes[0]?.value[1] ? parseFloat(diskRes[0].value[1]) * 100 : 0;
 
       // 5. Node Resources (Instant)
