@@ -254,15 +254,19 @@ const AppMetricsDashboard: React.FC = () => {
   };
 
   const fetchInitialData = async () => {
+    if (!selectedAppId) return;
+
     try {
-      // 1. Fetch apps for the selector
-      const appsRes = await api.get('/applications');
-      setApplications(appsRes.data);
+      // 1. Fetch specific app info first
+      const appRes = await api.get(`/applications/${selectedAppId}`);
+      setAppInfo(appRes.data);
       
-      // 2. Fetch specific app info
-      if (selectedAppId) {
-        const appRes = await api.get(`/applications/${selectedAppId}`);
-        setAppInfo(appRes.data);
+      // 2. Now fetch other apps in the same environment for the selector
+      if (appRes.data?.environmentId) {
+        const appsRes = await api.get('/applications', { 
+          params: { environmentId: appRes.data.environmentId } 
+        });
+        setApplications(appsRes.data);
       }
     } catch (e) {
       console.error('Failed to fetch initial data', e);

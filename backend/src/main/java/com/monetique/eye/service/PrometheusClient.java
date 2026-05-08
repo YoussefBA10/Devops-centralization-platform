@@ -94,34 +94,39 @@ public class PrometheusClient {
 
     public Map<String, Object> proxyQuery(String query) {
         try {
+            String encodedQuery = UriUtils.encodeQueryParam(query, StandardCharsets.UTF_8);
             return webClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", "{query}")
-                            .build(query))
+                            .query("query=" + encodedQuery)
+                            .build())
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
         } catch (Exception e) {
             log.error("Prometheus proxy query failed: {}", query, e);
-            return Collections.singletonMap("status", "error");
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("error", e.getMessage());
+            return error;
         }
     }
 
     public Map<String, Object> proxyQueryRange(String query, String start, String end, String step) {
         try {
+            String encodedQuery = UriUtils.encodeQueryParam(query, StandardCharsets.UTF_8);
             return webClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/api/v1/query_range")
-                            .queryParam("query", "{query}")
-                            .queryParam("start", start)
-                            .queryParam("end", end)
-                            .queryParam("step", step)
-                            .build(query))
+                            .query("query=" + encodedQuery + "&start=" + start + "&end=" + end + "&step=" + step)
+                            .build())
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
         } catch (Exception e) {
             log.error("Prometheus proxy range query failed: {}", query, e);
-            return Collections.singletonMap("status", "error");
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("error", e.getMessage());
+            return error;
         }
     }
 
@@ -267,4 +272,3 @@ public class PrometheusClient {
         return new ArrayList<>();
     }
 }
-
