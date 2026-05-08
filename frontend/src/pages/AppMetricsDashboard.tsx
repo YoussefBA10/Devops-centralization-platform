@@ -38,7 +38,7 @@ const AppMetricsDashboard: React.FC = () => {
     const step = '60s';
 
     const appName = appInfo?.name || '';
-    const containerFilter = `{container_label_com_monetique_app_id="${appId}"} or {name="${appName}"} or {name="${appName}-canary"}`;
+
 
     const queries = {
       cpu: `sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m]) or rate(container_cpu_usage_seconds_total{name="${appName}"}[5m]) or rate(container_cpu_usage_seconds_total{name="${appName}-canary"}[5m])) * 100`,
