@@ -65,13 +65,25 @@ const AppMetricsDashboard: React.FC = () => {
         if (Array.isArray(healthRes.data) && healthRes.data.length > 0) {
           newData.health = {
             status: 'UP',
-            message: 'Application is active and reporting infrastructure metrics.'
+            message: 'Application container is active and reporting metrics.'
           };
         } else {
-          newData.health = { 
-            status: 'NOT_FOUND', 
-            message: 'No container metrics found with this App ID. The container may be starting or not discovered yet.' 
-          };
+          // Final fallback: try to see if ANY metrics exist for the app name directly
+          const fallbackRes = await api.get(`/applications/${appId}/metrics`, {
+            params: { query: `count({name=~"${appName}.*"})` }
+          });
+          
+          if (Array.isArray(fallbackRes.data) && fallbackRes.data.length > 0) {
+            newData.health = {
+              status: 'UP',
+              message: 'Application discovered via container name fallback.'
+            };
+          } else {
+            newData.health = { 
+              status: 'NOT_FOUND', 
+              message: 'No metrics found for this App ID or container name. The container may still be initializing.' 
+            };
+          }
         }
       } catch (e) {
         console.error('Failed to fetch health status', e);
@@ -106,10 +118,15 @@ const AppMetricsDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchAppInfo();
-    fetchMetrics();
-    const interval = setInterval(fetchMetrics, 60000); // refresh every minute
-    return () => clearInterval(interval);
   }, [appId]);
+
+  useEffect(() => {
+    if (appInfo) {
+      fetchMetrics();
+      const interval = setInterval(fetchMetrics, 60000); // refresh every minute
+      return () => clearInterval(interval);
+    }
+  }, [appInfo]);
 
   const chartOptions = {
     responsive: true,
