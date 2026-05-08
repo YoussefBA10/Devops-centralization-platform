@@ -282,17 +282,18 @@ const AppMetricsDashboard: React.FC = () => {
     try {
       const appId = selectedAppId;
       const appName = appInfo.name;
+      const nodeId = String(appInfo.nodeId || '');
       const node = appInfo.targetNode;
 
       // 1. Fetch Summary Stats (Instant)
       const [uptimeRes, cpuRes, memRes, oomRes, netRxRes, netTxRes, diskRes] = await Promise.all([
-        prometheus.queryInstant(QUERIES.CONTAINER_UPTIME(appId, appName, node)),
-        prometheus.queryInstant(QUERIES.CPU_USAGE_STACKED(appId, appName, node)),
-        prometheus.queryInstant(QUERIES.MEMORY_PRESSURE(appId, appName, node)),
-        prometheus.queryInstant(QUERIES.OOM_EVENTS(appId, appName, node)),
-        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, node).rx),
-        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, node).tx),
-        prometheus.queryInstant(QUERIES.DISK_SPACE_USED(node))
+        prometheus.queryInstant(QUERIES.CONTAINER_UPTIME(appId, appName, nodeId)),
+        prometheus.queryInstant(QUERIES.CPU_USAGE_STACKED(appId, appName, nodeId)),
+        prometheus.queryInstant(QUERIES.MEMORY_PRESSURE(appId, appName, nodeId)),
+        prometheus.queryInstant(QUERIES.OOM_EVENTS(appId, appName, nodeId)),
+        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId).rx),
+        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId).tx),
+        prometheus.queryInstant(QUERIES.DISK_SPACE_USED(nodeId))
       ]);
 
       const cpuVal = cpuRes[0]?.value[1] ? parseFloat(cpuRes[0].value[1]) : 0;
@@ -302,10 +303,10 @@ const AppMetricsDashboard: React.FC = () => {
 
       // 5. Node Resources (Instant)
       const [nodeCoresRes, nodeMemTotalRes, nodeMemUsedRes, nodeInfoRes] = await Promise.all([
-        prometheus.queryInstant(QUERIES.NODE_RESOURCES(node).cpu_cores),
-        prometheus.queryInstant(QUERIES.NODE_RESOURCES(node).memory_total),
-        prometheus.queryInstant(QUERIES.NODE_RESOURCES(node).memory_used),
-        prometheus.queryInstant(QUERIES.NODE_INFO(node))
+        prometheus.queryInstant(QUERIES.NODE_RESOURCES(nodeId).cpu_cores),
+        prometheus.queryInstant(QUERIES.NODE_RESOURCES(nodeId).memory_total),
+        prometheus.queryInstant(QUERIES.NODE_RESOURCES(nodeId).memory_used),
+        prometheus.queryInstant(QUERIES.NODE_INFO(nodeId))
       ]);
 
       const cores = nodeCoresRes[0]?.value[1] ? parseInt(nodeCoresRes[0].value[1]) : 0;
@@ -655,14 +656,14 @@ const AppMetricsDashboard: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                 <MetricPanel 
                   title="CPU Usage Trend" 
-                  query={QUERIES.CPU_USAGE_STACKED(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '')} 
+                  query={QUERIES.CPU_USAGE_STACKED(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit="%" 
                   color="#10b981" 
                 />
                 <MetricPanel 
                   title="CPU Throttling" 
-                  query={QUERIES.CPU_THROTTLING(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '')} 
+                  query={QUERIES.CPU_THROTTLING(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit="%" 
                   color="#f59e0b" 
@@ -671,7 +672,7 @@ const AppMetricsDashboard: React.FC = () => {
                 />
                 <MetricPanel 
                   title="Memory Pressure" 
-                  query={QUERIES.MEMORY_PRESSURE(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '')} 
+                  query={QUERIES.MEMORY_PRESSURE(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit="%" 
                   color="#3b82f6" 
@@ -679,7 +680,7 @@ const AppMetricsDashboard: React.FC = () => {
                 />
                 <MetricPanel 
                   title="Load Average Ratio" 
-                  query={QUERIES.LOAD_AVERAGE_RATIO(appInfo?.targetNode)} 
+                  query={QUERIES.LOAD_AVERAGE_RATIO(String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit="" 
                   color="#8b5cf6" 
@@ -697,7 +698,7 @@ const AppMetricsDashboard: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                  <MetricPanel 
                   title="Restart Events" 
-                  query={QUERIES.CONTAINER_RESTARTS(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '')} 
+                  query={QUERIES.CONTAINER_RESTARTS(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit="" 
                   color="#ef4444" 
@@ -705,7 +706,7 @@ const AppMetricsDashboard: React.FC = () => {
                 />
                 <MetricPanel 
                   title="OOM Events" 
-                  query={QUERIES.OOM_EVENTS(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '')} 
+                  query={QUERIES.OOM_EVENTS(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit="" 
                   color="#f43f5e" 
@@ -722,21 +723,21 @@ const AppMetricsDashboard: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2 duration-300">
                 <MetricPanel 
                   title="Throughput RX" 
-                  query={QUERIES.NETWORK_THROUGHPUT(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '').rx} 
+                  query={QUERIES.NETWORK_THROUGHPUT(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || '')).rx} 
                   timeRange={timeRange} 
                   unit=" B/s" 
                   color="#3b82f6" 
                 />
                 <MetricPanel 
                   title="Throughput TX" 
-                  query={QUERIES.NETWORK_THROUGHPUT(selectedAppId, appInfo?.name || '', appInfo?.targetNode || '').tx} 
+                  query={QUERIES.NETWORK_THROUGHPUT(selectedAppId, appInfo?.name || '', String(appInfo?.nodeId || '')).tx} 
                   timeRange={timeRange} 
                   unit=" B/s" 
                   color="#10b981" 
                 />
                 <MetricPanel 
                   title="Packet Drops RX" 
-                  query={QUERIES.NETWORK_DROPS(appInfo?.targetNode).rx} 
+                  query={QUERIES.NETWORK_DROPS(String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit=" /s" 
                   color="#f59e0b" 
@@ -744,7 +745,7 @@ const AppMetricsDashboard: React.FC = () => {
                 />
                 <MetricPanel 
                   title="Packet Drops TX" 
-                  query={QUERIES.NETWORK_DROPS(appInfo?.targetNode).tx} 
+                  query={QUERIES.NETWORK_DROPS(String(appInfo?.nodeId || ''))} 
                   timeRange={timeRange} 
                   unit=" /s" 
                   color="#ef4444" 

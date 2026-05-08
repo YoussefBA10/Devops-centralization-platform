@@ -34,4 +34,6 @@ public class ApplicationDTO {
     private String gitToken;
     private java.util.Map<String, String> envVars;
     private String environmentName;
+    private Long nodeId;
+    private String nodeName;
 }

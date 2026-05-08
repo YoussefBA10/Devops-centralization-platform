@@ -33,6 +33,7 @@ public class ApplicationController {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final com.monetique.eye.service.ActivityLogService activityLogService;
     private final com.monetique.eye.service.PrometheusClient prometheusClient;
+    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
 
     @GetMapping
     @RequiresPermission("APP_DEPLOYMENT_VIEW")
@@ -59,6 +60,10 @@ public class ApplicationController {
                 .gitToken(app.getGitToken())
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
                 .environmentName(app.getEnvironment() != null ? app.getEnvironment().getName() : null)
+                .nodeId(managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), app.getTargetNode())
+                        .map(com.monetique.eye.entity.ManagedNode::getId).orElse(null))
+                .nodeName(managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), app.getTargetNode())
+                        .map(com.monetique.eye.entity.ManagedNode::getNodeName).orElse(null))
                 .build()).collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
     }
@@ -89,6 +94,10 @@ public class ApplicationController {
                 .lastErrorMessage(app.getLastErrorMessage())
                 .gitToken(app.getGitToken())
                 .envVars(parseEnvVars(app.getEnvVarsJson()))
+                .nodeId(managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), app.getTargetNode())
+                        .map(com.monetique.eye.entity.ManagedNode::getId).orElse(null))
+                .nodeName(managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), app.getTargetNode())
+                        .map(com.monetique.eye.entity.ManagedNode::getNodeName).orElse(null))
                 .build();
         return ResponseEntity.ok(dto);
     }
