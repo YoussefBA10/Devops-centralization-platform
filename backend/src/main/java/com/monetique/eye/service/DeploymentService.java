@@ -590,6 +590,7 @@ public class DeploymentService {
                     "-e", "srcPath='" + (request.getSrcPath() != null ? request.getSrcPath() : ".") + "'",
                     "-e", "oldAppName='" + oldAppName + "'",
                     "-e", "isCanary=" + (isCanary ? "true" : "false"),
+                    "-e", "appId=" + app.getId(),
                     "-e", "envVarsJson='" + (request.getEnvVars() != null ? objectMapper.writeValueAsString(request.getEnvVars()) : "{}") + "'",
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
@@ -652,11 +653,11 @@ public class DeploymentService {
                 this.promoteApplication(environmentId, applicationId, userId);
             }
 
-            // Task 3: Ensure metrics are registered in Prometheus if configured
-            if (app.getMetricsPort() != null && "SUCCESS".equals(app.getMetricsTestStatus())) {
-                log.info("App {} has metrics configured. Updating Prometheus targets...", app.getName());
-                this.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-            }
+//            // Task 3: Ensure metrics are registered in Prometheus if configured
+//            if (app.getMetricsPort() != null && "SUCCESS".equals(app.getMetricsTestStatus())) {
+//                log.info("App {} has metrics configured. Updating Prometheus targets...", app.getName());
+//                this.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
+//            }
 
         } catch (Exception e) {
             log.error("Application full deployment failed: {}", e.getMessage());
@@ -1372,12 +1373,12 @@ public class DeploymentService {
             registerNodeInPrometheus(node.getEnvironment(), node.getIp(), node.getId());
         }
 
-        List<Application> apps = applicationRepository.findAll();
-        for (Application app : apps) {
-            if (app.getTargetNode() != null && app.getMetricsPort() != null) {
-                registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-            }
-        }
+//        List<Application> apps = applicationRepository.findAll();
+//        for (Application app : apps) {
+//            if (app.getTargetNode() != null && app.getMetricsPort() != null) {
+//                registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
+//            }
+//        }
         log.info("Global monitoring synchronization complete.");
     }
 }

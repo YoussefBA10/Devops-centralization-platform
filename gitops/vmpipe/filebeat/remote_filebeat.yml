@@ -5,6 +5,11 @@ filebeat.inputs:
   paths:
     - /var/lib/docker/containers/*/*.log
 
+fields:
+  environment: "{{ env_label }}"
+  node: "{{ nodename }}"
+fields_under_root: true
+
 processors:
   - add_docker_metadata: ~
   - add_host_metadata: ~

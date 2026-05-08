@@ -219,7 +219,7 @@ services:
   logstash:
     image: docker.elastic.co/logstash/logstash:7.17.9
     container_name: logstash
-    restart: always
+    restart: unless-stopped
     labels:
       app: "monetique-eye"
       env: "central-node"
@@ -234,6 +234,7 @@ services:
     environment:
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - LS_JAVA_OPTS=-Xms256m -Xmx512m
     depends_on:
       - elasticsearch
     networks:

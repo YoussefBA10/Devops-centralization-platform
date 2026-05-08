@@ -13,10 +13,10 @@ const AppMetricsDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [appInfo, setAppInfo] = useState<any>(null);
   const [metricsData, setMetricsData] = useState<any>({
-    latency: [],
-    traffic: [],
-    errors: [],
-    saturation: [],
+    cpu: [],
+    memory: [],
+    network: [],
+    disk: [],
     health: { status: 'UNKNOWN', message: '' }
   });
 
@@ -38,32 +38,32 @@ const AppMetricsDashboard: React.FC = () => {
     const step = '60s';
 
     const queries = {
-      latency: `histogram_quantile(0.99, sum(rate({__name__=~"http_request_duration_seconds_bucket|http_request_duration_ms_bucket|http_server_requests_seconds_bucket|django_http_requests_latency_seconds_by_view_method_bucket", app_id="${appId}"}[5m])) by (le)) or (sum(rate(http_server_requests_seconds_sum{app_id="${appId}"}[5m])) / sum(rate(http_server_requests_seconds_count{app_id="${appId}"}[5m])))`,
-      traffic: `sum(rate({__name__=~"http_requests_total|http_request_total|http_request_count|http_server_requests_seconds_count|django_http_requests_before_middlewares_total", app_id="${appId}"}[5m]))`,
-      errors: `(sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count|django_http_responses_before_middlewares_total", app_id="${appId}", status_code!~"2..|3..", status!~"2..|3.."}[5m])) / sum(rate({__name__=~"http_requests_total|http_request_total|http_server_requests_seconds_count|django_http_responses_before_middlewares_total", app_id="${appId}"}[5m]))) * 100`,
-      saturation: `sum(rate({__name__=~"process_cpu_seconds_total|cpu_usage", app_id="${appId}"}[5m])) * 100 or (avg({__name__=~"process_cpu_usage|system_cpu_usage", app_id="${appId}"}) * 100)`
+      cpu: `sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}"}[5m])) * 100`,
+      memory: `sum(container_memory_usage_bytes{container_label_com_monetique_app_id="${appId}"}) / 1024 / 1024`,
+      network: `sum(rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}"}[5m])) / 1024`,
+      disk: `sum(container_fs_usage_bytes{container_label_com_monetique_app_id="${appId}"}) / 1024 / 1024`
     };
 
-    const newData: any = { latency: [], traffic: [], errors: [], saturation: [], health: { status: 'UNKNOWN', message: '' } };
+    const newData: any = { cpu: [], memory: [], network: [], disk: [], health: { status: 'UNKNOWN', message: '' } };
 
     try {
       // 1. Check Scrape Health first
       try {
         const healthRes = await api.get(`/applications/${appId}/metrics`, {
-          params: { query: `up{app_id="${appId}"}` }
+          params: { query: `container_last_seen{container_label_com_monetique_app_id="${appId}"}` }
         });
 
         // healthRes.data is a direct list from queryList
         if (Array.isArray(healthRes.data) && healthRes.data.length > 0) {
           const val = parseFloat(healthRes.data[0].value);
           newData.health = {
-            status: val === 1 ? 'UP' : 'DOWN',
-            message: val === 1 ? 'Prometheus is successfully scraping this app.' : 'Prometheus cannot reach the metrics endpoint (Check port/firewall).'
+            status: val > 0 ? 'UP' : 'DOWN',
+            message: val > 0 ? 'Container is currently active and reporting to cAdvisor.' : 'Container is not currently visible to cAdvisor.'
           };
         } else {
           // If we have any metrics at all, it means it's discovered
           const anyMetrics = await api.get(`/applications/${appId}/metrics`, {
-            params: { query: `count({app_id="${appId}"})` }
+            params: { query: `count({container_label_com_monetique_app_id="${appId}"})` }
           });
           if (Array.isArray(anyMetrics.data) && anyMetrics.data.length > 0) {
             newData.health = { status: 'UP', message: 'Prometheus is scraping, but the health signal is still stabilizing.' };
@@ -234,13 +234,13 @@ const AppMetricsDashboard: React.FC = () => {
           <Card className="bg-[#0c0c0e] border-white/5 shadow-xl">
             <CardHeader className="border-b border-white/5 pb-4">
               <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2 uppercase tracking-widest">
-                <Activity className="w-4 h-4 text-emerald-400" />
-                Traffic (Requests/sec)
+                <Cpu className="w-4 h-4 text-emerald-400" />
+                CPU Usage (%)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 h-72">
-              {metricsData.traffic.length > 0 ? (
-                <Line data={createChartData(metricsData.traffic, 'Requests/sec', '#34d399')} options={chartOptions} />
+              {metricsData.cpu.length > 0 ? (
+                <Line data={createChartData(metricsData.cpu, 'CPU %', '#34d399')} options={chartOptions} />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground/50 text-sm">No data available</div>
               )}
@@ -251,12 +251,12 @@ const AppMetricsDashboard: React.FC = () => {
             <CardHeader className="border-b border-white/5 pb-4">
               <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2 uppercase tracking-widest">
                 <Zap className="w-4 h-4 text-indigo-400" />
-                Latency (P99 ms)
+                Memory Usage (MB)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 h-72">
-              {metricsData.latency.length > 0 ? (
-                <Line data={createChartData(metricsData.latency.map((d: any) => ({ ...d, y: d.y * 1000 })), 'Latency (ms)', '#818cf8')} options={chartOptions} />
+              {metricsData.memory.length > 0 ? (
+                <Line data={createChartData(metricsData.memory, 'Memory MB', '#818cf8')} options={chartOptions} />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground/50 text-sm">No data available</div>
               )}
@@ -266,13 +266,13 @@ const AppMetricsDashboard: React.FC = () => {
           <Card className="bg-[#0c0c0e] border-white/5 shadow-xl">
             <CardHeader className="border-b border-white/5 pb-4">
               <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2 uppercase tracking-widest">
-                <AlertTriangle className="w-4 h-4 text-rose-400" />
-                Errors (Error Rate %)
+                <Activity className="w-4 h-4 text-rose-400" />
+                Network RX (KB/s)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 h-72">
-              {metricsData.errors.length > 0 ? (
-                <Line data={createChartData(metricsData.errors, 'Error Rate %', '#fb7185')} options={chartOptions} />
+              {metricsData.network.length > 0 ? (
+                <Line data={createChartData(metricsData.network, 'Network KB/s', '#fb7185')} options={chartOptions} />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground/50 text-sm">No data available</div>
               )}
@@ -283,12 +283,12 @@ const AppMetricsDashboard: React.FC = () => {
             <CardHeader className="border-b border-white/5 pb-4">
               <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2 uppercase tracking-widest">
                 <Cpu className="w-4 h-4 text-amber-400" />
-                Saturation (CPU Usage)
+                Disk Usage (MB)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 h-72">
-              {metricsData.saturation.length > 0 ? (
-                <Line data={createChartData(metricsData.saturation, 'CPU %', '#fbbf24')} options={chartOptions} />
+              {metricsData.disk.length > 0 ? (
+                <Line data={createChartData(metricsData.disk, 'Disk MB', '#fbbf24')} options={chartOptions} />
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground/50 text-sm">No data available</div>
               )}

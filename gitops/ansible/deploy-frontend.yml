@@ -16,7 +16,8 @@
       shell: |
         docker run -d --name {{ appName }} \
         --restart=always \
-        --label com.monetique.service={{ appName }} \
+        --log-driver json-file \
+        --label com.monetique.service="{{ appName }}" \
         --label com.monetique.environment={{ env_label | default('production') }} \
         --label node={{ ansible_hostname }} \
         -p 80:80 \

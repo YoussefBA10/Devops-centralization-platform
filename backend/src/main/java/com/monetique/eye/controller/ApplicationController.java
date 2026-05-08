@@ -484,9 +484,9 @@ public class ApplicationController {
 
         applicationRepository.save(app);
 
-        if ("SUCCESS".equals(app.getMetricsTestStatus()) && app.getMetricsPort() != null) {
-            deploymentService.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-        }
+//        if ("SUCCESS".equals(app.getMetricsTestStatus()) && app.getMetricsPort() != null) {
+//            deploymentService.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
+//        }
 
         return ResponseEntity.ok(Map.of("message", "Metrics configuration updated successfully"));
     }

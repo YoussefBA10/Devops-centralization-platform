@@ -312,6 +312,8 @@
           env: "{{ envLabel }}"
           com.monetique.environment: "{{ envLabel }}"
           com.monetique.category: "{{ appType | default('unknown') | lower }}"
+          com.monetique.app_id: "{{ appId }}"
+          com.monetique.app_name: "{{ appName }}"
           node: "{{ nodename }}"
           is_canary: "{{ isCanary | default(false) | bool | string }}"
         env: "{{ env_map | combine({'NODE_ENV': 'production'}) }}"
