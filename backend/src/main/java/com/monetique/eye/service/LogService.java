@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.entity.Application;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 public class LogService {
@@ -23,7 +23,7 @@ public class LogService {
         this.applicationRepository = applicationRepository;
     }
 
-    public LogResponseDTO searchLogs(Long appId, String query, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    public LogResponseDTO searchLogs(Long appId, String query, String severity, Instant from, Instant to, Pageable pageable) {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
@@ -48,7 +48,7 @@ public class LogService {
                 .build();
     }
 
-    public String exportLogsAsCsv(Long appId, String query, String severity, LocalDateTime from, LocalDateTime to) {
+    public String exportLogsAsCsv(Long appId, String query, String severity, Instant from, Instant to) {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         

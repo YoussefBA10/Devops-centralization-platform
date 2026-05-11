@@ -19,8 +19,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -42,14 +41,14 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String queryStr, String severity, LocalDateTime from,
-            LocalDateTime to, Pageable pageable) {
+    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String queryStr, String severity, Instant from,
+            Instant to, Pageable pageable) {
         return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, queryStr, severity, from, to, pageable))
                 .join();
     }
 
-    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String queryStr, String severity, LocalDateTime from,
-            LocalDateTime to, Pageable pageable) {
+    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+            Instant to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
@@ -103,11 +102,9 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 boolQuery.filter(f -> f.range(r -> {
                     var rangeBuilder = r.field("@timestamp");
                     if (from != null)
-                        rangeBuilder
-                                .gte(co.elastic.clients.json.JsonData.of(from.format(DateTimeFormatter.ISO_DATE_TIME) + "Z"));
+                        rangeBuilder.gte(co.elastic.clients.json.JsonData.of(from.toString()));
                     if (to != null)
-                        rangeBuilder
-                                .lte(co.elastic.clients.json.JsonData.of(to.format(DateTimeFormatter.ISO_DATE_TIME) + "Z"));
+                        rangeBuilder.lte(co.elastic.clients.json.JsonData.of(to.toString()));
                     return rangeBuilder;
                 }));
             }
@@ -142,8 +139,8 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String queryStr, String severity, LocalDateTime from,
-            LocalDateTime to, Pageable pageable, Throwable t) {
+    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+            Instant to, Pageable pageable, Throwable t) {
         log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", displayName,
                 t.getMessage());
         return new PageImpl<>(new ArrayList<>(), pageable, 0);
@@ -184,8 +181,8 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
         return LogEventDTO.builder()
                 .id(id)
                 .timestamp(source.has("@timestamp")
-                        ? LocalDateTime.parse(source.get("@timestamp").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-                        : LocalDateTime.now())
+                        ? Instant.parse(source.get("@timestamp").asText())
+                        : Instant.now())
                 .node(source.has("node") ? source.get("node").asText() : "unknown")
                 .service(getField(source, "service", "service_name", "app", "compose_service", "job"))
                 .severity(source.has("severity") ? source.get("severity").asText() : (source.has("detected_level") ? source.get("detected_level").asText() : "INFO"))

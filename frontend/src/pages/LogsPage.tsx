@@ -56,8 +56,8 @@ const LogsPage: React.FC = () => {
         severity: severity === 'ALL' ? undefined : severity, 
         size: limit,
         page: page,
-        from: fromDate ? (fromDate.length === 16 ? `${fromDate}:00` : fromDate) : undefined,
-        to: toDate ? (toDate.length === 16 ? `${toDate}:00` : toDate) : undefined
+        from: fromDate ? new Date(fromDate).toISOString() : undefined,
+        to: toDate ? new Date(toDate).toISOString() : undefined
       });
       setLogs(response.data.logs || []);
       setMetadata({
