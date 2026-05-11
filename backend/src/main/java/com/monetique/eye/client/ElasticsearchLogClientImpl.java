@@ -42,25 +42,38 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String appName, String queryStr, String severity, LocalDateTime from,
+    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String queryStr, String severity, LocalDateTime from,
             LocalDateTime to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, severity, from, to, pageable))
+        return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, queryStr, severity, from, to, pageable))
                 .join();
     }
 
-    private Page<LogEventDTO> executeSearch(String appName, String queryStr, String severity, LocalDateTime from,
+    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String queryStr, String severity, LocalDateTime from,
             LocalDateTime to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
-            // Filter to match any of the common service identifier fields
-            boolQuery.must(m -> m.bool(b -> b.should(s -> s
-                    .term(t -> t.field("service.keyword").value(appName)))
-                    .should(s -> s.term(t -> t.field("service_name.keyword").value(appName)))
-                    .should(s -> s.term(t -> t.field("app.keyword").value(appName)))
-                    .should(s -> s.term(t -> t.field("compose_service.keyword").value(appName)))
-                    .should(s -> s.term(t -> t.field("job.keyword").value(appName)))
-                    .minimumShouldMatch("1")));
+            // Build a list of possible matching names
+            List<String> namesToMatch = new ArrayList<>();
+            if (displayName != null) namesToMatch.add(displayName);
+            if (keywordName != null) namesToMatch.add(keywordName);
+
+            // Special handling for common mismatches if needed (e.g. frontend-service vs angular-nginx-app)
+            if ("frontend-service".equalsIgnoreCase(displayName)) {
+                namesToMatch.add("angular-nginx-app");
+            }
+
+            // Filter to match any of the common service identifier fields with any of the names
+            boolQuery.must(m -> m.bool(b -> {
+                namesToMatch.forEach(name -> {
+                    b.should(s -> s.term(t -> t.field("service.keyword").value(name)));
+                    b.should(s -> s.term(t -> t.field("service_name.keyword").value(name)));
+                    b.should(s -> s.term(t -> t.field("app.keyword").value(name)));
+                    b.should(s -> s.term(t -> t.field("compose_service.keyword").value(name)));
+                    b.should(s -> s.term(t -> t.field("job.keyword").value(name)));
+                });
+                return b.minimumShouldMatch("1");
+            }));
 
             if (queryStr != null && !queryStr.isBlank()) {
                 // Ensure wildcards for partial matches if not provided
@@ -113,15 +126,15 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             return new PageImpl<>(logs, pageable, total);
 
         } catch (Exception e) {
-            log.error("Failed to query ES for application {}: {}", appName, e.getMessage());
+            log.error("Failed to query ES for application {}: {}", displayName, e.getMessage());
             throw new RuntimeException("Elasticsearch query failed", e);
         }
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, String severity, LocalDateTime from,
+    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String queryStr, String severity, LocalDateTime from,
             LocalDateTime to, Pageable pageable, Throwable t) {
-        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", appName,
+        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", displayName,
                 t.getMessage());
         return new PageImpl<>(new ArrayList<>(), pageable, 0);
     }

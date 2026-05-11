@@ -27,14 +27,12 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        // Use serviceNameKeyword (container name) for ES queries, falling back to app name
-        String appName = (app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()) 
-                ? app.getServiceNameKeyword() 
-                : app.getName();
+        String displayName = app.getName();
+        String keywordName = app.getServiceNameKeyword();
 
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, pageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(displayName, keywordName, query, severity, from, to, pageable);
         
-        long totalDocs = elasticsearchLogClient.getDocumentCount(appName);
+        long totalDocs = elasticsearchLogClient.getDocumentCount(displayName);
         
         // Simple heuristic for ingest rate for enterprise feel
         long eps = totalDocs / (30 * 24 * 60 * 60) + 1;
