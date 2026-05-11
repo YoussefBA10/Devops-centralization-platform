@@ -132,12 +132,28 @@ const LogsPage: React.FC = () => {
     fetchLogs();
   };
 
-  const getSeverityColor = (message: string) => {
-    const msg = message.toUpperCase();
-    if (msg.includes('ERROR') || msg.includes('FATAL') || msg.includes('CRITICAL')) return 'text-destructive bg-destructive/10 border-destructive/20';
-    if (msg.includes('WARN')) return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
-    if (msg.includes('SUCCESS') || msg.includes('OK')) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-    return 'text-primary bg-primary/10 border-primary/20';
+  const getSeverityColor = (severity: string) => {
+    const s = (severity || 'INFO').toUpperCase();
+    if (s.includes('ERROR') || s.includes('FATAL') || s.includes('CRITICAL')) 
+      return 'text-rose-400 bg-rose-400/10 border-rose-400/20 shadow-[0_0_10px_rgba(251,113,133,0.1)]';
+    if (s.includes('WARN')) 
+      return 'text-amber-400 bg-amber-400/10 border-amber-400/20';
+    if (s.includes('DEBUG')) 
+      return 'text-sky-400 bg-sky-400/10 border-sky-400/20';
+    if (s.includes('SUCCESS') || s.includes('OK')) 
+      return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+    return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
+  };
+
+  const getCategoryColor = (category: string) => {
+    const c = (category || 'APPLICATION').toUpperCase();
+    switch (c) {
+      case 'DATABASE': return 'text-purple-400 bg-purple-400/10 border-purple-400/20';
+      case 'SECURITY': return 'text-orange-400 bg-orange-400/10 border-orange-400/20';
+      case 'NETWORK': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20';
+      case 'EXTERNAL': return 'text-pink-400 bg-pink-400/10 border-pink-400/20';
+      default: return 'text-primary/60 bg-primary/5 border-primary/10';
+    }
   };
 
   return (
@@ -321,7 +337,16 @@ const LogsPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-foreground/80">
                       <div className="flex flex-col gap-1.5">
-                        <span className="font-bold text-[9px] text-primary/60 uppercase tracking-[0.1em]">[{log.errorType || log.category || 'GENERAL'}]</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-widest border ${getCategoryColor(log.category || 'GENERAL')}`}>
+                            {log.category || 'GENERAL'}
+                          </span>
+                          {log.errorType && (
+                            <span className="text-[9px] font-bold text-rose-400/80 uppercase tracking-wider">
+                              • {log.errorType}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[13px] font-medium leading-[1.5] break-words whitespace-pre-wrap selection:bg-primary/30">
                           {log.normalizedSummary || log.rawMessage}
                         </div>
