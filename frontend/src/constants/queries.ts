@@ -34,7 +34,7 @@ export const QUERIES = {
   // ─── A. CPU THROTTLING (%) ───────────────────────────────────────────────
   // Correct cAdvisor CFS metrics (not container_cpu_throttled_seconds_total).
   // id=~"/docker/.*" excludes systemd slices from all cAdvisor queries.
-  CPU_THROTTLING: (appId: string, appName: string, nodeId: string, node: string) =>
+  CPU_THROTTLING: (_appId: string, appName: string, nodeId: string, node: string) =>
     `(
       rate(container_cpu_cfs_throttled_seconds_total{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}[5m])
       / rate(container_cpu_cfs_periods_total{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}[5m])
@@ -59,7 +59,7 @@ export const QUERIES = {
   // id=~"/docker/.*" is mandatory — systemd slice entries have start_time too
   // and would show as false restarts without this filter.
   // increase() on start_time counts upward jumps = actual container restarts.
-  CONTAINER_RESTARTS: (appId: string, appName: string, nodeId: string, node: string) =>
+  CONTAINER_RESTARTS: (_appId: string, appName: string, nodeId: string, node: string) =>
     `(
       increase(container_start_time_seconds{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}[10m])
     )
@@ -80,7 +80,7 @@ export const QUERIES = {
   // Third arm:  node total RAM fallback — when no container memory limit exists.
   //             on(node_id) group_left() required — container and node metrics
   //             have different label sets and can't be divided directly.
-  MEMORY_PRESSURE: (appId: string, appName: string, nodeId: string, node: string) =>
+  MEMORY_PRESSURE: (_appId: string, appName: string, nodeId: string, _node: string) =>
     `(
       (
         container_memory_working_set_bytes{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}
@@ -112,7 +112,7 @@ export const QUERIES = {
   // node_vmstat_oom_kill is the only reliable OOM signal on this setup.
   // WARNING: this is node-wide — any process OOM on the node increments it,
   // not just your container. Label it accordingly in the dashboard UI.
-  OOM_EVENTS: (appId: string, appName: string, nodeId: string, node: string) =>
+  OOM_EVENTS: (_appId: string, _appName: string, nodeId: string, node: string) =>
     `(
       increase(node_vmstat_oom_kill{node_id="${nodeId}"}[10m])
     )
@@ -200,7 +200,7 @@ export const QUERIES = {
   // id=~"/docker/.*" critical — systemd slices also have start_time and would
   // show false uptime values for non-container processes.
   // Zero-guard prevents duplicate series when multiple arms resolve simultaneously.
-  CONTAINER_UPTIME: (appId: string, appName: string, nodeId: string, node: string) =>
+  CONTAINER_UPTIME: (_appId: string, appName: string, nodeId: string, node: string) =>
     `(
       time() - container_start_time_seconds{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}
     )
@@ -218,7 +218,7 @@ export const QUERIES = {
   // ─── I. CPU USAGE TREND (stacked area) ───────────────────────────────────
   // Values > 100% are normal for multi-core containers (200% = 2 cores busy).
   // Set dashboard panel unit to "percent (0–∞)" not "percent (0–100)".
-  CPU_USAGE_STACKED: (appId: string, appName: string, nodeId: string, node: string) =>
+  CPU_USAGE_STACKED: (_appId: string, appName: string, nodeId: string, node: string) =>
     `(
       rate(container_cpu_usage_seconds_total{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}[5m]) * 100
     )
@@ -235,7 +235,7 @@ export const QUERIES = {
 
   // ─── J. NETWORK THROUGHPUT ───────────────────────────────────────────────
   // Results in bytes/sec — set dashboard panel unit to bytes/sec or bps.
-  NETWORK_THROUGHPUT: (appId: string, appName: string, nodeId: string, node: string) => ({
+  NETWORK_THROUGHPUT: (_appId: string, appName: string, nodeId: string, node: string) => ({
     rx: `(
       rate(container_network_receive_bytes_total{name=~"(?i).*${appName}.*", node_id="${nodeId}", id=~"/docker/.*"}[5m])
     )
