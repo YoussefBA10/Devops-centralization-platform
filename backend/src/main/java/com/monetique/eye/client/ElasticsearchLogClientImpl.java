@@ -65,9 +65,11 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             }
 
             // Special handling for common mismatches
-            if ("frontend-service".equalsIgnoreCase(displayName)) {
+            if ("frontend-service".equalsIgnoreCase(displayName) || "angular-nginx-app".equalsIgnoreCase(displayName)) {
                 namesToMatch.add("angular-nginx-app");
+                namesToMatch.add("frontend-service");
                 namesToMatch.add("frontend");
+                namesToMatch.add("nginx");
             }
 
             // Filter to match any of the common service identifier fields with any of the names (using wildcard for compose prefixes)
