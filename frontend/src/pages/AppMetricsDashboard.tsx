@@ -114,11 +114,6 @@ const MetricPanel: React.FC<{
     setLoading(true);
     try {
       // For charts, we want a small window to see detail, but scaled for long ranges
-      const duration = timeRange.end - timeRange.start;
-      const range = duration > 86400 ? '1h' : duration > 21600 ? '15m' : '5m';
-      
-      const queryWithRange = typeof query === 'string' ? query : ''; // Should handle both
-      
       const results = await prometheus.queryRange(query, timeRange.start, timeRange.end);
       const formatted = prometheus.formatSeries(results);
       setData(formatted);
