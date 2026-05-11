@@ -4,7 +4,7 @@
 export const QUERIES = {
   // A. CPU THROTTLING (%) - Surrogate using usage rate if throttling is unavailable
   CPU_THROTTLING: (appId: string, appName: string, nodeId: string, node: string) =>
-    `(rate(container_cpu_throttled_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) / (rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) > 0) * 100) or (rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m]) * 100) or (rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m]) * 100) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
+    `(sum(rate(container_cpu_throttled_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m])) / sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) > 0) * 100) or (sum(rate(container_cpu_throttled_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m])) / sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m]) > 0) * 100) or (sum(rate(container_cpu_throttled_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m])) / sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m]) > 0) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // B. CONTAINER RESTARTS - Detecting jumps in start time
   CONTAINER_RESTARTS: (appId: string, appName: string, nodeId: string, node: string) =>
@@ -41,7 +41,7 @@ export const QUERIES = {
 
   // I. CPU USAGE TREND (Stacked Area)
   CPU_USAGE_STACKED: (appId: string, appName: string, nodeId: string, node: string) =>
-    `(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) * 100 or rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m]) * 100 or rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m]) * 100) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
+    `(sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m])) * 100 or sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m])) * 100 or sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m])) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // J. NETWORK THROUGHPUT
   NETWORK_THROUGHPUT: (appId: string, appName: string, nodeId: string, node: string) => ({
