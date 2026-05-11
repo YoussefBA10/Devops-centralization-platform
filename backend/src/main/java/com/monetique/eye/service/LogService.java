@@ -52,13 +52,12 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String appName = (app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()) 
-                ? app.getServiceNameKeyword() 
-                : app.getName();
+        String displayName = app.getName();
+        String keywordName = app.getServiceNameKeyword();
 
         // Fetch top 1000 logs for export
         org.springframework.data.domain.Pageable exportPageable = org.springframework.data.domain.PageRequest.of(0, 1000);
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, exportPageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(displayName, keywordName, query, severity, from, to, exportPageable);
 
         StringBuilder csv = new StringBuilder();
         csv.append('\uFEFF');
