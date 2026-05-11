@@ -16,9 +16,11 @@ import { useEnvironment } from '../context/EnvironmentContext';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 import { getApplications, getSystemLogs, clearSystemLogs, exportSystemLogs } from '../services/api';
+import { useToast } from '../components/ui/Toast';
 
 const LogsPage: React.FC = () => {
   const { selectedEnvironment, environments, setSelectedEnvironment } = useEnvironment();
+  const { showToast } = useToast();
   const [logs, setLogs] = useState<any[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,6 +69,7 @@ const LogsPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to fetch logs', error);
+      showToast('Failed to connect to Elasticsearch telemetry stream.', 'error');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -79,7 +82,7 @@ const LogsPage: React.FC = () => {
       await clearSystemLogs(selectedApp.id);
       fetchLogs();
     } catch (err: any) {
-      alert(`Failed to clear: ${err.response?.data || err.message}`);
+      showToast(`Failed to clear buffer: ${err.response?.data || err.message}`, 'error');
     }
   };
 
@@ -89,8 +92,8 @@ const LogsPage: React.FC = () => {
       const response = await exportSystemLogs(selectedApp.id, { 
         q: query, 
         severity: severity === 'ALL' ? undefined : severity,
-        from: fromDate ? (fromDate.length === 16 ? `${fromDate}:00` : fromDate) : undefined,
-        to: toDate ? (toDate.length === 16 ? `${toDate}:00` : toDate) : undefined
+        from: fromDate ? new Date(fromDate).toISOString() : undefined,
+        to: toDate ? new Date(toDate).toISOString() : undefined
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -106,7 +109,7 @@ const LogsPage: React.FC = () => {
       link.remove();
     } catch (error) {
       console.error('Failed to export logs', error);
-      alert('Failed to export logs. Please try again.');
+      showToast('Failed to generate log export. Please ensure the backend is reachable.', 'error');
     }
   };
 
