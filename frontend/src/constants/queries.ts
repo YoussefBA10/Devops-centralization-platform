@@ -3,25 +3,25 @@
  */
 export const QUERIES = {
   // A. CPU THROTTLING (%) - Surrogate using usage rate if throttling is unavailable
-  CPU_THROTTLING: (appId: string, appName: string, nodeId: string, node: string) =>
-    `(sum(rate(container_cpu_throttled_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m])) / sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) > 0) * 100) or (sum(rate(container_cpu_throttled_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m])) / sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m]) > 0) * 100) or (sum(rate(container_cpu_throttled_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m])) / sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m]) > 0) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
+  CPU_THROTTLING: (appId: string, appName: string, nodeId: string, node: string, range: string = '5m') =>
+    `(sum(rate(container_cpu_throttled_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[${range}])) / sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[${range}]) > 0) * 100) or (sum(rate(container_cpu_throttled_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[${range}])) / sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[${range}]) > 0) * 100) or (sum(rate(container_cpu_throttled_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[${range}])) / sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[${range}]) > 0) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // B. CONTAINER RESTARTS - Detecting jumps in start time
-  CONTAINER_RESTARTS: (appId: string, appName: string, nodeId: string, node: string) =>
-    `count(time() - container_start_time_seconds{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} < 600) or count(time() - container_start_time_seconds{name=~".*${appName}.*", node_id="${nodeId}"} < 600) or count(time() - container_start_time_seconds{name=~".*${appName}.*", instance=~"${node}(:.*)?"} < 600) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
+  CONTAINER_RESTARTS: (appId: string, appName: string, nodeId: string, node: string, rangeSeconds: number = 600) =>
+    `count(time() - container_start_time_seconds{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} < ${rangeSeconds}) or count(time() - container_start_time_seconds{name=~".*${appName}.*", node_id="${nodeId}"} < ${rangeSeconds}) or count(time() - container_start_time_seconds{name=~".*${appName}.*", instance=~"${node}(:.*)?"} < ${rangeSeconds}) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // C. MEMORY PRESSURE (%) - High precision limit-based matching
   MEMORY_PRESSURE: (appId: string, appName: string, nodeId: string, node: string) =>
     `(sum(container_memory_working_set_bytes{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}) / sum(container_spec_memory_limit_bytes{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"} > 0 < 1e15) * 100) or (sum(container_memory_working_set_bytes{name=~".*${appName}.*", node_id="${nodeId}"}) / sum(container_spec_memory_limit_bytes{name=~".*${appName}.*", node_id="${nodeId}"} > 0 < 1e15) * 100) or (sum(container_memory_working_set_bytes{name=~".*${appName}.*", instance=~"${node}(:.*)?"}) / sum(container_spec_memory_limit_bytes{name=~".*${appName}.*", instance=~"${node}(:.*)?"} > 0 < 1e15) * 100) or (sum(container_memory_working_set_bytes{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}) / sum(node_memory_MemTotal_bytes{node_id="${nodeId}"}) * 100) or (sum(container_memory_working_set_bytes{name=~".*${appName}.*", node_id="${nodeId}"}) / sum(node_memory_MemTotal_bytes{node_id="${nodeId}"}) * 100) or (sum(container_memory_working_set_bytes{name=~".*${appName}.*", instance=~"${node}(:.*)?"}) / sum(node_memory_MemTotal_bytes{instance=~"${node}(:.*)?"}) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // D. OOM KILL EVENTS - Using increase() for reliable event capture
-  OOM_EVENTS: (appId: string, appName: string, nodeId: string, node: string) =>
-    `sum(increase(container_oom_events_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[10m])) or sum(increase(container_oom_events_total{name=~".*${appName}.*", node_id="${nodeId}"}[10m])) or sum(increase(container_oom_events_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[10m])) or sum(increase(node_vmstat_oom_kill{node_id="${nodeId}"}[10m])) or sum(increase(node_vmstat_oom_kill{instance=~"${node}(:.*)?"}[10m])) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
+  OOM_EVENTS: (appId: string, appName: string, nodeId: string, node: string, range: string = '10m') =>
+    `sum(increase(container_oom_events_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[${range}])) or sum(increase(container_oom_events_total{name=~".*${appName}.*", node_id="${nodeId}"}[${range}])) or sum(increase(container_oom_events_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[${range}])) or sum(increase(node_vmstat_oom_kill{node_id="${nodeId}"}[${range}])) or sum(increase(node_vmstat_oom_kill{instance=~"${node}(:.*)?"}[${range}])) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // E. NETWORK PACKET DROPS (Host level)
-  NETWORK_DROPS: (nodeId: string, node: string) => ({
-    rx: `sum(rate(node_network_receive_drop_total{node_id="${nodeId}", device!="lo"}[5m])) or sum(rate(node_network_receive_drop_total{instance=~"${node}(:.*)?", device!="lo"}[5m])) or sum(up{job="node-exporter", node_id="${nodeId}"}) * 0`,
-    tx: `sum(rate(node_network_transmit_drop_total{node_id="${nodeId}", device!="lo"}[5m])) or sum(rate(node_network_transmit_drop_total{instance=~"${node}(:.*)?", device!="lo"}[5m])) or sum(up{job="node-exporter", node_id="${nodeId}"}) * 0`
+  NETWORK_DROPS: (nodeId: string, node: string, range: string = '5m') => ({
+    rx: `sum(rate(node_network_receive_drop_total{node_id="${nodeId}", device!="lo"}[${range}])) or sum(rate(node_network_receive_drop_total{instance=~"${node}(:.*)?", device!="lo"}[${range}])) or sum(up{job="node-exporter", node_id="${nodeId}"}) * 0`,
+    tx: `sum(rate(node_network_transmit_drop_total{node_id="${nodeId}", device!="lo"}[${range}])) or sum(rate(node_network_transmit_drop_total{instance=~"${node}(:.*)?", device!="lo"}[${range}])) or sum(up{job="node-exporter", node_id="${nodeId}"}) * 0`
   }),
 
   // F. FILESYSTEM SATURATION
@@ -40,13 +40,13 @@ export const QUERIES = {
     `(time() - container_start_time_seconds{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}) or (time() - container_start_time_seconds{name=~".*${appName}.*", node_id="${nodeId}"}) or (time() - container_start_time_seconds{name=~".*${appName}.*", instance=~"${node}(:.*)?"})`,
 
   // I. CPU USAGE TREND (Stacked Area)
-  CPU_USAGE_STACKED: (appId: string, appName: string, nodeId: string, node: string) =>
-    `(sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m])) * 100 or sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m])) * 100 or sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m])) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
+  CPU_USAGE_STACKED: (appId: string, appName: string, nodeId: string, node: string, range: string = '5m') =>
+    `(sum(rate(container_cpu_usage_seconds_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[${range}])) * 100 or sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", node_id="${nodeId}"}[${range}])) * 100 or sum(rate(container_cpu_usage_seconds_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[${range}])) * 100) or sum(up{job="cadvisor", node_id="${nodeId}"}) * 0`,
 
   // J. NETWORK THROUGHPUT
-  NETWORK_THROUGHPUT: (appId: string, appName: string, nodeId: string, node: string) => ({
-    rx: `(rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) or rate(container_network_receive_bytes_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m]) or rate(container_network_receive_bytes_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m])) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
-    tx: `(rate(container_network_transmit_bytes_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[5m]) or rate(container_network_transmit_bytes_total{name=~".*${appName}.*", node_id="${nodeId}"}[5m]) or rate(container_network_transmit_bytes_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[5m])) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`
+  NETWORK_THROUGHPUT: (appId: string, appName: string, nodeId: string, node: string, range: string = '5m') => ({
+    rx: `(rate(container_network_receive_bytes_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[${range}]) or rate(container_network_receive_bytes_total{name=~".*${appName}.*", node_id="${nodeId}"}[${range}]) or rate(container_network_receive_bytes_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[${range}])) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`,
+    tx: `(rate(container_network_transmit_bytes_total{container_label_com_monetique_app_id="${appId}", node_id="${nodeId}"}[${range}]) or rate(container_network_transmit_bytes_total{name=~".*${appName}.*", node_id="${nodeId}"}[${range}]) or rate(container_network_transmit_bytes_total{name=~".*${appName}.*", instance=~"${node}(:.*)?"}[${range}])) or (up{job="cadvisor", node_id="${nodeId}"} * 0)`
   }),
 
   // K. NODE INFO

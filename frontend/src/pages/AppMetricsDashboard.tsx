@@ -113,6 +113,12 @@ const MetricPanel: React.FC<{
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // For charts, we want a small window to see detail, but scaled for long ranges
+      const duration = timeRange.end - timeRange.start;
+      const range = duration > 86400 ? '1h' : duration > 21600 ? '15m' : '5m';
+      
+      const queryWithRange = typeof query === 'string' ? query : ''; // Should handle both
+      
       const results = await prometheus.queryRange(query, timeRange.start, timeRange.end);
       const formatted = prometheus.formatSeries(results);
       setData(formatted);
@@ -149,8 +155,12 @@ const MetricPanel: React.FC<{
           <XAxis 
             dataKey="timestamp" 
             type="number"
-            domain={['dataMin', 'dataMax']}
-            tickFormatter={(ts) => format(ts, 'HH:mm')}
+            domain={[timeRange.start * 1000, timeRange.end * 1000]}
+            tickFormatter={(ts) => {
+              const duration = timeRange.end - timeRange.start;
+              if (duration > 86400) return format(ts, 'MMM dd HH:mm');
+              return format(ts, 'HH:mm');
+            }}
             stroke="rgba(255,255,255,0.2)"
             fontSize={9}
             tickLine={false}
@@ -285,18 +295,19 @@ const AppMetricsDashboard: React.FC = () => {
       const nodeId = String(appInfo.nodeId || '');
       const node = appInfo.targetNode || '';
 
-      // DEBUG — remove after fixing
-      console.log('[DEBUG] Query params:', { appId, appName, nodeId, node });
-      console.log('[DEBUG] Sample query (CPU):', QUERIES.CPU_USAGE_STACKED(appId, appName, nodeId, node));
+      const duration = timeRange.end - timeRange.start;
+      const rangeStr = duration > 86400 ? '1d' : duration > 3600 ? `${Math.floor(duration/3600)}h` : `${Math.floor(duration/60)}m`;
+      const rangeSeconds = duration;
 
       // 1. Fetch Summary Stats (Instant)
-      const [uptimeRes, cpuRes, memRes, oomRes, netRxRes, netTxRes, diskRes] = await Promise.all([
+      const [uptimeRes, cpuRes, memRes, oomRes, restartsRes, netRxRes, netTxRes, diskRes] = await Promise.all([
         prometheus.queryInstant(QUERIES.CONTAINER_UPTIME(appId, appName, nodeId, node)),
-        prometheus.queryInstant(QUERIES.CPU_USAGE_STACKED(appId, appName, nodeId, node)),
+        prometheus.queryInstant(QUERIES.CPU_USAGE_STACKED(appId, appName, nodeId, node, '5m')),
         prometheus.queryInstant(QUERIES.MEMORY_PRESSURE(appId, appName, nodeId, node)),
-        prometheus.queryInstant(QUERIES.OOM_EVENTS(appId, appName, nodeId, node)),
-        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node).rx),
-        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node).tx),
+        prometheus.queryInstant(QUERIES.OOM_EVENTS(appId, appName, nodeId, node, rangeStr)),
+        prometheus.queryInstant(QUERIES.CONTAINER_RESTARTS(appId, appName, nodeId, node, rangeSeconds)),
+        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node, '5m').rx),
+        prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node, '5m').tx),
         prometheus.queryInstant(QUERIES.DISK_SPACE_USED(nodeId, node))
       ]);
 
@@ -340,7 +351,7 @@ const AppMetricsDashboard: React.FC = () => {
           cpu: safeParse(cpuRes, 1, 2),
           memory: safeParse(memRes, 1, 1),
           oom: safeParse(oomRes, 1, 0, '0'),
-          restarts: '0',
+          restarts: safeParse(restartsRes, 1, 0, '0'),
           netRx: formatThroughput(parseFloat(netRxRes[0]?.value[1] || '0')),
           netTx: formatThroughput(parseFloat(netTxRes[0]?.value[1] || '0')),
           disk: safeParse(diskRes, 100, 1),
