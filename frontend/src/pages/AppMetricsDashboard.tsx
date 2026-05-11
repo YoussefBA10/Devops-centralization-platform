@@ -286,12 +286,11 @@ const AppMetricsDashboard: React.FC = () => {
       const node = appInfo.targetNode || '';
 
       // 1. Fetch Summary Stats (Instant)
-      const [uptimeRes, cpuRes, memRes, oomRes, restartsRes, netRxRes, netTxRes, diskRes] = await Promise.all([
+      const [uptimeRes, cpuRes, memRes, oomRes, netRxRes, netTxRes, diskRes] = await Promise.all([
         prometheus.queryInstant(QUERIES.CONTAINER_UPTIME(appId, appName, nodeId, node)),
         prometheus.queryInstant(QUERIES.CPU_USAGE_STACKED(appId, appName, nodeId, node)),
         prometheus.queryInstant(QUERIES.MEMORY_PRESSURE(appId, appName, nodeId, node)),
         prometheus.queryInstant(QUERIES.OOM_EVENTS(appId, appName, nodeId, node)),
-        prometheus.queryInstant(QUERIES.CONTAINER_RESTARTS(appId, appName, nodeId, node)),
         prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node).rx),
         prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node).tx),
         prometheus.queryInstant(QUERIES.DISK_SPACE_USED(nodeId, node))
@@ -329,7 +328,7 @@ const AppMetricsDashboard: React.FC = () => {
           cpu: safeParse(cpuRes, 1, 2),
           memory: safeParse(memRes, 1, 1),
           oom: safeParse(oomRes, 1, 0, '0'),
-          restarts: safeParse(restartsRes, 1, 0, '0'),
+          restarts: '0',
           netRx: formatThroughput(parseFloat(netRxRes[0]?.value[1] || '0')),
           netTx: formatThroughput(parseFloat(netTxRes[0]?.value[1] || '0')),
           disk: safeParse(diskRes, 100, 1),
