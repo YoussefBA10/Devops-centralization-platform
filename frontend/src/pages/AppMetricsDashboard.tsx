@@ -285,6 +285,10 @@ const AppMetricsDashboard: React.FC = () => {
       const nodeId = String(appInfo.nodeId || '');
       const node = appInfo.targetNode || '';
 
+      // DEBUG — remove after fixing
+      console.log('[DEBUG] Query params:', { appId, appName, nodeId, node });
+      console.log('[DEBUG] Sample query (CPU):', QUERIES.CPU_USAGE_STACKED(appId, appName, nodeId, node));
+
       // 1. Fetch Summary Stats (Instant)
       const [uptimeRes, cpuRes, memRes, oomRes, netRxRes, netTxRes, diskRes] = await Promise.all([
         prometheus.queryInstant(QUERIES.CONTAINER_UPTIME(appId, appName, nodeId, node)),
@@ -295,6 +299,14 @@ const AppMetricsDashboard: React.FC = () => {
         prometheus.queryInstant(QUERIES.NETWORK_THROUGHPUT(appId, appName, nodeId, node).tx),
         prometheus.queryInstant(QUERIES.DISK_SPACE_USED(nodeId, node))
       ]);
+
+      // DEBUG — remove after fixing
+      console.log('[DEBUG] Results:', {
+        uptime: uptimeRes?.length, cpu: cpuRes?.length, mem: memRes?.length,
+        oom: oomRes?.length, netRx: netRxRes?.length, netTx: netTxRes?.length, disk: diskRes?.length
+      });
+      if (cpuRes?.length > 0) console.log('[DEBUG] CPU value:', cpuRes[0].value);
+      if (memRes?.length > 0) console.log('[DEBUG] MEM value:', memRes[0].value);
 
       const cpuVal = cpuRes[0]?.value[1] ? parseFloat(cpuRes[0].value[1]) : 0;
       const memVal = memRes[0]?.value[1] ? parseFloat(memRes[0].value[1]) : 0;
