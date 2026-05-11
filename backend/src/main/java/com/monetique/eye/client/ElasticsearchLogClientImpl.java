@@ -55,22 +55,32 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
             // Build a list of possible matching names
             List<String> namesToMatch = new ArrayList<>();
-            if (displayName != null) namesToMatch.add(displayName);
-            if (keywordName != null) namesToMatch.add(keywordName);
-
-            // Special handling for common mismatches if needed (e.g. frontend-service vs angular-nginx-app)
-            if ("frontend-service".equalsIgnoreCase(displayName)) {
-                namesToMatch.add("angular-nginx-app");
+            if (displayName != null) {
+                namesToMatch.add(displayName);
+                // Also add a version with underscores instead of hyphens
+                namesToMatch.add(displayName.replace("-", "_"));
+            }
+            if (keywordName != null) {
+                namesToMatch.add(keywordName);
+                namesToMatch.add(keywordName.replace("-", "_"));
             }
 
-            // Filter to match any of the common service identifier fields with any of the names
+            // Special handling for common mismatches
+            if ("frontend-service".equalsIgnoreCase(displayName)) {
+                namesToMatch.add("angular-nginx-app");
+                namesToMatch.add("frontend");
+            }
+
+            // Filter to match any of the common service identifier fields with any of the names (using wildcard for compose prefixes)
             boolQuery.must(m -> m.bool(b -> {
                 namesToMatch.forEach(name -> {
-                    b.should(s -> s.term(t -> t.field("service.keyword").value(name)));
-                    b.should(s -> s.term(t -> t.field("service_name.keyword").value(name)));
-                    b.should(s -> s.term(t -> t.field("app.keyword").value(name)));
-                    b.should(s -> s.term(t -> t.field("compose_service.keyword").value(name)));
-                    b.should(s -> s.term(t -> t.field("job.keyword").value(name)));
+                    // Use wildcard to match names like 'vmpipe_angular-nginx-app_1'
+                    String wildcardName = "*" + name + "*";
+                    b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
                 });
                 return b.minimumShouldMatch("1");
             }));
@@ -94,10 +104,10 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     var rangeBuilder = r.field("@timestamp");
                     if (from != null)
                         rangeBuilder
-                                .gte(co.elastic.clients.json.JsonData.of(from.format(DateTimeFormatter.ISO_DATE_TIME)));
+                                .gte(co.elastic.clients.json.JsonData.of(from.format(DateTimeFormatter.ISO_DATE_TIME) + "Z"));
                     if (to != null)
                         rangeBuilder
-                                .lte(co.elastic.clients.json.JsonData.of(to.format(DateTimeFormatter.ISO_DATE_TIME)));
+                                .lte(co.elastic.clients.json.JsonData.of(to.format(DateTimeFormatter.ISO_DATE_TIME) + "Z"));
                     return rangeBuilder;
                 }));
             }
