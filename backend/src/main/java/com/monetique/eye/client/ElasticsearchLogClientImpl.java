@@ -37,7 +37,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     private String getIndexName() {
-        return "app-logs-*";
+        return "app-logs-*,loki-logs-*";
     }
 
     @Override
@@ -58,6 +58,8 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     .term(t -> t.field("service.keyword").value(appName)))
                     .should(s -> s.term(t -> t.field("service_name.keyword").value(appName)))
                     .should(s -> s.term(t -> t.field("app.keyword").value(appName)))
+                    .should(s -> s.term(t -> t.field("compose_service.keyword").value(appName)))
+                    .should(s -> s.term(t -> t.field("job.keyword").value(appName)))
                     .minimumShouldMatch("1")));
 
             if (queryStr != null && !queryStr.isBlank()) {
@@ -162,8 +164,8 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                         ? LocalDateTime.parse(source.get("@timestamp").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME)
                         : LocalDateTime.now())
                 .node(source.has("node") ? source.get("node").asText() : "unknown")
-                .service(getField(source, "service", "service_name", "app"))
-                .severity(source.has("severity") ? source.get("severity").asText() : "INFO")
+                .service(getField(source, "service", "service_name", "app", "compose_service", "job"))
+                .severity(source.has("severity") ? source.get("severity").asText() : (source.has("detected_level") ? source.get("detected_level").asText() : "INFO"))
                 .category(source.has("category") ? source.get("category").asText() : "APPLICATION")
                 .errorType(getField(source, "errorType", "error_type"))
                 .normalizedSummary(getField(source, "normalizedSummary", "normalized_summary"))

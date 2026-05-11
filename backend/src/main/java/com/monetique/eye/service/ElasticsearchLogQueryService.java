@@ -32,7 +32,7 @@ public class ElasticsearchLogQueryService {
         // Aligned with Logstash output index pattern: app-logs-<env>-<date>
         // Using lowercase for env to match Logstash normalization
         String normalizedEnv = (env != null) ? env.toLowerCase() : "unknown";
-        String indexPattern = "app-logs-" + normalizedEnv + "-*";
+        String indexPattern = "app-logs-" + normalizedEnv + "-*,loki-logs-*";
         String url = elasticsearchBaseUrl + "/" + indexPattern + "/_search";
 
         // Build ES query
