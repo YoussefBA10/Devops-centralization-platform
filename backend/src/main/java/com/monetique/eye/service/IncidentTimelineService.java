@@ -4,19 +4,18 @@ import com.monetique.eye.entity.Incident;
 import com.monetique.eye.entity.IncidentTimelineEntry;
 import com.monetique.eye.entity.User;
 import com.monetique.eye.repository.IncidentTimelineEntryRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class IncidentTimelineService {
 
     private final IncidentTimelineEntryRepository timelineRepository;
-
-    public IncidentTimelineService(IncidentTimelineEntryRepository timelineRepository) {
-        this.timelineRepository = timelineRepository;
-    }
+    private final ActivityLogService activityLogService;
 
     @Transactional
     public void log(Incident incident, User actor, String action, Map<String, Object> payload) {
@@ -27,6 +26,15 @@ public class IncidentTimelineService {
                 .payload(payload)
                 .build();
         timelineRepository.save(entry);
+
+        // Also log to global activity log
+        String envName = incident.getApplication() != null ? 
+            incident.getApplication().getEnvironment().getName() : "Global";
+        activityLogService.logActivity(
+            "Incident #" + incident.getId() + ": " + action.replace('_', ' '),
+            "incident",
+            envName
+        );
     }
     
     @Transactional
