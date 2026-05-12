@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
 import { getApplications, deployApplication, restartApplication, getApplicationLogs, getApplicationStatus, deleteApplicationRecord, undeployApplication, redeployApplication /*, getGitHubInstallUrl, disconnectGitHub */ } from '../services/api';
-import { Search, Plus, GitBranch, RefreshCw, Terminal, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink } from 'lucide-react';
+import { Search, Plus, GitBranch, RefreshCw, Terminal, Server, Box, X, AlertTriangle, Trash2, CheckCircle2, Loader2, Settings2, Zap, Globe, ExternalLink, Rocket } from 'lucide-react';
 import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import MetricsConfigModal from '../components/applications/MetricsConfigModal';
+import DeploymentsTab from '../components/applications/DeploymentsTab';
 
 const ApplicationsPage: React.FC = () => {
   const { isAdmin, permissions } = useAuth();
@@ -23,6 +24,8 @@ const ApplicationsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [postDeployApp, setPostDeployApp] = useState<any>(null);
   const [configModalApp, setConfigModalApp] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'apps' | 'deployments'>('apps');
+  const [selectedAppForDeploy, setSelectedAppForDeploy] = useState<any>(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -308,7 +311,7 @@ const ApplicationsPage: React.FC = () => {
               Manage and deploy services for <span className="font-bold text-primary">{selectedEnvironment?.name || '...'}</span>
             </p>
           </div>
-          {canCreate && (
+          {canCreate && activeTab === 'apps' && (
             <Button
               onClick={() => setIsDeployModalOpen(true)}
               className="bg-primary hover:bg-primary/90 shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] transition-all h-11 px-6"
@@ -319,7 +322,17 @@ const ApplicationsPage: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 p-4 bg-card border border-border shadow-md rounded-xl">
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 p-1 bg-[#0c0c0e] border border-white/5 rounded-xl w-fit">
+          <button onClick={() => setActiveTab('apps')} className={`px-5 py-2 rounded-lg text-sm font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'apps' ? 'bg-primary/20 text-primary border border-primary/30' : 'text-muted-foreground hover:bg-white/5 hover:text-white border border-transparent'}`}>
+            <Server className="w-4 h-4" /> Services
+          </button>
+          <button onClick={() => setActiveTab('deployments')} className={`px-5 py-2 rounded-lg text-sm font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'deployments' ? 'bg-primary/20 text-primary border border-primary/30' : 'text-muted-foreground hover:bg-white/5 hover:text-white border border-transparent'}`}>
+            <Rocket className="w-4 h-4" /> Deployments
+          </button>
+        </div>
+
+        {activeTab === 'apps' && (<div className="flex items-center justify-between gap-4 p-4 bg-card border border-border shadow-md rounded-xl">
           <div className="flex items-center gap-4 flex-1">
             <div className="relative max-w-sm flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -347,9 +360,39 @@ const ApplicationsPage: React.FC = () => {
           <Button variant="outline" size="sm" onClick={fetchApps} loading={loading} className="border-white/10">
             <RefreshCw className="w-4 h-4" />
           </Button>
-        </div>
+        </div>)}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {activeTab === 'deployments' && (
+          <div className="space-y-6">
+            {/* App selector for deployments */}
+            <div className="flex items-center gap-4 p-4 bg-card border border-border shadow-md rounded-xl">
+              <label className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold whitespace-nowrap">Select App</label>
+              <select
+                value={selectedAppForDeploy?.id || ''}
+                onChange={(e) => {
+                  const app = applications.find((a: any) => a.id === Number(e.target.value));
+                  setSelectedAppForDeploy(app || null);
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-black/40 border border-white/10 text-sm text-white focus:border-primary/50 outline-none"
+              >
+                <option value="">— Choose an application —</option>
+                {applications.map((app: any) => (
+                  <option key={app.id} value={app.id}>{app.name} ({app.type})</option>
+                ))}
+              </select>
+            </div>
+            {selectedAppForDeploy ? (
+              <DeploymentsTab appId={selectedAppForDeploy.id} appName={selectedAppForDeploy.name} />
+            ) : (
+              <div className="py-16 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-xl bg-black/20">
+                <Rocket className="w-10 h-10 text-muted-foreground/20 mb-3" />
+                <p className="text-sm text-muted-foreground">Select an application above to view its CI/CD deployment history.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'apps' && (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredApps.map((app) => {
             const statusColor = getStatusColor(app.status);
             return (
@@ -447,7 +490,7 @@ const ApplicationsPage: React.FC = () => {
               {canCreate && <Button onClick={() => setIsDeployModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Deploy Application</Button>}
             </div>
           )}
-        </div>
+        </div>)}
       </div>
 
       <DeployApplicationModal

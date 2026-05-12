@@ -36,13 +36,13 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/auth/**").permitAll()
+                .requestMatchers("/api/v1/auth/**", "/api/auth/**", "/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/setup/sync-monitoring").permitAll()
-                .requestMatchers("/api/setup/**").authenticated()
-                .requestMatchers("/api/infrastructure/**").authenticated()
-                .requestMatchers("/api/environments/**").authenticated()
+                .requestMatchers("/api/v1/setup/sync-monitoring", "/api/setup/sync-monitoring").permitAll()
+                .requestMatchers("/api/v1/version").permitAll() // Allow checking system version without auth
+                .requestMatchers("/api/v1/**").authenticated()
+                .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

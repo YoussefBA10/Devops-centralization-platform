@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 import com.monetique.eye.security.RequiresPermission;
 
 @RestController
-@RequestMapping("/api/apps/{appId}/logs")
+@RequestMapping("/api/v1/apps/{appId}/logs")
 @RequiresPermission("MONITORING_LOGS")
 public class LogController {
 

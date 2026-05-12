@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/logs")
+@RequestMapping("/api/v1/logs")
 @RequiresPermission("MONITORING_LOGS")
 public class LogsController {
 

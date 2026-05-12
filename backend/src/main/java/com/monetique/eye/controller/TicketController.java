@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/tickets")
+@RequestMapping("/api/v1/tickets")
 public class TicketController {
 
     private final TicketRepository ticketRepository;

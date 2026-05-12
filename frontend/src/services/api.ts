@@ -2,8 +2,8 @@ import axios from 'axios';
 import { showPermissionError } from '../components/ui/Toast';
 
 const getBaseURL = () => {
-  const url = import.meta.env.VITE_API_URL || 'http://localhost:8880/api';
-  return url.endsWith('/api') ? url : `${url}/api`;
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:8880/api/v1';
+  return url.endsWith('/api/v1') ? url : (url.endsWith('/api') ? `${url}/v1` : `${url}/api/v1`);
 };
 
 const api = axios.create({
@@ -147,5 +147,11 @@ export const getAlertGroups = () => api.get('/alerts/groups');
 export const resolveAlertGroup = (id: number) => api.post(`/alerts/groups/${id}/resolve`);
 export const linkAlertGroupToIncident = (groupId: number, incidentId: number) => 
   api.post(`/alerts/groups/${groupId}/link/${incidentId}`);
+
+// CI/CD Deployment tracking
+export const getDeploymentEvents = (appId?: number, env?: string, page = 0, size = 20) =>
+  api.get(`/deployments`, { params: { appId, env, page, size } });
+export const triggerPipeline = (data: { jobName: string; appId: string; env: string; gitBranch?: string }) =>
+  api.post(`/cicd/trigger`, data);
 
 export default api;

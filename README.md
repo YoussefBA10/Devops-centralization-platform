@@ -2,7 +2,7 @@
 
 # Monetique Eye - Enterprise Observability Platform
 
-> **Status**: Production Ready | **Version**: 1.0.0 | **Author**: Monetique Team
+> **Status**: Production Ready | **Version**: 2.0.0 | **Author**: Monetique Team
 
 Monetique-Eye is a clean, enterprise-grade hosted observability platform designed for seamless infrastructure monitoring and automated deployment. It bridges the gap between complex GitOps workflows and intuitive administrative control.
 

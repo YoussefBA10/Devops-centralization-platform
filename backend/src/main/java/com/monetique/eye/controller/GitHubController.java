@@ -17,7 +17,7 @@ import org.springframework.http.HttpMethod;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/github")
+@RequestMapping("/api/v1/github")
 public class GitHubController {
     private static final Logger log = LoggerFactory.getLogger(GitHubController.class);
 
