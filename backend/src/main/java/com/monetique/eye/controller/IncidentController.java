@@ -77,11 +77,22 @@ public class IncidentController {
     }
 
     @GetMapping("/{id}/timeline")
-    public Page<IncidentTimelineEntry> getTimeline(
+    public Page<com.monetique.eye.dto.IncidentTimelineDTO> getTimeline(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return timelineRepository.findByIncidentIdOrderByCreatedAtDesc(id, PageRequest.of(page, size));
+        return timelineRepository.findByIncidentIdOrderByCreatedAtDesc(id, PageRequest.of(page, size))
+                .map(this::convertToTimelineDTO);
+    }
+
+    private com.monetique.eye.dto.IncidentTimelineDTO convertToTimelineDTO(IncidentTimelineEntry entry) {
+        return com.monetique.eye.dto.IncidentTimelineDTO.builder()
+                .id(entry.getId())
+                .action(entry.getAction())
+                .actorName(entry.getActor() != null ? entry.getActor().getUsername() : "System")
+                .payload(entry.getPayload())
+                .createdAt(entry.getCreatedAt())
+                .build();
     }
 
     @PostMapping("/{id}/attachments")

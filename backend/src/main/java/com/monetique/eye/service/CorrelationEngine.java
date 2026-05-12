@@ -30,8 +30,16 @@ public class CorrelationEngine {
         
         // Rule 1: Fingerprinting for deduplication
         String fingerprint = generateFingerprint(serviceName, alertName, severity);
+        String groupName = alertName + " on " + serviceName;
+        String groupingFingerprint = fingerprint;
+
+        // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App Down"
+        if (alertName.contains("Down") && (alertName.contains("Backend") || alertName.contains("Frontend"))) {
+            groupName = "Monetique App Down";
+            groupingFingerprint = generateFingerprint("monetique-app", "app-down", severity);
+        }
         
-        Optional<AlertGroup> existingGroup = alertGroupRepository.findByFingerprint(fingerprint);
+        Optional<AlertGroup> existingGroup = alertGroupRepository.findByFingerprint(groupingFingerprint);
         
         AlertGroup group;
         if (existingGroup.isPresent() && existingGroup.get().getStatus() == AlertGroupStatus.FIRING) {
@@ -39,8 +47,8 @@ public class CorrelationEngine {
             group.setLastFiredAt(LocalDateTime.now());
         } else {
             group = AlertGroup.builder()
-                    .fingerprint(fingerprint)
-                    .name(alertName + " on " + serviceName)
+                    .fingerprint(groupingFingerprint)
+                    .name(groupName)
                     .severity(severity)
                     .status(AlertGroupStatus.FIRING)
                     .firstFiredAt(LocalDateTime.now())

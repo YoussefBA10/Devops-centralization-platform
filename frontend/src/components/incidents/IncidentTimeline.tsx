@@ -31,6 +31,7 @@ const IncidentTimeline: React.FC<Props> = ({ incidentId }) => {
       case 'status_changed': return <History className="w-4 h-4 text-blue-400" />;
       case 'note_added': return <MessageSquare className="w-4 h-4 text-amber-400" />;
       case 'incident_created': return <AlertCircle className="w-4 h-4 text-red-400" />;
+      case 'owner_assigned': return <User className="w-4 h-4 text-purple-400" />;
       case 'resolved': return <CheckCircle className="w-4 h-4 text-emerald-400" />;
       default: return <History className="w-4 h-4 text-muted-foreground" />;
     }
@@ -66,10 +67,10 @@ const IncidentTimeline: React.FC<Props> = ({ incidentId }) => {
                 <p>Assigned to <span className="text-white">{entry.payload.new_owner}</span></p>
               )}
             </div>
-            {entry.actor && (
+            {entry.actorName && (
               <div className="mt-2 flex items-center text-[10px] text-muted-foreground">
                 <User className="w-3 h-3 mr-1" />
-                {entry.actor.username}
+                {entry.actorName}
               </div>
             )}
           </div>

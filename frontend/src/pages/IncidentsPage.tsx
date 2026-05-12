@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getIncidents } from '../services/api';
+import api from '../services/api';
 import { AlertCircle, Clock, User, ShieldAlert, History } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
@@ -22,6 +23,33 @@ const IncidentsPage: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!selectedIncident) return;
+    try {
+      // Assuming '1' is the admin/current user ID for now as a quick fix
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const res = await api.patch(`/incidents/${selectedIncident.id}`, { ownerId: user.id || 1 });
+      setSelectedIncident(res.data);
+      fetchIncidents();
+    } catch (err) {
+      console.error('Failed to assign incident', err);
+    }
+  };
+
+  const handleResolve = async () => {
+    if (!selectedIncident) return;
+    try {
+      const res = await api.patch(`/incidents/${selectedIncident.id}`, { 
+        status: 'RESOLVED',
+        resolutionNotes: 'Resolved by admin'
+      });
+      setSelectedIncident(res.data);
+      fetchIncidents();
+    } catch (err) {
+      console.error('Failed to resolve incident', err);
     }
   };
 
@@ -99,8 +127,8 @@ const IncidentsPage: React.FC = () => {
                 <h1 className="text-3xl font-bold">{selectedIncident.title}</h1>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm">Assign</Button>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">Resolve</Button>
+                <Button variant="outline" size="sm" onClick={handleAssign}>Assign</Button>
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleResolve}>Resolve</Button>
               </div>
             </div>
 
