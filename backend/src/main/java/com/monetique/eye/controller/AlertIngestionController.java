@@ -30,29 +30,61 @@ public class AlertIngestionController {
         
         if (alerts.isArray()) {
             for (JsonNode alertNode : alerts) {
-                Map<String, String> labels = new HashMap<>();
-                alertNode.path("labels").fields().forEachRemaining(entry -> 
-                    labels.put(entry.getKey(), entry.getValue().asText())
-                );
-                
-                Map<String, String> annotations = new HashMap<>();
-                alertNode.path("annotations").fields().forEachRemaining(entry -> 
-                    annotations.put(entry.getKey(), entry.getValue().asText())
-                );
-                
-                String alertStatus = alertNode.path("status").asText();
-                String fingerprint = alertNode.path("fingerprint").asText();
-                
-                if ("resolved".equalsIgnoreCase(alertStatus)) {
-                    // Logic to resolve group might need more than just fingerprint if multiple groups exist,
-                    // but the spec says CorrelationEngine deduplicates by fingerprint.
-                    alertGroupService.resolveGroup(fingerprint);
-                } else {
-                    alertGroupService.ingestAlert(labels, annotations, alertStatus, fingerprint);
+                try {
+                    Map<String, String> labels = new HashMap<>();
+                    alertNode.path("labels").fields().forEachRemaining(entry -> 
+                        labels.put(entry.getKey(), entry.getValue().asText())
+                    );
+                    
+                    Map<String, String> annotations = new HashMap<>();
+                    alertNode.path("annotations").fields().forEachRemaining(entry -> 
+                        annotations.put(entry.getKey(), entry.getValue().asText())
+                    );
+                    
+                    String alertStatus = alertNode.path("status").asText();
+                    String fingerprint = alertNode.path("fingerprint").asText();
+                    
+                    log.info("Processing alert: status='{}', fingerprint='{}', labels={}", alertStatus, fingerprint, labels);
+                    
+                    if ("resolved".equalsIgnoreCase(alertStatus)) {
+                        alertGroupService.resolveGroup(fingerprint);
+                    } else {
+                        alertGroupService.ingestAlert(labels, annotations, alertStatus, fingerprint);
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to process alert: {}", alertNode, e);
                 }
             }
         }
         
         return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Test endpoint to verify ticket creation pipeline.
+     * Call: GET /api/alerts/test-ticket
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/test-ticket")
+    public ResponseEntity<?> testTicket() {
+        log.info("=== TEST TICKET CREATION ===");
+        Map<String, String> labels = new HashMap<>();
+        labels.put("alertname", "BackendDown");
+        labels.put("severity", "critical");
+        labels.put("application", "backend");
+        labels.put("environment", "central-node");
+        labels.put("job", "monetique-backend");
+        labels.put("instance", "backend:8880");
+
+        Map<String, String> annotations = new HashMap<>();
+        annotations.put("summary", "TEST: Backend is down");
+        annotations.put("description", "This is a test alert to verify ticket creation.");
+
+        try {
+            alertGroupService.ingestAlert(labels, annotations, "firing", "test-fingerprint-" + System.currentTimeMillis());
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Test alert processed. Check /tickets for a new ticket."));
+        } catch (Exception e) {
+            log.error("Test ticket creation failed", e);
+            return ResponseEntity.status(500).body(Map.of("status", "error", "message", e.getMessage()));
+        }
     }
 }

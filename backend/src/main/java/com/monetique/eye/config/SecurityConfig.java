@@ -51,6 +51,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/setup/sync-monitoring", "/api/setup/sync-monitoring").permitAll()
                 .requestMatchers("/api/v1/version").permitAll() // Allow checking system version without auth
                 .requestMatchers("/api/alerts/ingest").permitAll() // Alertmanager webhook (no JWT)
+                .requestMatchers("/api/alerts/test-ticket").permitAll() // Test endpoint
                 .requestMatchers("/api/v1/**").authenticated()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()

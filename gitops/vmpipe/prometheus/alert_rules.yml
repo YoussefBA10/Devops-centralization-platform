@@ -47,8 +47,8 @@ groups:
   - name: "application_alerts"
     rules:
       - alert: "FrontendDown"
-        expr: "(time() - container_last_seen{container_label_com_monetique_category='frontend', container_label_is_canary!='true', name!=''} > 60) or (time() - container_last_seen{container_label_com_monetique_environment!='', container_label_is_canary!='true', name=~'.*frontend.*'} > 60)"
-        for: "1m"
+        expr: 'time() - container_last_seen{container_label_com_monetique_category="frontend", container_label_is_canary!="true", name!=""} > 60'
+        for: "2m"
         labels:
           severity: "critical"
           application: "frontend"
@@ -58,9 +58,8 @@ groups:
 
       - alert: "BackendDown"
         expr: |
-          (time() - container_last_seen{container_label_com_monetique_category='backend', container_label_is_canary!~"(?i)true", name!=''} > 60) 
-          or (time() - container_last_seen{container_label_is_canary!~"(?i)true", name=~'.*backend.*'} > 60) 
-          or (up{job='monetique-backend'} == 0)
+          (up{job='monetique-backend'} == 0)
+          or (time() - container_last_seen{container_label_com_monetique_category='backend', container_label_is_canary!~"(?i)true", name!=''} > 60)
         for: "2m"
         labels:
           severity: "critical"
@@ -68,16 +67,6 @@ groups:
         annotations:
           summary: "Backend {{ if $labels.container_label_app }}{{ $labels.container_label_app }}{{ else }}Service{{ end }} is down"
           description: "Backend {{ $labels.name }} on {{ if $labels.nodename }}{{ $labels.nodename }}{{ else }}{{ $labels.instance }}{{ end }} is unreachable."
-
-      - alert: "BackendUnhealthy"
-        expr: 'up{job="monetique-backend"} == 1 and (avg_over_time(up{job="monetique-backend"}[5m]) < 0.9)'
-        for: "1m"
-        labels:
-          severity: "critical"
-          application: "backend"
-        annotations:
-          summary: "Backend is flapping or unstable"
-          description: "Backend service is reporting UP but has been unstable for the last 5 minutes."
 
       - alert: "HighErrorRate"
         expr: "sum by (job, instance, nodename) (rate(http_server_requests_seconds_count{status=~\"5..\"}[2m])) / sum by (job, instance, nodename) (rate(http_server_requests_seconds_count[2m])) * 100 > 5"
