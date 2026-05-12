@@ -6,6 +6,7 @@ import com.monetique.eye.entity.enums.AlertGroupStatus;
 import com.monetique.eye.repository.AlertGroupRepository;
 import com.monetique.eye.repository.AlertRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +16,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AlertGroupService {
 
     private final AlertGroupRepository groupRepository;
