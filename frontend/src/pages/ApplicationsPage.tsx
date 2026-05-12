@@ -7,7 +7,6 @@ import { Button, Input } from '../components/ui/Input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import DeployApplicationModal from '../components/applications/DeployApplicationModal';
 import ConfirmationModal from '../components/ConfirmationModal';
-import MetricsConfigModal from '../components/applications/MetricsConfigModal';
 import DeploymentsTab from '../components/applications/DeploymentsTab';
 
 const ApplicationsPage: React.FC = () => {
@@ -23,8 +22,6 @@ const ApplicationsPage: React.FC = () => {
   const [editingApp, setEditingApp] = useState<any>(null);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
-  const [postDeployApp, setPostDeployApp] = useState<any>(null);
-  const [configModalApp, setConfigModalApp] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'apps' | 'deployments'>('apps');
   const [selectedAppForDeploy, setSelectedAppForDeploy] = useState<any>(null);
 
