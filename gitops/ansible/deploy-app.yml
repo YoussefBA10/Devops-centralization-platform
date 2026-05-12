@@ -3,7 +3,7 @@
   hosts: "{{ target_host }}"
 
   vars:
-    app_dir: "/data/monetique/apps/{{ appName }}"
+    app_dir: "/opt/monetique/apps/{{ appName }}"
     image_name: "{{ appName | lower }}"
     # Task 2 & Canary logic
     container_name: "{{ (isCanary | default(false) | bool) | ternary(appName ~ '-canary', appName) }}"

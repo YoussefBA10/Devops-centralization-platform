@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.annotation.PostConstruct;
+
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -44,6 +46,28 @@ public class DeploymentService {
     private String gitopsPath;
 
     private final com.monetique.eye.service.ActivityLogService activityLogService;
+
+    @PostConstruct
+    public void init() {
+        log.info("Checking configured gitopsPath: {}", gitopsPath);
+        File f = new File(gitopsPath);
+        if (!f.exists()) {
+            log.warn("Path '{}' does not exist. Attempting auto-discovery...", gitopsPath);
+            // Try common locations
+            if (new File("./gitops").exists()) {
+                gitopsPath = new File("./gitops").getAbsolutePath();
+            } else if (new File("../gitops").exists()) {
+                gitopsPath = new File("../gitops").getAbsolutePath();
+            } else if (new File("/app/gitops").exists()) {
+                gitopsPath = "/app/gitops";
+            }
+            log.info("Final resolved gitopsPath: {}", gitopsPath);
+        } else {
+            gitopsPath = f.getAbsolutePath();
+            log.info("Using validated gitopsPath: {}", gitopsPath);
+        }
+    }
+
 
     private String getSafeGroupName(String name) {
         if (name == null) return "unknown";

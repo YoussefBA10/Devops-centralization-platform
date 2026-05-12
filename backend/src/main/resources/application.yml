@@ -63,7 +63,7 @@ monetique:
   git:
     executable: ${GIT_EXECUTABLE:git}
   gitops:
-    path: ${MONETIQUE_GITOPS_PATH:../gitops}
+    path: ${MONETIQUE_GITOPS_PATH:./gitops}
 
 monitoring:
   prometheus:

@@ -69,13 +69,13 @@ usermod -aG docker monitoring
 
 
 # 6. Setup Directory Structure
-echo "🔹 Configuring /data/monetique permissions..."
-if [ -d "/opt/monetique" ]; then
-    echo "⚠️ Found legacy /opt/monetique directory. Please migrate data manually if needed."
+echo "🔹 Configuring /opt/monetique permissions..."
+if [ -d "/data/monetique" ]; then
+    echo "⚠️ Found legacy /data/monetique directory. Please migrate data manually if needed."
 fi
-mkdir -p /data/monetique/apps
-chown -R monitoring:monitoring /data/monetique
-chmod -R 755 /data/monetique
+mkdir -p /opt/monetique/apps
+chown -R monitoring:monitoring /opt/monetique
+chmod -R 755 /opt/monetique
 
 # 7. Final Check
 echo "---------------------------------------------------"
