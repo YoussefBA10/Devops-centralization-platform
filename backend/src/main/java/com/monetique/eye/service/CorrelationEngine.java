@@ -33,12 +33,8 @@ public class CorrelationEngine {
         String groupName = alertName + " on " + serviceName;
         String groupingFingerprint = fingerprint;
 
-        // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App Down"
-        if (alertName.contains("Down") && (alertName.contains("Backend") || alertName.contains("Frontend"))) {
-            groupName = "Monetique App Down";
-            groupingFingerprint = generateFingerprint("monetique-app", "app-down", severity);
-        }
-        
+        // No smart grouping; allow individual service alerts to generate separate tickets
+
         Optional<AlertGroup> existingGroup = alertGroupRepository.findByFingerprint(groupingFingerprint);
         
         AlertGroup group;
