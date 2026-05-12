@@ -353,7 +353,7 @@ const TicketsPage: React.FC = () => {
                         {ticket.node && <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-md ml-1">{ticket.node}</span>}
                         {ticket.application && <span className="text-xs text-muted-foreground bg-primary/10 text-primary px-2 py-0.5 rounded-md ml-1">{ticket.application.name}</span>}
                       </div>
-                      <p className="text-sm text-muted-foreground truncate max-w-2xl">{ticket.description}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-3 max-w-4xl mt-1">{ticket.description}</p>
                     </div>
 
                     <div className="flex items-center gap-8 text-xs font-medium text-muted-foreground">
@@ -363,11 +363,11 @@ const TicketsPage: React.FC = () => {
                            {ticket.priority || 'LOW'}
                          </span>
                       </div>
-                      <div className="flex flex-col gap-1 items-end min-w-[100px]">
+                      <div className="flex flex-col gap-1 items-end min-w-[120px]">
                          <span className="uppercase tracking-widest text-[9px] font-bold">Created</span>
                          <span className="flex items-center gap-1.5 whitespace-nowrap">
                            <Clock className="w-3 h-3" />
-                           {new Date(ticket.createdAt).toLocaleDateString()}
+                           {new Date(ticket.createdAt).toLocaleString([], { month: 'numeric', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                          </span>
                       </div>
                     </div>

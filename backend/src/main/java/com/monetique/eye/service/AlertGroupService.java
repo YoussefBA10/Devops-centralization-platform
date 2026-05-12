@@ -81,6 +81,26 @@ public class AlertGroupService {
             } else {
                 log.error("Cannot raise ticket: No environment found for label '{}' and no default environment exists.", envName);
             }
+        } else if (isFiring && group.getTicket() != null) {
+            // Update existing ticket if new alert joins the same group (e.g. FrontendDown joining Monetique App Down)
+            String alertName = labels.getOrDefault("alertname", "unknown");
+            com.monetique.eye.entity.Ticket ticket = group.getTicket();
+            
+            // Check if this alert belongs to a different app than the current ticket tag
+            String appName = labels.getOrDefault("application", labels.getOrDefault("service_name", "unknown"));
+            com.monetique.eye.entity.Application currentApp = ticket.getApplication();
+            
+            if (currentApp != null && !currentApp.getName().equalsIgnoreCase(appName)) {
+                // Outage spans multiple applications, so remove the specific app tag to make it environment-wide
+                ticket.setApplication(null);
+            }
+            
+            // Append the new alert info to the description if it's not already there
+            if (!ticket.getDescription().contains(alertName)) {
+                ticket.setDescription(ticket.getDescription() + "\n\nAdditional Alert: " + alertName + "\nLabels: " + labels);
+                ticketRepository.save(ticket);
+                log.info("TICKET UPDATED: id={}, appended alert '{}'", ticket.getId(), alertName);
+            }
         }
         
         groupRepository.save(group);
