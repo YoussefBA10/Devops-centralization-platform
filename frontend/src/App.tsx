@@ -15,7 +15,6 @@ import LoginPage from './pages/LoginPage';
 import SetupWizard from './pages/SetupWizard';
 import ApplicationsPage from './pages/ApplicationsPage';
 import ApplicationObservabilityPage from './pages/ApplicationObservabilityPage';
-import IncidentsPage from './pages/IncidentsPage';
 import AppMetricsDashboard from './pages/AppMetricsDashboard';
 import AuditLogPage from './pages/AuditLogPage';
 import UserManagementPage from './pages/UserManagementPage';
@@ -111,7 +110,6 @@ function App() {
                     <Route path="/network-monitor/vm/:vmId" element={<NetworkMonitor />} />
                     <Route path="/infrastructure" element={<InfrastructureTopologyPage />} />
                     <Route path="/logs" element={<LogsPage />} />
-                    <Route path="/incidents" element={<IncidentsPage />} />
                     <Route path="/tickets" element={<TicketsPage />} />
                     <Route path="/audit-log" element={<AuditLogPage />} />
                     <Route path="/chat" element={<ChatPage />} />

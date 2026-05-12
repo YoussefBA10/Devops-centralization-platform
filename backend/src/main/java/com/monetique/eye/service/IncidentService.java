@@ -41,6 +41,11 @@ public class IncidentService {
         Incident saved = incidentRepository.save(incident);
         timelineService.log(saved, securityService.getCurrentUser(), "incident_created", 
             Map.of("severity", saved.getSeverity(), "status", saved.getStatus()));
+        
+        if (saved.getLinkedTicket() != null) {
+            timelineService.log(saved, securityService.getCurrentUser(), "ticket_raised", 
+                Map.of("ticket_id", saved.getLinkedTicket().getId()));
+        }
         return saved;
     }
 

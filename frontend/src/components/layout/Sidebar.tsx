@@ -64,12 +64,6 @@ const Sidebar: React.FC = () => {
       show: isAdmin || permissions?.monitoring?.logs
     },
     { 
-      name: 'Incidents', 
-      path: '/incidents', 
-      icon: ShieldAlert,
-      show: isAdmin || permissions?.incidents?.view
-    },
-    { 
       name: 'Tickets', 
       path: '/tickets', 
       icon: FileText,

@@ -32,6 +32,7 @@ const IncidentTimeline: React.FC<Props> = ({ incidentId }) => {
       case 'note_added': return <MessageSquare className="w-4 h-4 text-amber-400" />;
       case 'incident_created': return <AlertCircle className="w-4 h-4 text-red-400" />;
       case 'owner_assigned': return <User className="w-4 h-4 text-purple-400" />;
+      case 'ticket_raised': return <MessageSquare className="w-4 h-4 text-cyan-400" />;
       case 'resolved': return <CheckCircle className="w-4 h-4 text-emerald-400" />;
       default: return <History className="w-4 h-4 text-muted-foreground" />;
     }
@@ -65,6 +66,9 @@ const IncidentTimeline: React.FC<Props> = ({ incidentId }) => {
               )}
               {entry.action === 'owner_assigned' && (
                 <p>Assigned to <span className="text-white">{entry.payload.new_owner}</span></p>
+              )}
+              {entry.action === 'ticket_raised' && (
+                <p>Support ticket raised: <span className="text-white">#{entry.payload.ticket_id}</span></p>
               )}
             </div>
             {entry.actorName && (

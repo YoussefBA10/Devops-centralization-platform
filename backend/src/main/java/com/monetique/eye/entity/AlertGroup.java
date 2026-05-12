@@ -34,8 +34,8 @@ public class AlertGroup {
     private LocalDateTime resolvedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "incident_id")
-    private Incident incident;
+    @JoinColumn(name = "ticket_id")
+    private Ticket ticket;
 
     @PrePersist
     protected void onCreate() {
