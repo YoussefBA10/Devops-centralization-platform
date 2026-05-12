@@ -57,8 +57,11 @@ groups:
           description: "Frontend container {{ $labels.name }} is down."
 
       - alert: "BackendDown"
-        expr: "(time() - container_last_seen{container_label_com_monetique_category='backend', container_label_is_canary!~\"(?i)true\", name!=''} > 60) or (time() - container_last_seen{container_label_is_canary!~\"(?i)true\", name=~'.*backend.*'} > 60) or (up{job='monetique-backend'} == 0)"
-        for: "1m"
+        expr: |
+          (time() - container_last_seen{container_label_com_monetique_category='backend', container_label_is_canary!~"(?i)true", name!=''} > 60) 
+          or (time() - container_last_seen{container_label_is_canary!~"(?i)true", name=~'.*backend.*'} > 60) 
+          or (up{job='monetique-backend'} == 0)
+        for: "2m"
         labels:
           severity: "critical"
           application: "backend"
