@@ -86,20 +86,34 @@ public class AlertGroupService {
             String alertName = labels.getOrDefault("alertname", "unknown");
             com.monetique.eye.entity.Ticket ticket = group.getTicket();
             
-            // Check if this alert belongs to a different app than the current ticket tag
             String appName = labels.getOrDefault("application", labels.getOrDefault("service_name", "unknown"));
-            com.monetique.eye.entity.Application currentApp = ticket.getApplication();
+            boolean needsSave = false;
             
+            // Check if this alert belongs to a different app than the current ticket tag
+            com.monetique.eye.entity.Application currentApp = ticket.getApplication();
             if (currentApp != null && !currentApp.getName().equalsIgnoreCase(appName)) {
-                // Outage spans multiple applications, so remove the specific app tag to make it environment-wide
-                ticket.setApplication(null);
+                // Outage spans multiple applications. We keep the primary app tag, but we update the TITLE to show both!
+                String newTag = appName.toLowerCase();
+                if (!ticket.getTitle().toLowerCase().contains(newTag)) {
+                    // E.g. changes "[ALERT] Monetique App Down" to "[ALERT] Monetique App Down (backend, frontend)"
+                    if (ticket.getTitle().endsWith(")")) {
+                        ticket.setTitle(ticket.getTitle().substring(0, ticket.getTitle().length() - 1) + ", " + newTag + ")");
+                    } else {
+                        ticket.setTitle(ticket.getTitle() + " (" + currentApp.getName().toLowerCase() + ", " + newTag + ")");
+                    }
+                    needsSave = true;
+                }
             }
             
             // Append the new alert info to the description if it's not already there
             if (!ticket.getDescription().contains(alertName)) {
                 ticket.setDescription(ticket.getDescription() + "\n\nAdditional Alert: " + alertName + "\nLabels: " + labels);
+                needsSave = true;
+            }
+            
+            if (needsSave) {
                 ticketRepository.save(ticket);
-                log.info("TICKET UPDATED: id={}, appended alert '{}'", ticket.getId(), alertName);
+                log.info("TICKET UPDATED: id={}, appended alert '{}' and updated title to '{}'", ticket.getId(), alertName, ticket.getTitle());
             }
         }
         
