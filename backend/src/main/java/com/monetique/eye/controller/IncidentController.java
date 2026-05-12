@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/incidents")
+@RequestMapping("/api/v1/incidents")
 @RequiredArgsConstructor
 public class IncidentController {
 
@@ -112,8 +112,8 @@ public class IncidentController {
                 .createdAt(incident.getCreatedAt())
                 .resolvedAt(incident.getResolvedAt())
                 .resolutionNotes(incident.getResolutionNotes())
-                .applicationId(incident.getApplication().getId())
-                .applicationName(incident.getApplication().getName())
+                .applicationId(incident.getApplication() != null ? incident.getApplication().getId() : null)
+                .applicationName(incident.getApplication() != null ? incident.getApplication().getName() : null)
                 .ticketId(incident.getLinkedTicket() != null ? incident.getLinkedTicket().getId() : null)
                 .build();
     }

@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/alerts/groups")
+@RequestMapping("/api/v1/alerts/groups")
 @RequiredArgsConstructor
 public class AlertGroupController {
 
