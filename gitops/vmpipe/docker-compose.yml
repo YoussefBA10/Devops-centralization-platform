@@ -18,8 +18,9 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - ./data/mysql:/var/lib/mysql
+      - ./../../data/mysql:/var/lib/mysql
     healthcheck:
+
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
@@ -44,7 +45,7 @@ services:
       - ./prometheus/conf.d:/etc/prometheus/conf.d
       - ./prometheus/rules:/etc/prometheus/rules
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data/prometheus:/prometheus
+      - ./../../data/prometheus:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -80,7 +81,7 @@ services:
     command:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
-      - --collector.filesystem.ignored-mount-points
+      - --collector.filesystem.mount-points-exclude
       - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
     ports:
       - "9100:9100"
@@ -102,7 +103,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /data:/data:ro
     ports:
-      - "8081:8080"
+      - "8085:8080"
     networks:
       - monetique-eye-net
       
@@ -212,14 +213,14 @@ services:
     ports:
       - "9200:9200"
     volumes:
-      - ./data/elasticsearch:/usr/share/elasticsearch/data
+      - ./../../data/elasticsearch:/usr/share/elasticsearch/data
     networks:
       - monetique-eye-net
 
   logstash:
     image: docker.elastic.co/logstash/logstash:7.17.9
     container_name: logstash
-    restart: always
+    restart: unless-stopped
     labels:
       app: "monetique-eye"
       env: "central-node"
@@ -234,6 +235,7 @@ services:
     environment:
       - ELASTIC_USER=${ELASTIC_USER}
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - LS_JAVA_OPTS=-Xms256m -Xmx512m
     depends_on:
       - elasticsearch
     networks:
@@ -267,9 +269,11 @@ services:
       com.monetique.environment: "central-node"
       com.monetique.category: "backend"
     volumes:
-      - ../../gitops:/app/gitops
+      - ./../../gitops:/app/gitops
       - ./prometheus/conf.d:/opt/monitoring/prometheus/conf.d
       - ./prometheus/rules:/opt/monitoring/prometheus/rules
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
     environment:
       SERVER_PORT: ${SERVER_PORT}
       NODE_NAME: "central-node"
@@ -290,15 +294,18 @@ services:
       MONITORING_BLACKBOX_EXPORTER_URL: "blackbox-exporter:9115"
       GROQ_API_KEY: ${GROQ_API_KEY}
       GROQ_MODEL: ${GROQ_MODEL}
+<<<<<<< HEAD
+=======
+      SPRING_FLYWAY_REPAIR_ON_MIGRATE: "true"
+>>>>>>> prod
       MONETIQUE_GITOPS_PATH: "./gitops"
     ports:
       - "8880:8880"
-      - "9001:9001"
     depends_on:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9001/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8880/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 3

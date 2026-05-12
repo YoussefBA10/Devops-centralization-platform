@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
@@ -47,12 +46,16 @@ public class DeploymentService {
 
     private final com.monetique.eye.service.ActivityLogService activityLogService;
 
+
     @PostConstruct
     public void init() {
         log.info("Checking configured gitopsPath: {}", gitopsPath);
-        File f = new File(gitopsPath);
-        if (!f.exists()) {
-            log.warn("Path '{}' does not exist. Attempting auto-discovery...", gitopsPath);
+        if (gitopsPath == null) {
+            log.warn("gitopsPath is null. Attempting auto-discovery...");
+        }
+        File f = (gitopsPath != null) ? new File(gitopsPath) : null;
+        if (f == null || !f.exists()) {
+            log.warn("Path '{}' does not exist or is null. Attempting auto-discovery...", gitopsPath);
             // Try common locations
             if (new File("./gitops").exists()) {
                 gitopsPath = new File("./gitops").getAbsolutePath();
@@ -123,10 +126,9 @@ public class DeploymentService {
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
 
             String envLabel = environment.getSafeName();
-            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
-                    : "192.168.126.130";
+            String centralIp = getCentralIp(environment);
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
+            String nodeName = targetIp.equals(centralIp) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
             executeProcessSecure(new String[] {
@@ -144,6 +146,38 @@ public class DeploymentService {
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
+            
+            // Extract dynamic cAdvisor and Node Exporter ports from logs if present
+            Integer detectedCadvisorPort = 8085; // Default fallback
+            Integer detectedNodeExporterPort = 9100; // Default fallback
+            String fullLog = deploymentLog.getLogOutput();
+            
+            if (fullLog != null) {
+                // Parse cAdvisor
+                if (fullLog.contains("FINAL_CADVISOR_PORT=")) {
+                    try {
+                        int start = fullLog.indexOf("FINAL_CADVISOR_PORT=") + 20;
+                        int end = fullLog.indexOf("\"", start);
+                        if (end == -1) end = fullLog.indexOf("\n", start);
+                        if (end != -1) {
+                            detectedCadvisorPort = Integer.parseInt(fullLog.substring(start, end).trim());
+                        }
+                    } catch (Exception ex) { log.warn("Failed to parse cAdvisor port: {}", ex.getMessage()); }
+                }
+                // Parse Node Exporter
+                if (fullLog.contains("FINAL_NODE_EXPORTER_PORT=")) {
+                    try {
+                        int start = fullLog.indexOf("FINAL_NODE_EXPORTER_PORT=") + 25;
+                        int end = fullLog.indexOf("\"", start);
+                        if (end == -1) end = fullLog.indexOf("\n", start);
+                        if (end != -1) {
+                            detectedNodeExporterPort = Integer.parseInt(fullLog.substring(start, end).trim());
+                        }
+                    } catch (Exception ex) { log.warn("Failed to parse Node Exporter port: {}", ex.getMessage()); }
+                }
+                log.info("Detected dynamic ports for IP {}: cAdvisor={}, NodeExporter={}", targetIp, detectedCadvisorPort, detectedNodeExporterPort);
+            }
+
             // Persist Managed Node credentials
             com.monetique.eye.entity.ManagedNode managedNode = managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
                     .orElse(com.monetique.eye.entity.ManagedNode.builder()
@@ -154,6 +188,8 @@ public class DeploymentService {
             managedNode.setSshUser(sshUser);
             managedNode.setSshPassword(sshPassword);
             managedNode.setNodeName(nodeName);
+            managedNode.setCadvisorPort(detectedCadvisorPort);
+            managedNode.setNodeExporterPort(detectedNodeExporterPort);
             managedNode = managedNodeRepository.save(managedNode);
 
             // Register in Prometheus with the persisted node ID
@@ -172,8 +208,10 @@ public class DeploymentService {
             
             environment.setLastDeploymentStatus(DeploymentStatus.FAILED);
             environmentRepository.save(environment);
-            deploymentLog.setLogOutput((deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
-                    + "\nERROR: " + e.getMessage());
+            String fullLogContent = (deploymentLog.getLogOutput() == null ? "" : deploymentLog.getLogOutput())
+                    + "\nERROR: " + e.getMessage();
+            deploymentLog.setLogOutput(fullLogContent);
+            deploymentLog.setShortError(extractSimpleErrorMessage(fullLogContent));
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
@@ -261,10 +299,9 @@ public class DeploymentService {
 
             String playbookPath = gitopsPath + "/ansible/" + playbookFile;
             String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-            String centralIp = environment.getCentralNodeIp() != null ? environment.getCentralNodeIp()
-                    : "192.168.126.130";
+            String centralIp = getCentralIp(environment);
 
-            String nodeName = targetIp.equals(environment.getCentralNodeIp()) ? "central-node"
+            String nodeName = targetIp.equals(centralIp) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
             // Fetch credentials from ManagedNode
@@ -520,7 +557,8 @@ public class DeploymentService {
             log.info("Deployment Details - Name: {}, Previous: {}, oldAppName: '{}', isCanary: {}, hostPort: {}, autoPromote: {}, targetNode: {}", 
                     request.getName(), previousName, oldAppName, isCanary, hostPort, request.getAutoPromote(), request.getTargetNode());
 
-            String nodeName = request.getTargetNode().equals(environment.getCentralNodeIp()) ? "central-node"
+            String centralIp = getCentralIp(environment);
+            String nodeName = request.getTargetNode().equals(centralIp) ? "central-node"
                     : "node-" + request.getTargetNode().replace(".", "-");
 
             String buildArgsStr = "";
@@ -567,6 +605,7 @@ public class DeploymentService {
                     "-e", "srcPath='" + (request.getSrcPath() != null ? request.getSrcPath() : ".") + "'",
                     "-e", "oldAppName='" + oldAppName + "'",
                     "-e", "isCanary=" + (isCanary ? "true" : "false"),
+                    "-e", "appId=" + app.getId(),
                     "-e", "envVarsJson='" + (request.getEnvVars() != null ? objectMapper.writeValueAsString(request.getEnvVars()) : "{}") + "'",
                     "-e", "containerPort=" + (request.getContainerPort() != null ? request.getContainerPort()
                             : ("FRONTEND".equalsIgnoreCase(request.getType()) ? 80 : request.getPort()))));
@@ -629,11 +668,7 @@ public class DeploymentService {
                 this.promoteApplication(environmentId, applicationId, userId);
             }
 
-            // Task 3: Ensure metrics are registered in Prometheus if configured
-            if (app.getMetricsPort() != null && "SUCCESS".equals(app.getMetricsTestStatus())) {
-                log.info("App {} has metrics configured. Updating Prometheus targets...", app.getName());
-                this.registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-            }
+
 
         } catch (Exception e) {
             log.error("Application full deployment failed: {}", e.getMessage());
@@ -654,6 +689,19 @@ public class DeploymentService {
         } finally {
             deploymentLogRepository.save(deploymentLog);
         }
+    }
+
+    private String getCentralIp(Environment environment) {
+        // 1. Try finding central-node in the current environment
+        return managedNodeRepository.findByEnvironmentAndNodeName(environment, "central-node")
+                .map(com.monetique.eye.entity.ManagedNode::getIp)
+                // 2. Fallback to searching globally for any node named central-node
+                .or(() -> managedNodeRepository.findAll().stream()
+                        .filter(n -> "central-node".equalsIgnoreCase(n.getNodeName()))
+                        .map(com.monetique.eye.entity.ManagedNode::getIp)
+                        .findFirst())
+                // 3. Fallback to the environment's configured central node IP
+                .orElseGet(() -> environment.getCentralNodeIp());
     }
 
     public void updateInventory(String envName, String targetIp, String sshUser) {
@@ -877,14 +925,31 @@ public class DeploymentService {
             }
 
             String envLabel = environment.getSafeName();
-            String nodeName = ip.equals(environment.getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
+            
+            // SANITIZE IP
+            String cleanIp = ip;
+            if (cleanIp != null) {
+                cleanIp = cleanIp.replaceAll("^https?://", "").replaceAll("/$", "");
+            }
+            final String finalIp = cleanIp;
 
-            // Determine targets based on whether the IP matches the central node
-            String nodeExporterTarget = ip + ":9100";
-            String cadvisorTarget = ip + ":8081";
-            String filebeatTarget = ip + ":5066";
+            String centralIp = getCentralIp(environment);
+            String nodeName = finalIp.equals(centralIp) ? "central-node" : "node-" + finalIp.replace(".", "-");
 
-            if (ip.equals(environment.getCentralNodeIp())) {
+            // Fetch dynamic ports from ManagedNode if possible
+            Integer nodeExporterPort = 9100;
+            Integer cadvisorPort = 8085;
+            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findById(nodeId).orElse(null);
+            if (node != null) {
+                if (node.getNodeExporterPort() != null) nodeExporterPort = node.getNodeExporterPort();
+                if (node.getCadvisorPort() != null) cadvisorPort = node.getCadvisorPort();
+            }
+
+            String nodeExporterTarget = finalIp + ":" + nodeExporterPort;
+            String cadvisorTarget = finalIp + ":" + cadvisorPort;
+            String filebeatTarget = finalIp + ":5066";
+
+            if (ip.equals(centralIp)) {
                 log.info("Node {} is detected as Central Node. Using internal service names.", ip);
                 nodeExporterTarget = "node-exporter:9100";
                 cadvisorTarget = "cadvisor:8080";
@@ -923,74 +988,7 @@ public class DeploymentService {
     }
 
     @Async
-    @Transactional
-    public void registerAppInPrometheus(Long appId, String ip, Integer metricsPort) {
-        log.info("Starting background Prometheus registration for appId: {}", appId);
-        Application app = applicationRepository.findById(appId).orElse(null);
-        if (app == null) {
-            log.error("Cannot register app in Prometheus: App with ID {} not found", appId);
-            return;
-        }
-        
-        String envName = "unknown";
-        try {
-            envName = app.getEnvironment().getName();
-        } catch (Exception e) {
-            log.warn("Could not get environment name for app {}: {}", app.getName(), e.getMessage());
-        }
 
-        log.info("Registering app {} in Prometheus for environment {}", app.getName(), envName);
-        try {
-            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/app_targets.yml");
-            if (!configFile.getParentFile().exists()) {
-                log.info("Creating directory: {}", configFile.getParentFile().getAbsolutePath());
-                configFile.getParentFile().mkdirs();
-            }
-
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
-                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-            java.util.List<java.util.Map<String, Object>> targets;
-
-            if (configFile.exists() && configFile.length() > 0) {
-                targets = mapper.readValue(configFile,
-                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
-                        });
-            } else {
-                targets = new java.util.ArrayList<>();
-            }
-
-            String envLabel = app.getEnvironment().getSafeName();
-            String nodeName = ip.equals(app.getEnvironment().getCentralNodeIp()) ? "central-node" : "node-" + ip.replace(".", "-");
-            String targetStr = ip + ":" + metricsPort;
-            String jobName = app.getServiceNameKeyword() != null ? app.getServiceNameKeyword() : app.getName().toLowerCase().replaceAll("[^a-z0-9]", "-");
-
-            java.util.Map<String, String> labels = new java.util.HashMap<>();
-            labels.put("job", jobName);
-            labels.put("environment", envLabel);
-            labels.put("nodename", nodeName);
-            
-            // Find node ID for this app
-            managedNodeRepository.findByEnvironmentAndIp(app.getEnvironment(), ip)
-                .ifPresent(n -> labels.put("node_id", String.valueOf(n.getId())));
-            labels.put("app_id", String.valueOf(app.getId()));
-            if (app.getMetricsPath() != null) {
-                labels.put("metrics_path", app.getMetricsPath());
-            }
-
-            java.util.Map<String, Object> appTarget = new java.util.HashMap<>();
-            appTarget.put("targets", java.util.List.of(targetStr));
-            appTarget.put("labels", labels);
-
-            updateOrAdd(targets, appTarget);
-
-            mapper.writeValue(configFile, targets);
-            log.info("Updated Prometheus app targets in {}", configFile.getAbsolutePath());
-
-            triggerPrometheusReload();
-        } catch (Exception e) {
-            log.error("Failed to register app in Prometheus: {}", e.getMessage(), e);
-        }
-    }
 
     private void deregisterNodeFromPrometheus(String ip) {
         log.info("Deregistering node {} from Prometheus", ip);
@@ -1169,7 +1167,11 @@ public class DeploymentService {
             return "Deployment Failed: A task in the playbook failed. Check logs for details.";
         }
         
-        // 4. Check for Permission denied
+        // 4. Check for Permission denied or sudoers issue
+        if (fullLog.contains("n'apparaît pas dans le fichier sudoers") || fullLog.contains("is not in the sudoers file")) {
+            return "Privilege Error: The deployment user does not have sudo permissions on the target node.";
+        }
+        
         if (fullLog.contains("Permission denied")) {
             return "Access Denied: Invalid SSH credentials or insufficient permissions on the node.";
         }
@@ -1306,12 +1308,6 @@ public class DeploymentService {
             registerNodeInPrometheus(node.getEnvironment(), node.getIp(), node.getId());
         }
 
-        List<Application> apps = applicationRepository.findAll();
-        for (Application app : apps) {
-            if (app.getTargetNode() != null && app.getMetricsPort() != null) {
-                registerAppInPrometheus(app.getId(), app.getTargetNode(), app.getMetricsPort());
-            }
-        }
         log.info("Global monitoring synchronization complete.");
     }
 }

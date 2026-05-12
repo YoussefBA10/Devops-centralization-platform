@@ -81,10 +81,6 @@ const DashboardPage: React.FC = () => {
           </p>
         </motion.div>
         <div className="flex items-center gap-3">
-          <Button variant="outline">
-            <BarChart3 className="w-4 h-4" />
-            Full Report
-          </Button>
           <Link to="/environments">
             <Button>
               <Plus className="w-4 h-4" />
@@ -264,7 +260,7 @@ const DashboardPage: React.FC = () => {
           <Card className="h-full">
             <CardContent className="p-8">
               <h3 className="text-xl font-bold mb-6 tracking-tight">Pulse Feed</h3>
-              <div className="space-y-6">
+              <div className="space-y-6 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                 {recentActivity.map((act, i) => (
                   <div key={i} className="flex gap-4 group cursor-pointer">
                     <div className="flex flex-col items-center gap-2">

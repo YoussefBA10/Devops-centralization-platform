@@ -6,7 +6,7 @@
     # Defaults that should be overridden by extra-vars from the backend
     appName: "backend"
     image_tag: "v1"
-    central_ip: "192.168.126.130"
+    central_ip: "" # Overridden by backend
     db_name: "monetique-eye-db"
     db_user: "youss"
     db_pass: "youss123"
@@ -21,6 +21,10 @@
       shell: |
         docker run -d --name {{ appName }} \
         --restart=always \
+        --log-driver json-file \
+        --label com.monetique.service="{{ appName }}" \
+        --label com.monetique.environment={{ env_label | default('production') }} \
+        --label node={{ ansible_hostname }} \
         -p 8880:8880 \
         -p 9001:9001 \
         -e SERVER_PORT=8880 \

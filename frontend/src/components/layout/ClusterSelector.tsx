@@ -28,7 +28,7 @@ const ClusterSelector: React.FC = () => {
           
           <div className="h-px bg-border my-1 mx-2"></div>
           
-          {clusters.map((cluster) => (
+          {(clusters || []).map((cluster) => (
             <button
               key={cluster.id}
               onClick={() => setSelectedCluster(cluster)}

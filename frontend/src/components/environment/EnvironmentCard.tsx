@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardTitle, CardDescription } from '../ui/Card';
 import { Button } from '../ui/Input';
-import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { Server, Settings, MoreVertical, Cpu, Activity, HardDrive, AlertCircle, MapPin, ArrowUpRight, Loader2, CheckCircle2, XCircle, RefreshCw, Trash2, Terminal } from 'lucide-react';
 import { getDeploymentStatus } from '../../services/api';
 import type { Environment } from '../../types';
 
@@ -49,6 +49,8 @@ type DeploymentState = 'idle' | 'deploying' | 'success' | 'failed';
 const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDeployClick, onNodesClick, onEdit, onDelete, onRefresh, activeDeploymentIp }) => {
   const [status, setStatus] = useState<DeploymentState>(activeDeploymentIp ? 'deploying' : 'idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fullLog, setFullLog] = useState<string | null>(null);
+  const [showLogsModal, setShowLogsModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
   // Sync internal state with prop if triggered from parent
@@ -75,9 +77,10 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
             setTimeout(() => setStatus('idle'), 15000);
           } else if (currentStatus === 'FAILED') {
             setStatus('failed');
-            setErrorMessage(res.data.log?.split('\n').pop() || 'Deployment failed. Check logs.');
-            // Maintain failure state for 15 seconds then reset if not manual retry
-            setTimeout(() => setStatus('idle'), 15000);
+            setErrorMessage(res.data.shortError || res.data.log?.split('\n').pop() || 'Deployment failed. Check logs.');
+            setFullLog(res.data.log || '');
+            // Maintain failure state for 1 minute or until manual close
+            setTimeout(() => setStatus('idle'), 60000);
           }
         } catch (error) {
           // Keep polling if there's a network error, backend might be starting up
@@ -128,10 +131,62 @@ const EnvironmentCard: React.FC<EnvironmentCardProps> = ({ env, resources, onDep
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowLogsModal(true)} className="bg-white/5 border-white/20 text-white hover:bg-white/10">
+              <Terminal className="w-4 h-4 mr-2" />
+              Logs
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setStatus('idle')} className="text-white hover:bg-white/10">
+              <XCircle className="w-4 h-4 mr-2" />
               Close
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Log Modal */}
+      {showLogsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-4xl bg-[#0c0c0e] border-white/10 shadow-3xl animate-in zoom-in-95 duration-300 overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="h-1 w-full bg-destructive" />
+            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#08080a]">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-destructive/10 rounded-xl">
+                  <Terminal className="w-6 h-6 text-destructive" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white">Infrastructure Deployment Logs</h3>
+                  <p className="text-sm text-muted-foreground">Target: <span className="font-mono text-white">{activeDeploymentIp || env.prometheusLabel}</span></p>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowLogsModal(false)} className="rounded-xl">
+                <XCircle className="w-6 h-6" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-auto bg-black/40 p-6">
+              <div className="mb-6 p-4 bg-destructive/5 border border-destructive/20 rounded-xl">
+                <h4 className="text-xs font-bold text-destructive uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />
+                  Primary Issue Detected
+                </h4>
+                <p className="text-sm text-red-200 font-medium leading-relaxed">
+                  {errorMessage}
+                </p>
+              </div>
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Full Technical Output</h4>
+                <pre className="p-5 text-[11px] font-mono text-emerald-400/80 leading-relaxed overflow-auto bg-black/60 rounded-xl border border-white/5 whitespace-pre-wrap break-words min-h-[300px]">
+                  {fullLog || 'No output available.'}
+                </pre>
+              </div>
+            </div>
+            <div className="p-6 border-t border-white/5 bg-[#08080a] flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setShowLogsModal(false)}>Close</Button>
+              <Button onClick={() => { setShowLogsModal(false); onDeployClick(); }}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Try Again
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
 

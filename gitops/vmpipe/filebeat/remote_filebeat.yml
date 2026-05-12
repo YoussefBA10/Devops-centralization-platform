@@ -1,0 +1,35 @@
+filebeat.inputs:
+- type: container
+  id: docker-container-logs
+  enabled: true
+  paths:
+    - /var/lib/docker/containers/*/*.log
+
+fields:
+  environment: "{{ env_label }}"
+  node: "{{ nodename }}"
+fields_under_root: true
+
+processors:
+  - add_docker_metadata: ~
+  - add_host_metadata: ~
+  - add_fields:
+      target: ''
+      fields:
+        environment: "{{ env_label }}"
+        node: "{{ nodename }}"
+
+output.logstash:
+  hosts: ["{{ central_logstash_ip }}:5045"]
+
+logging.level: info
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+setup.template.settings:
+  index.number_of_shards: 1
+
+http.enabled: true
+http.host: 0.0.0.0
+http.port: 5066

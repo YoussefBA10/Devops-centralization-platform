@@ -1,11 +1,11 @@
 ---
 - name: Deploy Frontend Application to Agent Node
   hosts: agents
-  become: yes
+  become:yes
   vars:
     appName: "frontend"
     image_tag: "v1"
-    central_ip: "192.168.126.130"
+    central_ip: "" # Overridden by backend
 
   tasks:
     - name: Remove old frontend container if exists
@@ -16,6 +16,10 @@
       shell: |
         docker run -d --name {{ appName }} \
         --restart=always \
+        --log-driver json-file \
+        --label com.monetique.service="{{ appName }}" \
+        --label com.monetique.environment={{ env_label | default('production') }} \
+        --label node={{ ansible_hostname }} \
         -p 80:80 \
         {{ appName }}:{{ image_tag }}
       args:

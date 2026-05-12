@@ -60,7 +60,7 @@ public class InfrastructureService {
 
             Double avgCpu = prometheusClient.queryMetric("avg(1 - rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100");
             Double avgRam = prometheusClient.queryMetric("avg((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100)");
-            Double avgDisk = prometheusClient.queryMetric("avg(max(1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) by (instance) * 100)");
+            Double avgDisk = prometheusClient.queryMetric("avg(1 - (node_filesystem_avail_bytes{mountpoint=\"/data\"} / node_filesystem_size_bytes{mountpoint=\"/data\"})) * 100");
             
             // Total Network Load in Mbps (Receive + Transmit)
             Double totalNetRx = prometheusClient.queryMetric("sum(rate(node_network_receive_bytes_total{device!~\"lo\"}[5m]))");
@@ -228,7 +228,10 @@ public class InfrastructureService {
 
             Double cpu = isUp ? prometheusClient.getCpuUsageForInstance(nodeInstance) : 0.0;
             Double ram = isUp ? prometheusClient.getMemoryUsagePercentForInstance(nodeInstance) : 0.0;
-            Double disk = isUp ? prometheusClient.queryMetric(String.format("max(1 - (node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/\"} / node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/\"})) * 100", ip, ip)) : 0.0;
+            Double disk = isUp ? prometheusClient.queryMetric(String.format(
+                "max(1 - ((node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/data\"} or ignoring(mountpoint, device, fstype) node_filesystem_avail_bytes{instance=~\"%s.*\", mountpoint=\"/\"}) / " +
+                "(node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/data\"} or ignoring(mountpoint, device, fstype) node_filesystem_size_bytes{instance=~\"%s.*\", mountpoint=\"/\"}))) * 100", 
+                ip, ip, ip, ip)) : 0.0;
             if (disk == null) disk = 0.0;
 
             if (isUp && (cpu == 0.0 || ram == 0.0)) {
@@ -520,7 +523,7 @@ public class InfrastructureService {
                     } catch (Exception e) {}
 
                     String instance = labels.get("instance");
-                    if (instance != null && instance.endsWith(":8081")) {
+                    if (instance != null && instance.contains(":")) {
                         instance = instance.substring(0, instance.lastIndexOf(":"));
                     }
 

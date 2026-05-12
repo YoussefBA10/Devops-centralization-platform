@@ -11,6 +11,7 @@ import MetricsConfigModal from '../components/applications/MetricsConfigModal';
 import DeploymentsTab from '../components/applications/DeploymentsTab';
 
 const ApplicationsPage: React.FC = () => {
+
   const { isAdmin, permissions } = useAuth();
   const canCreate = isAdmin || permissions?.appDeployment?.create;
   const canEdit = isAdmin || permissions?.appDeployment?.edit;
@@ -26,6 +27,7 @@ const ApplicationsPage: React.FC = () => {
   const [configModalApp, setConfigModalApp] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'apps' | 'deployments'>('apps');
   const [selectedAppForDeploy, setSelectedAppForDeploy] = useState<any>(null);
+
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -55,7 +57,6 @@ const ApplicationsPage: React.FC = () => {
 
   // Polling refs for DEPLOYING apps
   const pollingRefs = useRef<Record<number, ReturnType<typeof setInterval>>>({});
-  const newlyDeployedAppIds = useRef<Set<number>>(new Set());
 
   const fetchApps = useCallback(async () => {
     if (!selectedEnvironment) return;
@@ -88,12 +89,8 @@ const ApplicationsPage: React.FC = () => {
               clearInterval(pollingRefs.current[app.id]);
               delete pollingRefs.current[app.id];
               
-              if (newStatus === 'RUNNING' && newlyDeployedAppIds.current.has(app.id)) {
-                newlyDeployedAppIds.current.delete(app.id);
-                // Fetch the updated app object to ensure we have latest data for the modal
-                getApplicationStatus(app.id).then(res => {
-                   setPostDeployApp(res.data);
-                });
+              if (newStatus === 'RUNNING') {
+                fetchApps();
               }
               
               fetchApps();
@@ -120,15 +117,10 @@ const ApplicationsPage: React.FC = () => {
 
   const handleDeploy = async (payload: any) => {
     try {
-      const res = await deployApplication(payload);
-      const isNew = !editingApp;
+      await deployApplication(payload);
       setEditingApp(null);
       setIsDeployModalOpen(false);
       await fetchApps();
-      
-      if (isNew && res.data) {
-        newlyDeployedAppIds.current.add(res.data.id);
-      }
     } catch (e: any) {
       throw e;
     }
@@ -395,11 +387,14 @@ const ApplicationsPage: React.FC = () => {
         {activeTab === 'apps' && (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredApps.map((app) => {
             const statusColor = getStatusColor(app.status);
+            const cleanNode = (app.targetNode || '').replace(/^https?:\/\//, '').replace(/\/$/, '');
+            const endpointUrl = `http://${cleanNode}:${app.port}`;
+
             return (
               <div key={app.id} className="group relative pt-6">
                 <div className="absolute top-2 right-4 px-3 py-1 bg-primary border border-primary/50 shadow-[0_0_15px_rgba(59,130,246,0.4)] rounded-full z-10 flex items-center gap-1.5">
                   <Server className="w-3 h-3 text-white" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">{app.targetNode || 'Auto'}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white">{cleanNode || 'Auto'}</span>
                 </div>
 
                 <div className={`p-5 rounded-xl border flex flex-col bg-[#0c0c0e]/80 backdrop-blur-md shadow-2xl transition-all duration-300 hover:-translate-y-1 ${
@@ -430,30 +425,17 @@ const ApplicationsPage: React.FC = () => {
                     <div className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
                       <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-muted-foreground"><span>Endpoint</span><Globe className="w-3 h-3" /></div>
                       <div className="flex items-center justify-between">
-                        <a href={`http://${app.targetNode}:${app.port}`} target="_blank" rel="noreferrer" className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}>http://{app.targetNode}:{app.port}</a>
+                        <a href={endpointUrl} target="_blank" rel="noreferrer" className={`text-xs font-mono transition-colors ${app.status === 'RUNNING' ? 'text-primary hover:text-primary/80 underline underline-offset-4' : 'text-muted-foreground cursor-not-allowed pointer-events-none'}`}>{endpointUrl}</a>
                         {app.status === 'RUNNING' && <ExternalLink className="w-3 h-3 text-primary/50" />}
                       </div>
                     </div>
                     <div className="p-3 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between">
                       <div className="flex flex-col">
                         <span className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Monitoring</span>
-                        {app.metricsTestStatus === 'SUCCESS' ? (
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
-                            <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400">
-                            <AlertTriangle className="w-3 h-3" /> UNCONFIGURED
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                          <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                        </div>
                       </div>
-                      <button 
-                        onClick={() => setConfigModalApp(app)}
-                        className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-white transition-colors"
-                        title="Configure Metrics"
-                      >
-                        <Settings2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                     {app.isCanary && <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20"><Zap className="w-3 h-3 text-amber-500 animate-pulse" /><span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Canary active on port {app.canaryPort}</span></div>}
                   </div>
@@ -554,29 +536,6 @@ const ApplicationsPage: React.FC = () => {
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
       />
-
-      <ConfirmationModal
-        isOpen={!!postDeployApp}
-        title="Deployment Successful"
-        message={`The application "${postDeployApp?.name}" is now running. Would you like to configure Application Observability metrics (Golden Signals) for this service now?`}
-        type="info"
-        onClose={() => setPostDeployApp(null)}
-        onConfirm={() => {
-          setConfigModalApp(postDeployApp);
-          setPostDeployApp(null);
-        }}
-      />
-
-      {configModalApp && (
-        <MetricsConfigModal
-          app={configModalApp}
-          onClose={() => setConfigModalApp(null)}
-          onSuccess={() => {
-            setConfigModalApp(null);
-            fetchApps();
-          }}
-        />
-      )}
     </div>
   );
 };

@@ -23,10 +23,11 @@ scrape_configs:
   - job_name: 'monetique-backend'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['backend:9001']
+      - targets: ['backend:8880']
         labels:
           environment: "central-node"
           nodename: "central-node"
+          app_id: "1"
 
   # 2. Central Node (central-node) - Self monitoring
   - job_name: 'central-node'
@@ -118,17 +119,6 @@ scrape_configs:
         labels:
           environment: "central-node"
           nodename: "central-node"
-
-  # 10. Application Metrics (Dynamic discovery via Monetique-Eye)
-  - job_name: 'application-metrics'
-    metrics_path: '/metrics'
-    file_sd_configs:
-      - files:
-          - '/etc/prometheus/file_sd/app_targets.yml'
-        refresh_interval: 15s
-    relabel_configs:
-      - source_labels: [metrics_path]
-        target_label: __metrics_path__
 
   # 11. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'

@@ -154,4 +154,10 @@ export const getDeploymentEvents = (appId?: number, env?: string, page = 0, size
 export const triggerPipeline = (data: { jobName: string; appId: string; env: string; gitBranch?: string }) =>
   api.post(`/cicd/trigger`, data);
 
+// Prometheus Proxy
+export const prometheusQuery = (query: string) => api.get('/prometheus/query', { params: { query } });
+export const prometheusQueryRange = (query: string, start: number, end: number, step: string) => 
+  api.get('/prometheus/query_range', { params: { query, start, end, step } });
+
+
 export default api;

@@ -15,8 +15,17 @@ public class ActivityLogService {
     private final com.monetique.eye.repository.UserRepository userRepository;
 
     public void logActivity(String title, String type, String envName) {
-        String username = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
-        com.monetique.eye.entity.User user = userRepository.findByUsername(username).orElse(null);
+        com.monetique.eye.entity.User user = null;
+        try {
+            var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.isAuthenticated()) {
+                String username = auth.getName();
+                user = userRepository.findByUsername(username).orElse(null);
+            }
+        } catch (Exception e) {
+            // Log as system if no security context
+        }
+
 
         ActivityLog log = ActivityLog.builder()
                 .title(title)

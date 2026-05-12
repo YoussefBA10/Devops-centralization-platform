@@ -1,6 +1,7 @@
 package com.monetique.eye.controller;
 
 import com.monetique.eye.dto.UserPermissionDto;
+import com.monetique.eye.entity.Cluster;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.entity.ClusterAccess;
 import com.monetique.eye.entity.User;
@@ -8,6 +9,7 @@ import com.monetique.eye.entity.UserPermission;
 import com.monetique.eye.entity.UserPermissionDetail;
 import com.monetique.eye.entity.enums.Role;
 import com.monetique.eye.repository.ClusterAccessRepository;
+import com.monetique.eye.repository.ClusterRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.UserPermissionDetailRepository;
 import com.monetique.eye.repository.UserPermissionRepository;
@@ -34,6 +36,7 @@ public class AdminPermissionController {
     private final UserPermissionRepository userPermissionRepository;
     private final UserPermissionDetailRepository userPermissionDetailRepository;
     private final ClusterAccessRepository clusterAccessRepository;
+    private final ClusterRepository clusterRepository;
     private final SecurityService securityService;
     private final com.monetique.eye.service.NotificationService notificationService;
 
@@ -80,17 +83,24 @@ public class AdminPermissionController {
                 .collect(Collectors.toList());
     }
 
-    @GetMapping("/environments")
+    @GetMapping("/clusters")
     @PreAuthorize("hasRole('ADMIN')")
-    public List<Map<String, Object>> getEnvironments() {
-        return environmentRepository.findAll().stream()
-                .map(env -> {
+    public List<Map<String, Object>> getClusters() {
+        return clusterRepository.findAll().stream()
+                .map(cluster -> {
                     Map<String, Object> m = new HashMap<>();
-                    m.put("id", env.getId());
-                    m.put("name", env.getName());
+                    m.put("id", cluster.getId());
+                    m.put("name", cluster.getName());
                     return m;
                 })
                 .collect(Collectors.toList());
+    }
+
+    @GetMapping("/environments")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Deprecated
+    public List<Map<String, Object>> getEnvironments() {
+        return getClusters(); // Temporary fallback
     }
 
     @GetMapping("/{userId}")
@@ -193,7 +203,7 @@ public class AdminPermissionController {
         return UserPermissionDto.builder()
                 .userId(userId)
                 .clusterAccess(true)
-                .allowedClusterIds(environmentRepository.findAll().stream().map(e -> e.getId().toString()).collect(Collectors.toList()))
+                .allowedClusterIds(clusterRepository.findAll().stream().map(c -> c.getId().toString()).collect(Collectors.toList()))
                 .monitoring(new UserPermissionDto.MonitoringPermissions(true, true, true))
                 .envDeployment(new UserPermissionDto.DeploymentPermissions(true, true, true, true))
                 .appDeployment(new UserPermissionDto.DeploymentPermissions(true, true, true, true))

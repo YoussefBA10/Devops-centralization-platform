@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.util.UriUtils;
-import java.nio.charset.StandardCharsets;
+import org.springframework.web.util.UriComponentsBuilder;
+import java.net.URI;
 import java.util.*;
 
 @Service
@@ -14,21 +14,32 @@ public class PrometheusClient {
     private static final Logger log = LoggerFactory.getLogger(PrometheusClient.class);
 
     private final WebClient webClient;
+    private final String prometheusUrl;
 
     public PrometheusClient(@Value("${prometheus.url}") String prometheusUrl, WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.baseUrl(prometheusUrl).build();
+        this.prometheusUrl = prometheusUrl;
+        
+        // Configure explicit timeouts and force system DNS resolver
+        io.netty.channel.ChannelOption<Integer> connectTimeout = io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS;
+        
+        reactor.netty.http.client.HttpClient httpClient = reactor.netty.http.client.HttpClient.create()
+                .resolver(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE) 
+                .option(connectTimeout, 10000)
+                .responseTimeout(java.time.Duration.ofSeconds(15))
+                .doOnConnected(conn -> conn
+                        .addHandlerLast(new io.netty.handler.timeout.ReadTimeoutHandler(15))
+                        .addHandlerLast(new io.netty.handler.timeout.WriteTimeoutHandler(15)));
+
+        this.webClient = webClientBuilder
+                .baseUrl(prometheusUrl)
+                .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(10 * 1024 * 1024))
+                .build();
     }
 
     public Double queryMetric(String query) {
         try {
-            Map result = webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", "{query}")
-                            .build(query))
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-
+            Map result = proxyQuery(query);
             if (result != null && "success".equals(result.get("status"))) {
                 Map data = (Map) result.get("data");
                 List results = (List) data.get("result");
@@ -47,14 +58,7 @@ public class PrometheusClient {
     public List<Map<String, Object>> queryList(String query) {
         List<Map<String, Object>> list = new ArrayList<>();
         try {
-            Map result = webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query")
-                            .queryParam("query", "{query}")
-                            .build(query))
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-
+            Map result = proxyQuery(query);
             if (result != null && "success".equals(result.get("status"))) {
                 Map data = (Map) result.get("data");
                 List<Map> results = (List<Map>) data.get("result");
@@ -75,24 +79,59 @@ public class PrometheusClient {
         return list;
     }
 
-    public Map<String, Object> queryRange(String query, String start, String end, String step) {
+    public Map<String, Object> proxyQuery(String query) {
         try {
-            Map result = webClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/api/v1/query_range")
-                            .queryParam("query", "{query}")
-                            .queryParam("start", start)
-                            .queryParam("end", end)
-                            .queryParam("step", step)
-                            .build(query))
+            URI uri = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
+                    .path("/api/v1/query")
+                    .queryParam("query", query)
+                    .build()
+                    .toUri();
+
+            log.debug("Proxying instant query to: {}", uri);
+            return webClient.get()
+                    .uri(uri)
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
-
-            if (result != null && "success".equals(result.get("status"))) {
-                return (Map<String, Object>) result.get("data");
-            }
         } catch (Exception e) {
-            log.error("Prometheus range query failed: {}", query, e);
+            log.error("Prometheus proxy query failed: {}", query, e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("error", e.getMessage());
+            return error;
+        }
+    }
+
+    public Map<String, Object> proxyQueryRange(String query, String start, String end, String step) {
+        try {
+            URI uri = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
+                    .path("/api/v1/query_range")
+                    .queryParam("query", query)
+                    .queryParam("start", start)
+                    .queryParam("end", end)
+                    .queryParam("step", step)
+                    .build()
+                    .toUri();
+
+            log.debug("Proxying range query to: {}", uri);
+            return webClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+        } catch (Exception e) {
+            log.error("Prometheus proxy range query failed: {}", query, e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("error", e.getMessage());
+            return error;
+        }
+    }
+
+    public Map<String, Object> queryRange(String query, String start, String end, String step) {
+        Map result = proxyQueryRange(query, start, end, step);
+        if (result != null && "success".equals(result.get("status"))) {
+            return (Map<String, Object>) result.get("data");
         }
         return new HashMap<>();
     }
@@ -108,7 +147,11 @@ public class PrometheusClient {
     }
 
     public Double getDiskUsagePercent(String envLabel) {
-        String query = String.format("max(1 - (node_filesystem_avail_bytes{mountpoint=\"/\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=\"/\", environment=\"%s\"})) * 100", envLabel, envLabel);
+        String query = String.format(
+            "avg(1 - (node_filesystem_avail_bytes{mountpoint=\"/data\", environment=\"%s\"} / " +
+            "node_filesystem_size_bytes{mountpoint=\"/data\", environment=\"%s\"})) * 100", 
+            envLabel, envLabel
+        );
         return queryMetric(query);
     }
 
@@ -132,7 +175,6 @@ public class PrometheusClient {
     }
 
     public Double getAvgStability() {
-        // Mock stability or query instance uptime percentage
         return queryMetric("avg(avg_over_time(up{job=\"node-exporter\"}[1h])) * 100");
     }
 
@@ -227,4 +269,3 @@ public class PrometheusClient {
         return new ArrayList<>();
     }
 }
-

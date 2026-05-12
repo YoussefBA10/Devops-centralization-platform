@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @Builder
@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class LogEventDTO {
     private String id;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private String node;           // vmpipe, node-1, node-2...
     private String service;
     private String severity;       // CRITICAL, ERROR, WARN, INFO

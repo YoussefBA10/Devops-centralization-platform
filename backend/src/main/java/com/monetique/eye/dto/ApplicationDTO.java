@@ -33,8 +33,7 @@ public class ApplicationDTO {
     private String githubRepoUrl;
     private String gitToken;
     private java.util.Map<String, String> envVars;
-    private Integer metricsPort;
-    private String metricsTestStatus;
     private String environmentName;
-    private String metricsPath;
+    private Long nodeId;
+    private String nodeName;
 }

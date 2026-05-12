@@ -102,7 +102,10 @@ public class TicketController {
             applicationRepository.findById(appId).ifPresent(ticket::setApplication);
         }
 
-        return ResponseEntity.ok(ticketRepository.save(ticket));
+        Ticket saved = ticketRepository.save(ticket);
+        activityLogService.logActivity("New Ticket Created: " + ticket.getTitle(), "incident", env.getName());
+        return ResponseEntity.ok(saved);
+
     }
 
     @PutMapping("/{id}")
@@ -138,7 +141,9 @@ public class TicketController {
             }
         }
 
-        return ResponseEntity.ok(ticketRepository.save(ticket));
+        Ticket saved = ticketRepository.save(ticket);
+        activityLogService.logActivity("Ticket Updated: " + ticket.getTitle(), "incident", ticket.getEnvironment().getName());
+        return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/{id}/status")

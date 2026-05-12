@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.entity.Application;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 public class LogService {
@@ -23,18 +23,16 @@ public class LogService {
         this.applicationRepository = applicationRepository;
     }
 
-    public LogResponseDTO searchLogs(Long appId, String query, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    public LogResponseDTO searchLogs(Long appId, String query, String severity, Instant from, Instant to, Pageable pageable) {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        // Use serviceNameKeyword (container name) for ES queries, falling back to app name
-        String appName = (app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()) 
-                ? app.getServiceNameKeyword() 
-                : app.getName();
+        String displayName = app.getName();
+        String keywordName = app.getServiceNameKeyword();
 
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, pageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(displayName, keywordName, query, severity, from, to, pageable);
         
-        long totalDocs = elasticsearchLogClient.getDocumentCount(appName);
+        long totalDocs = elasticsearchLogClient.getDocumentCount(displayName);
         
         // Simple heuristic for ingest rate for enterprise feel
         long eps = totalDocs / (30 * 24 * 60 * 60) + 1;
@@ -50,17 +48,16 @@ public class LogService {
                 .build();
     }
 
-    public String exportLogsAsCsv(Long appId, String query, String severity, LocalDateTime from, LocalDateTime to) {
+    public String exportLogsAsCsv(Long appId, String query, String severity, Instant from, Instant to) {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String appName = (app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()) 
-                ? app.getServiceNameKeyword() 
-                : app.getName();
+        String displayName = app.getName();
+        String keywordName = app.getServiceNameKeyword();
 
         // Fetch top 1000 logs for export
         org.springframework.data.domain.Pageable exportPageable = org.springframework.data.domain.PageRequest.of(0, 1000);
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(appName, query, severity, from, to, exportPageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(displayName, keywordName, query, severity, from, to, exportPageable);
 
         StringBuilder csv = new StringBuilder();
         csv.append('\uFEFF');

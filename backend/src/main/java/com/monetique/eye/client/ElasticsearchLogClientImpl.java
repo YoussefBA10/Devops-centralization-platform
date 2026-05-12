@@ -19,8 +19,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -37,26 +36,55 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     private String getIndexName() {
-        return "app-logs-*";
+        return "app-logs-*,loki-logs-*";
     }
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(appName, queryStr, severity, from, to, pageable)).join();
+    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String queryStr, String severity, Instant from,
+            Instant to, Pageable pageable) {
+        return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, queryStr, severity, from, to, pageable))
+                .join();
     }
 
-    private Page<LogEventDTO> executeSearch(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+            Instant to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
-            // Filter to match any of the common service identifier fields
-            boolQuery.must(m -> m.bool(b -> b.should(s -> s
-                    .term(t -> t.field("service.keyword").value(appName)))
-                    .should(s -> s.term(t -> t.field("service_name.keyword").value(appName)))
-                    .should(s -> s.term(t -> t.field("app.keyword").value(appName)))
-                    .minimumShouldMatch("1")
-            ));
+            // Build a list of possible matching names
+            List<String> namesToMatch = new ArrayList<>();
+            if (displayName != null) {
+                namesToMatch.add(displayName);
+                // Also add a version with underscores instead of hyphens
+                namesToMatch.add(displayName.replace("-", "_"));
+            }
+            if (keywordName != null) {
+                namesToMatch.add(keywordName);
+                namesToMatch.add(keywordName.replace("-", "_"));
+            }
+
+            // Special handling for common mismatches
+            if ("frontend-service".equalsIgnoreCase(displayName) || "angular-nginx-app".equalsIgnoreCase(displayName)) {
+                namesToMatch.add("angular-nginx-app");
+                namesToMatch.add("frontend-service");
+                namesToMatch.add("frontend");
+                namesToMatch.add("nginx");
+            }
+
+            // Filter to match any of the common service identifier fields with any of the names (using wildcard for compose prefixes)
+            boolQuery.must(m -> m.bool(b -> {
+                namesToMatch.forEach(name -> {
+                    // Use wildcard to match names like 'vmpipe_angular-nginx-app_1'
+                    String wildcardName = "*" + name + "*";
+                    b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
+                    b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
+                });
+                return b.minimumShouldMatch("1");
+            }));
 
             if (queryStr != null && !queryStr.isBlank()) {
                 // Ensure wildcards for partial matches if not provided
@@ -65,8 +93,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                         .query(finalQuery)
                         .fields("raw_message", "message", "normalized_summary", "error_type", "category")
                         .analyzeWildcard(true)
-                        .defaultOperator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
-                ));
+                        .defaultOperator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)));
             }
 
             if (severity != null && !severity.isBlank() && !"ALL".equalsIgnoreCase(severity)) {
@@ -76,8 +103,10 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             if (from != null || to != null) {
                 boolQuery.filter(f -> f.range(r -> {
                     var rangeBuilder = r.field("@timestamp");
-                    if (from != null) rangeBuilder.gte(co.elastic.clients.json.JsonData.of(from.format(DateTimeFormatter.ISO_DATE_TIME)));
-                    if (to != null) rangeBuilder.lte(co.elastic.clients.json.JsonData.of(to.format(DateTimeFormatter.ISO_DATE_TIME)));
+                    if (from != null)
+                        rangeBuilder.gte(co.elastic.clients.json.JsonData.of(from.toString()));
+                    if (to != null)
+                        rangeBuilder.lte(co.elastic.clients.json.JsonData.of(to.toString()));
                     return rangeBuilder;
                 }));
             }
@@ -106,14 +135,16 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             return new PageImpl<>(logs, pageable, total);
 
         } catch (Exception e) {
-            log.error("Failed to query ES for application {}: {}", appName, e.getMessage());
+            log.error("Failed to query ES for application {}: {}", displayName, e.getMessage());
             throw new RuntimeException("Elasticsearch query failed", e);
         }
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String appName, String queryStr, String severity, LocalDateTime from, LocalDateTime to, Pageable pageable, Throwable t) {
-        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", appName, t.getMessage());
+    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+            Instant to, Pageable pageable, Throwable t) {
+        log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", displayName,
+                t.getMessage());
         return new PageImpl<>(new ArrayList<>(), pageable, 0);
     }
 
@@ -151,10 +182,12 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     private LogEventDTO parseLog(String id, ObjectNode source) {
         return LogEventDTO.builder()
                 .id(id)
-                .timestamp(source.has("@timestamp") ? LocalDateTime.parse(source.get("@timestamp").asText(), DateTimeFormatter.ISO_OFFSET_DATE_TIME) : LocalDateTime.now())
+                .timestamp(source.has("@timestamp")
+                        ? Instant.parse(source.get("@timestamp").asText())
+                        : Instant.now())
                 .node(source.has("node") ? source.get("node").asText() : "unknown")
-                .service(getField(source, "service", "service_name", "app"))
-                .severity(source.has("severity") ? source.get("severity").asText() : "INFO")
+                .service(getField(source, "service", "service_name", "app", "compose_service", "job"))
+                .severity(source.has("severity") ? source.get("severity").asText() : (source.has("detected_level") ? source.get("detected_level").asText() : "INFO"))
                 .category(source.has("category") ? source.get("category").asText() : "APPLICATION")
                 .errorType(getField(source, "errorType", "error_type"))
                 .normalizedSummary(getField(source, "normalizedSummary", "normalized_summary"))

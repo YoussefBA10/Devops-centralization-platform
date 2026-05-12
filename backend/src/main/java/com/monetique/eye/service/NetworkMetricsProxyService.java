@@ -23,6 +23,7 @@ public class NetworkMetricsProxyService {
 
     private final RestTemplate restTemplate;
     private final ServiceLinkRepository serviceLinkRepository;
+    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
     private final ObjectMapper objectMapper;
 
     @Value("${prometheus.url:http://prometheus:9090}")
@@ -45,15 +46,17 @@ public class NetworkMetricsProxyService {
     public Map<String, Object> getVmNetworkMetrics(Long nodeId, String range) {
         String step = getStep(range);
         String start = getStart(range);
+        
+        String nodeFilter = resolveNodeFilter(nodeId);
 
         Map<String, Object> result = new HashMap<>();
-        result.put("retransmitRate", queryRange("rate(node_netstat_Tcp_RetransSegs{node_id=\"" + nodeId + "\"}[5m])", start, step));
-        result.put("dropRate", queryRange("rate(node_network_receive_drop_total{node_id=\"" + nodeId + "\"}[5m])", start, step));
-        result.put("rxMbps", queryRange("rate(node_network_receive_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step));
-        result.put("txMbps", queryRange("rate(node_network_transmit_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step));
-        result.put("tcpEstab", queryRange("node_netstat_Tcp_CurrEstab{node_id=\"" + nodeId + "\"}", start, step));
-        result.put("timeWait", queryRange("node_sockstat_TCP_tw{node_id=\"" + nodeId + "\"}", start, step));
-        result.put("errors", queryRange("rate(node_network_receive_errs_total{node_id=\"" + nodeId + "\"}[5m])", start, step));
+        result.put("retransmitRate", queryRange("rate(node_netstat_Tcp_RetransSegs{" + nodeFilter + "}[5m])", start, step));
+        result.put("dropRate", queryRange("rate(node_network_receive_drop_total{" + nodeFilter + "}[5m])", start, step));
+        result.put("rxMbps", queryRange("rate(node_network_receive_bytes_total{" + nodeFilter + "}[5m]) * 8 / 1e6", start, step));
+        result.put("txMbps", queryRange("rate(node_network_transmit_bytes_total{" + nodeFilter + "}[5m]) * 8 / 1e6", start, step));
+        result.put("tcpEstab", queryRange("node_netstat_Tcp_CurrEstab{" + nodeFilter + "}", start, step));
+        result.put("timeWait", queryRange("node_sockstat_TCP_tw{" + nodeFilter + "}", start, step));
+        result.put("errors", queryRange("rate(node_network_receive_errs_total{" + nodeFilter + "}[5m])", start, step));
         
         return result;
     }
@@ -61,10 +64,12 @@ public class NetworkMetricsProxyService {
     public Map<String, Map<String, Object>> getVmContainerNetworkMetrics(Long nodeId, String range) {
         String step = getStep(range);
         String start = getStart(range);
+        
+        String nodeFilter = resolveNodeFilter(nodeId);
 
-        JsonNode rxData = queryRange("rate(container_network_receive_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step);
-        JsonNode txData = queryRange("rate(container_network_transmit_bytes_total{node_id=\"" + nodeId + "\"}[5m]) * 8 / 1e6", start, step);
-        JsonNode dropData = queryRange("rate(container_network_receive_dropped_total{node_id=\"" + nodeId + "\"}[5m])", start, step);
+        JsonNode rxData = queryRange("rate(container_network_receive_bytes_total{" + nodeFilter + "}[5m]) * 8 / 1e6", start, step);
+        JsonNode txData = queryRange("rate(container_network_transmit_bytes_total{" + nodeFilter + "}[5m]) * 8 / 1e6", start, step);
+        JsonNode dropData = queryRange("rate(container_network_receive_dropped_total{" + nodeFilter + "}[5m])", start, step);
 
         Map<String, Map<String, Object>> containers = new HashMap<>();
         
@@ -139,7 +144,8 @@ public class NetworkMetricsProxyService {
     }
 
     public Map<String, Object> checkExporterCollectors(Long nodeId) {
-        Double value = querySingleValue("node_netstat_Tcp_RetransSegs{node_id=\"" + nodeId + "\"}");
+        String nodeFilter = resolveNodeFilter(nodeId);
+        Double value = querySingleValue("node_netstat_Tcp_RetransSegs{" + nodeFilter + "}");
         Map<String, Object> result = new HashMap<>();
         if (value == null) {
             result.put("netstatAvailable", false);
@@ -148,6 +154,34 @@ public class NetworkMetricsProxyService {
             result.put("netstatAvailable", true);
         }
         return result;
+    }
+
+    private String resolveNodeFilter(Long nodeId) {
+        return managedNodeRepository.findById(nodeId)
+                .map(node -> {
+                    String ip = node.getIp();
+                    if (ip == null) return "instance=\"unknown\"";
+                    
+                    // CLEAN IP ON THE FLY
+                    String cleanIp = ip.replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
+                    
+                    String centralIp = null;
+                    if (node.getEnvironment() != null && node.getEnvironment().getCentralNodeIp() != null) {
+                        centralIp = node.getEnvironment().getCentralNodeIp().replaceAll("^https?://", "").replaceAll("/", "").replaceAll("http", "");
+                    }
+
+                    boolean isCentral = cleanIp.equals("127.0.0.1") || 
+                                        cleanIp.equals("localhost") || 
+                                        cleanIp.equals("central-node") || 
+                                        (node.getNodeName() != null && node.getNodeName().toLowerCase().contains("central")) ||
+                                        (centralIp != null && cleanIp.equals(centralIp));
+                    
+                    if (isCentral) {
+                        return "instance=~\"localhost:.*|node-exporter:.*|central-node:.*|cadvisor:.*\"";
+                    }
+                    return "instance=~\"" + cleanIp + ":.*\"";
+                })
+                .orElse("node_id=\"" + nodeId + "\""); // Fallback
     }
 
     private JsonNode queryRange(String query, String startStr, String step) {
