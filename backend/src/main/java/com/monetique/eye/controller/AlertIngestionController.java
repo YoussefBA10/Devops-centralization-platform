@@ -23,7 +23,7 @@ public class AlertIngestionController {
 
     @PostMapping("/ingest")
     public ResponseEntity<?> ingest(@RequestBody JsonNode payload) {
-        log.info("Received alert webhook from Alertmanager");
+        log.info("Received alert webhook from Alertmanager: {}", payload.toString());
         
         String status = payload.path("status").asText();
         JsonNode alerts = payload.path("alerts");

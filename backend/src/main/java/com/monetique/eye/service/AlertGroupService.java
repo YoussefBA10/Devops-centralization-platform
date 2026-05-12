@@ -42,9 +42,17 @@ public class AlertGroupService {
         String alertName = labels.getOrDefault("alertname", "unknown");
         String serviceName = labels.get("service_name");
         if (serviceName == null) {
-            serviceName = labels.getOrDefault("application", "unknown");
+            serviceName = labels.get("application");
         }
         
+        // Inference logic: if still unknown, try to guess from alertName
+        if (serviceName == null || "unknown".equals(serviceName)) {
+            if (alertName.contains("Backend")) serviceName = "backend";
+            else if (alertName.contains("Frontend")) serviceName = "frontend";
+            else serviceName = "unknown";
+        }
+        
+        log.info("Processing alert '{}' for service '{}' (Severity: {})", alertName, serviceName, severity);
         autoCreator.processGroup(group, alertName, serviceName);
         groupRepository.save(group);
     }
