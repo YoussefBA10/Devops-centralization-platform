@@ -1,0 +1,67 @@
+package com.monetique.eye.service;
+
+import com.monetique.eye.entity.Alert;
+import com.monetique.eye.entity.AlertGroup;
+import com.monetique.eye.entity.enums.AlertGroupStatus;
+import com.monetique.eye.repository.AlertGroupRepository;
+import com.monetique.eye.repository.AlertRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+public class AlertGroupService {
+
+    private final AlertGroupRepository groupRepository;
+    private final AlertRepository alertRepository;
+    private final CorrelationEngine correlationEngine;
+    private final IncidentAutoCreator autoCreator;
+
+    @Transactional
+    public void ingestAlert(Map<String, String> labels, Map<String, String> annotations, String status, String fingerprint) {
+        String severity = labels.getOrDefault("severity", "warning");
+        AlertGroup group = correlationEngine.correlate(labels, severity);
+        
+        Alert alert = Alert.builder()
+                .group(group)
+                .prometheusFingerprint(fingerprint)
+                .labels(labels)
+                .annotations(annotations)
+                .status(status)
+                .firedAt(LocalDateTime.now())
+                .build();
+        
+        alertRepository.save(alert);
+
+        // Auto-create incident if needed
+        String alertName = labels.getOrDefault("alertname", "unknown");
+        String serviceName = labels.getOrDefault("service_name", "unknown");
+        autoCreator.processGroup(group, alertName, serviceName);
+        groupRepository.save(group);
+    }
+
+    @Transactional
+    public void resolveGroup(String fingerprint) {
+        groupRepository.findByFingerprint(fingerprint).ifPresent(group -> {
+            group.setStatus(AlertGroupStatus.RESOLVED);
+            group.setResolvedAt(LocalDateTime.now());
+            groupRepository.save(group);
+        });
+    }
+
+    public List<AlertGroup> getActiveGroups() {
+        return groupRepository.findByStatus(AlertGroupStatus.FIRING);
+    }
+
+    @Transactional
+    public void linkToIncident(Long groupId, Long incidentId, IncidentService incidentService) {
+        AlertGroup group = groupRepository.findById(groupId).orElseThrow();
+        group.setIncident(incidentService.getIncident(incidentId));
+        groupRepository.save(group);
+    }
+}

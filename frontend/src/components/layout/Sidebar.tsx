@@ -10,7 +10,8 @@ import {
   LayoutDashboard,
   Settings,
   Box,
-  Book
+  Book,
+  ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
@@ -64,6 +65,12 @@ const Sidebar: React.FC = () => {
     },
     { 
       name: 'Incidents', 
+      path: '/incidents', 
+      icon: ShieldAlert,
+      show: isAdmin || permissions?.incidents?.view
+    },
+    { 
+      name: 'Tickets', 
       path: '/tickets', 
       icon: FileText,
       show: isAdmin || permissions?.incidents?.view

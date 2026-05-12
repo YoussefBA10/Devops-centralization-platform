@@ -133,4 +133,19 @@ export const getAlertRules = () => api.get(`/network/alert-rules`);
 export const addAlertRule = (data: any) => api.post(`/network/alert-rules`, data);
 export const deleteAlertRule = (id: string) => api.delete(`/network/alert-rules/${id}`);
 
+// New Incident Management & Smart Alerting
+export const getIncidents = (params: { status?: string; severity?: string; before_id?: number; size?: number }) => 
+  api.get('/incidents', { params });
+export const getIncident = (id: number) => api.get(`/incidents/${id}`);
+export const updateIncident = (id: number, data: any) => api.patch(`/incidents/${id}`, data);
+export const getIncidentTimeline = (id: number, params: { page?: number; size?: number }) => 
+  api.get(`/incidents/${id}/timeline`, { params });
+export const addIncidentAttachment = (id: number, data: { type: string; referenceId?: string; snapshot?: any }) => 
+  api.post(`/incidents/${id}/attachments`, data);
+
+export const getAlertGroups = () => api.get('/alerts/groups');
+export const resolveAlertGroup = (id: number) => api.post(`/alerts/groups/${id}/resolve`);
+export const linkAlertGroupToIncident = (groupId: number, incidentId: number) => 
+  api.post(`/alerts/groups/${groupId}/link/${incidentId}`);
+
 export default api;
