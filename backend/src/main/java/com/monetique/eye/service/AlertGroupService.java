@@ -24,6 +24,7 @@ public class AlertGroupService {
     private final CorrelationEngine correlationEngine;
     private final com.monetique.eye.repository.TicketRepository ticketRepository;
     private final com.monetique.eye.repository.ApplicationRepository applicationRepository;
+    private final com.monetique.eye.repository.EnvironmentRepository environmentRepository;
 
     @Transactional
     public void ingestAlert(Map<String, String> labels, Map<String, String> annotations, String status, String fingerprint) {
@@ -44,32 +45,33 @@ public class AlertGroupService {
         // Auto-raise ticket if needed
         if (group.getTicket() == null && "FIRING".equals(status)) {
             String alertName = labels.getOrDefault("alertname", "unknown");
-            String serviceName = labels.get("service_name");
-            if (serviceName == null) {
-                serviceName = labels.getOrDefault("application", "unknown");
-            }
             
-            // Inference logic: if still unknown, try to guess from alertName
-            if ("unknown".equals(serviceName)) {
-                if (alertName.contains("Backend")) serviceName = "backend";
-                else if (alertName.contains("Frontend")) serviceName = "frontend";
-            }
-            
-            log.info("Auto-raising ticket for alert '{}' on service '{}'", alertName, serviceName);
-            
-            com.monetique.eye.entity.Application app = applicationRepository.findByName(serviceName).orElse(null);
-            if (app != null) {
+            // 1. Resolve Environment (Mandatory for Ticket)
+            String envName = labels.getOrDefault("environment", labels.getOrDefault("env", "unknown"));
+            com.monetique.eye.entity.Environment env = environmentRepository.findByName(envName)
+                    .orElseGet(() -> environmentRepository.findAll().stream().findFirst().orElse(null));
+
+            if (env != null) {
+                // 2. Resolve Application (Optional for Ticket)
+                String appName = labels.getOrDefault("application", labels.getOrDefault("service_name", "unknown"));
+                com.monetique.eye.entity.Application app = applicationRepository.findByName(appName).orElse(null);
+
+                log.info("Auto-raising ticket for alert '{}' on env '{}' (App: {})", alertName, env.getName(), app != null ? app.getName() : "None");
+                
                 com.monetique.eye.entity.Ticket ticket = com.monetique.eye.entity.Ticket.builder()
                         .title("[ALERT] " + group.getName())
                         .description("Automated ticket raised from Prometheus alert: " + alertName + "\nLabels: " + labels)
                         .status(com.monetique.eye.entity.enums.TicketStatus.OPEN)
                         .priority("critical".equalsIgnoreCase(severity) ? "CRITICAL" : "HIGH")
                         .application(app)
-                        .environment(app.getEnvironment())
+                        .environment(env)
+                        .node(labels.get("nodename"))
                         .build();
                 
                 com.monetique.eye.entity.Ticket savedTicket = ticketRepository.save(ticket);
                 group.setTicket(savedTicket);
+            } else {
+                log.error("Cannot raise ticket: No environment found for label '{}' and no default environment exists.", envName);
             }
         }
         
