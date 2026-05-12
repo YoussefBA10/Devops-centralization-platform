@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getDeploymentEvents, triggerPipeline } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { Rocket, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { Rocket, RefreshCw, Clock, CheckCircle2, XCircle, AlertTriangle, X } from 'lucide-react';
 import { Button } from '../ui/Input';
 
 interface DeploymentsTabProps {
