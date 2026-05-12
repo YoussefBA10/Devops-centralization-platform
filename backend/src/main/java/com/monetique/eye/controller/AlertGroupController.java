@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class AlertGroupController {
 
     private final AlertGroupService alertGroupService;
-    private final IncidentService incidentService;
+    // Removed IncidentService as incidents are phased out
 
     @GetMapping
     public List<AlertGroupDTO> getActiveGroups() {
@@ -28,19 +28,8 @@ public class AlertGroupController {
 
     @PostMapping("/{id}/resolve")
     public ResponseEntity<?> resolve(@PathVariable Long id) {
-        // Find group by ID to get fingerprint
-        // (The webhook usually sends fingerprint, but frontend might use ID)
-        // For simplicity, we'll implement a resolveById in the service if needed,
-        // but here we can just update the status directly if we have the entity.
-        // Let's assume the service handles resolution.
         alertGroupService.resolveGroup(alertGroupService.getActiveGroups().stream()
             .filter(g -> g.getId().equals(id)).findFirst().map(AlertGroup::getFingerprint).orElse(null));
-        return ResponseEntity.ok().build();
-    }
-
-    @PostMapping("/{id}/link/{incidentId}")
-    public ResponseEntity<?> linkToIncident(@PathVariable Long id, @PathVariable Long incidentId) {
-        alertGroupService.linkToIncident(id, incidentId, incidentService);
         return ResponseEntity.ok().build();
     }
 
@@ -53,7 +42,7 @@ public class AlertGroupController {
                 .severity(group.getSeverity())
                 .firstFiredAt(group.getFirstFiredAt())
                 .lastFiredAt(group.getLastFiredAt())
-                .incidentId(group.getIncident() != null ? group.getIncident().getId() : null)
+                .ticketId(group.getTicket() != null ? group.getTicket().getId() : null)
                 .build();
     }
 }

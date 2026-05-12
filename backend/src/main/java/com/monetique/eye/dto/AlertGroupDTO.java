@@ -19,5 +19,5 @@ public class AlertGroupDTO {
     private String severity;
     private LocalDateTime firstFiredAt;
     private LocalDateTime lastFiredAt;
-    private Long incidentId;
+    private Long ticketId;
 }

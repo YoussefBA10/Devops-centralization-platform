@@ -167,7 +167,7 @@ const TicketsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight">Incident Management</h1>
+          <h1 className="text-4xl font-bold tracking-tight">Support & Incident Tickets</h1>
           <p className="text-muted-foreground mt-2 text-lg">Track, triage, and resolve environment-level infrastructure issues.</p>
         </div>
         <div className="flex items-center gap-3">
