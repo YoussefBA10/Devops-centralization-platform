@@ -42,9 +42,18 @@ public class CorrelationEngine {
         Optional<AlertGroup> existingGroup = alertGroupRepository.findByFingerprint(groupingFingerprint);
         
         AlertGroup group;
-        if (existingGroup.isPresent() && existingGroup.get().getStatus() == AlertGroupStatus.FIRING) {
+        if (existingGroup.isPresent()) {
             group = existingGroup.get();
             group.setLastFiredAt(LocalDateTime.now());
+            
+            // If it was resolved, but is now firing again
+            if (group.getStatus() != AlertGroupStatus.FIRING) {
+                group.setStatus(AlertGroupStatus.FIRING);
+                group.setFirstFiredAt(LocalDateTime.now());
+                group.setResolvedAt(null);
+                // Clear the old ticket so a new one is raised for this new occurrence
+                group.setTicket(null);
+            }
         } else {
             group = AlertGroup.builder()
                     .fingerprint(groupingFingerprint)

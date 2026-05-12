@@ -64,10 +64,12 @@ const TicketsPage: React.FC = () => {
   }, [selectedEnvironment]);
 
   const fetchTickets = async () => {
-    if (!selectedEnvironment) return;
     setLoading(true);
     try {
-      const response = await api.get<Ticket[]>(`/tickets?environmentId=${selectedEnvironment.id}`);
+      const url = selectedEnvironment 
+        ? `/tickets?environmentId=${selectedEnvironment.id}` 
+        : '/tickets?clusters=all';
+      const response = await api.get<Ticket[]>(url);
       setTickets(response.data);
     } catch (error) {
       console.error('Failed to fetch tickets', error);
