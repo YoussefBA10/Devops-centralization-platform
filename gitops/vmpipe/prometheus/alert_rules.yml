@@ -51,6 +51,7 @@ groups:
         for: "1m"
         labels:
           severity: "critical"
+          application: "frontend"
         annotations:
           summary: "Frontend {{ $labels.container_label_app }} is down"
           description: "Frontend container {{ $labels.name }} is down."
@@ -60,6 +61,7 @@ groups:
         for: "1m"
         labels:
           severity: "critical"
+          application: "backend"
         annotations:
           summary: "Backend {{ if $labels.container_label_app }}{{ $labels.container_label_app }}{{ else }}Service{{ end }} is down"
           description: "Backend {{ $labels.name }} on {{ if $labels.nodename }}{{ $labels.nodename }}{{ else }}{{ $labels.instance }}{{ end }} is unreachable."
