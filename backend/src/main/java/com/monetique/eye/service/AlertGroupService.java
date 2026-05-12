@@ -29,7 +29,10 @@ public class AlertGroupService {
     @Transactional
     public void ingestAlert(Map<String, String> labels, Map<String, String> annotations, String status, String fingerprint) {
         String severity = labels.getOrDefault("severity", "warning");
+        log.info("=== ALERT INGESTION === status='{}', fingerprint='{}', labels={}", status, fingerprint, labels);
+        
         AlertGroup group = correlationEngine.correlate(labels, severity);
+        log.info("Correlated to group: id={}, name='{}', hasTicket={}", group.getId(), group.getName(), group.getTicket() != null);
         
         Alert alert = Alert.builder()
                 .group(group)
@@ -42,8 +45,12 @@ public class AlertGroupService {
         
         alertRepository.save(alert);
 
-        // Auto-raise ticket if needed
-        if (group.getTicket() == null && "FIRING".equals(status)) {
+        // Auto-raise ticket if needed — use case-insensitive check since Alertmanager sends "firing"
+        boolean isFiring = "firing".equalsIgnoreCase(status);
+        boolean needsTicket = group.getTicket() == null;
+        log.info("Ticket check: isFiring={}, needsTicket={}", isFiring, needsTicket);
+        
+        if (needsTicket && isFiring) {
             String alertName = labels.getOrDefault("alertname", "unknown");
             
             // 1. Resolve Environment (Mandatory for Ticket)
@@ -56,7 +63,7 @@ public class AlertGroupService {
                 String appName = labels.getOrDefault("application", labels.getOrDefault("service_name", "unknown"));
                 com.monetique.eye.entity.Application app = applicationRepository.findByName(appName).orElse(null);
 
-                log.info("Auto-raising ticket for alert '{}' on env '{}' (App: {})", alertName, env.getName(), app != null ? app.getName() : "None");
+                log.info("AUTO-RAISING TICKET for alert '{}' on env '{}' (App: {})", alertName, env.getName(), app != null ? app.getName() : "None");
                 
                 com.monetique.eye.entity.Ticket ticket = com.monetique.eye.entity.Ticket.builder()
                         .title("[ALERT] " + group.getName())
@@ -70,6 +77,7 @@ public class AlertGroupService {
                 
                 com.monetique.eye.entity.Ticket savedTicket = ticketRepository.save(ticket);
                 group.setTicket(savedTicket);
+                log.info("TICKET CREATED: id={}, title='{}'", savedTicket.getId(), savedTicket.getTitle());
             } else {
                 log.error("Cannot raise ticket: No environment found for label '{}' and no default environment exists.", envName);
             }
