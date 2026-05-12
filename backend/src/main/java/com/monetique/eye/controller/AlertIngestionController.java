@@ -65,23 +65,25 @@ public class AlertIngestionController {
      * Call: GET /api/alerts/test-ticket
      */
     @org.springframework.web.bind.annotation.GetMapping("/test-ticket")
-    public ResponseEntity<?> testTicket() {
+    public ResponseEntity<?> testTicket(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "backend") String app) {
         log.info("=== TEST TICKET CREATION ===");
+        boolean isFrontend = "frontend".equalsIgnoreCase(app);
+        
         Map<String, String> labels = new HashMap<>();
-        labels.put("alertname", "BackendDown");
+        labels.put("alertname", isFrontend ? "FrontendDown" : "BackendDown");
         labels.put("severity", "critical");
-        labels.put("application", "backend");
+        labels.put("application", isFrontend ? "frontend" : "backend");
         labels.put("environment", "central-node");
-        labels.put("job", "monetique-backend");
-        labels.put("instance", "backend:8880");
+        labels.put("job", isFrontend ? "monetique-frontend" : "monetique-backend");
+        labels.put("instance", isFrontend ? "frontend:80" : "backend:8880");
 
         Map<String, String> annotations = new HashMap<>();
-        annotations.put("summary", "TEST: Backend is down");
+        annotations.put("summary", "TEST: " + (isFrontend ? "Frontend" : "Backend") + " is down");
         annotations.put("description", "This is a test alert to verify ticket creation.");
 
         try {
-            alertGroupService.ingestAlert(labels, annotations, "firing", "test-fingerprint-" + System.currentTimeMillis());
-            return ResponseEntity.ok(Map.of("status", "success", "message", "Test alert processed. Check /tickets for a new ticket."));
+            alertGroupService.ingestAlert(labels, annotations, "firing", "test-fingerprint-" + app + "-" + System.currentTimeMillis());
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Test alert processed for " + app + ". Check /tickets for the ticket."));
         } catch (Exception e) {
             log.error("Test ticket creation failed", e);
             return ResponseEntity.status(500).body(Map.of("status", "error", "message", e.getMessage()));

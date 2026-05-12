@@ -12,4 +12,5 @@ import java.util.Optional;
 public interface AlertGroupRepository extends JpaRepository<AlertGroup, Long> {
     Optional<AlertGroup> findByFingerprint(String fingerprint);
     List<AlertGroup> findByStatus(AlertGroupStatus status);
+    List<AlertGroup> findByTicketId(Long ticketId);
 }

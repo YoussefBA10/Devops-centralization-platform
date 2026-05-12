@@ -21,6 +21,8 @@ import java.util.Map;
 public class TicketController {
 
     private final TicketRepository ticketRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.monetique.eye.repository.AlertGroupRepository alertGroupRepository;
     private final SecurityService securityService;
     private final ActivityLogService activityLogService;
     private final EnvironmentRepository environmentRepository;
@@ -171,6 +173,14 @@ public class TicketController {
             return ResponseEntity.notFound().build();
         }
         String envName = ticket.getEnvironment() != null ? ticket.getEnvironment().getName() : "Global";
+        
+        // Unlink any AlertGroups that might be referencing this ticket
+        List<com.monetique.eye.entity.AlertGroup> groups = alertGroupRepository.findByTicketId(ticket.getId());
+        for (com.monetique.eye.entity.AlertGroup group : groups) {
+            group.setTicket(null);
+            alertGroupRepository.save(group);
+        }
+        
         ticketRepository.delete(ticket);
         activityLogService.logActivity("Ticket Deleted: " + ticket.getTitle(), "incident", envName);
         return ResponseEntity.ok().build();
