@@ -22,7 +22,10 @@ public class CorrelationEngine {
     private final AlertGroupRepository alertGroupRepository;
 
     public AlertGroup correlate(Map<String, String> labels, String severity) {
-        String serviceName = labels.getOrDefault("service_name", "unknown");
+        String serviceName = labels.get("service_name");
+        if (serviceName == null) {
+            serviceName = labels.getOrDefault("application", "unknown");
+        }
         String alertName = labels.getOrDefault("alertname", "unknown");
         
         // Rule 1: Fingerprinting for deduplication

@@ -40,7 +40,11 @@ public class AlertGroupService {
 
         // Auto-create incident if needed
         String alertName = labels.getOrDefault("alertname", "unknown");
-        String serviceName = labels.getOrDefault("service_name", "unknown");
+        String serviceName = labels.get("service_name");
+        if (serviceName == null) {
+            serviceName = labels.getOrDefault("application", "unknown");
+        }
+        
         autoCreator.processGroup(group, alertName, serviceName);
         groupRepository.save(group);
     }
