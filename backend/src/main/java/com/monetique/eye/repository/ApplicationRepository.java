@@ -15,4 +15,5 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     List<Application> findByEnvironmentIdAndTargetNodeAndPort(Long environmentId, String targetNode, Integer port);
 
     Optional<Application> findFirstByGithubInstallationIdIsNotNullAndRepoUrlContaining(String searchPattern);
+    List<Application> findAllByServiceNameKeyword(String serviceNameKeyword);
 }

@@ -22,7 +22,8 @@ public class LogAnalyticsController {
             @RequestParam Long environmentId,
             @RequestParam(defaultValue = "6h") String range,
             @RequestParam(required = false) String serviceName,
-            @RequestParam(required = false) String nodeName) {
-        return analyticsService.getDashboardData(environmentId, range, serviceName, nodeName);
+            @RequestParam(required = false) String nodeName,
+            @RequestParam(required = false) Long ticketId) {
+        return analyticsService.getDashboardData(environmentId, range, serviceName, nodeName, ticketId);
     }
 }

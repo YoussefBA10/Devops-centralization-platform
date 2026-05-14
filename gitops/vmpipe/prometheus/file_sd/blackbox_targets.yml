@@ -1,32 +1,49 @@
+---
 - targets:
-  - http://backend:8880/actuator/health
+  - "http://backend:8880/actuator/health"
   labels:
-    job: blackbox
-    environment: central-node
-    nodename: central-node
-    probe_module: http_2xx
-    target_type: node
+    nodename: "central-node"
+    target_type: "node"
+    job: "blackbox"
+    probe_module: "http_2xx"
+    environment: "central-node"
 - targets:
-  - http://frontend:80
+  - "http://frontend:80"
   labels:
-    job: blackbox
-    environment: central-node
-    nodename: central-node
-    probe_module: http_2xx
-    target_type: frontend
+    nodename: "central-node"
+    target_type: "frontend"
+    job: "blackbox"
+    probe_module: "http_2xx"
+    environment: "central-node"
 - targets:
-  - http://192.168.126.131:80
+  - "192.168.126.131"
   labels:
-    environment: test
-    job: blackbox
-    nodename: node-192-168-126-131
-    probe_module: http_2xx
-    target_type: frontend
+    nodename: "node-192-168-126-131"
+    target_type: "node"
+    job: "blackbox"
+    probe_module: "icmp"
+    environment: "test"
 - targets:
-  - http://192.168.126.135:80
+  - "http://192.168.126.131:80"
   labels:
-    environment: test
-    job: blackbox
-    nodename: node-192-168-126-135
-    probe_module: http_2xx
-    target_type: frontend
+    nodename: "node-192-168-126-131"
+    target_type: "frontend"
+    job: "blackbox"
+    probe_module: "http_2xx"
+    environment: "test"
+- targets:
+  - "192.168.126.135"
+  labels:
+    nodename: "node-192-168-126-135"
+    target_type: "node"
+    job: "blackbox"
+    probe_module: "icmp"
+    environment: "test"
+- targets:
+  - "http://192.168.126.135:80"
+  labels:
+    nodename: "node-192-168-126-135"
+    target_type: "frontend"
+    job: "blackbox"
+    probe_module: "http_2xx"
+    environment: "test"

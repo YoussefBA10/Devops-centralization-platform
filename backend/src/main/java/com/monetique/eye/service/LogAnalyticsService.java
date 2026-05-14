@@ -9,9 +9,11 @@ import com.monetique.eye.dto.LogAnalyticsResponseDTO.*;
 import com.monetique.eye.dto.LogEventDTO;
 import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.Environment;
+import com.monetique.eye.client.ElasticsearchLogClient;
+import com.monetique.eye.entity.Ticket;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
-import com.monetique.eye.client.ElasticsearchLogClient;
+import com.monetique.eye.repository.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -33,8 +35,31 @@ public class LogAnalyticsService {
     private final ElasticsearchLogClient elasticsearchLogClient;
     private final ApplicationRepository applicationRepository;
     private final EnvironmentRepository environmentRepository;
+    private final TicketRepository ticketRepository;
 
-    public LogAnalyticsResponseDTO getDashboardData(Long environmentId, String range, String serviceName, String nodeName) {
+    public LogAnalyticsResponseDTO getDashboardData(Long environmentId, String range, String serviceName, String nodeName, Long ticketId) {
+        // Resolve ticket context if provided
+        String effectiveServiceName = serviceName;
+        String effectiveNodeName = nodeName;
+
+        if (ticketId != null) {
+            Ticket ticket = ticketRepository.findById(ticketId).orElse(null);
+            if (ticket != null) {
+                if (ticket.getApplication() != null) {
+                    effectiveServiceName = ticket.getApplication().getServiceNameKeyword() != null ? 
+                        ticket.getApplication().getServiceNameKeyword() : ticket.getApplication().getName();
+                }
+                if (ticket.getNode() != null) {
+                    effectiveNodeName = ticket.getNode();
+                }
+                log.info("ANALYTICS: Resolved ticket #{} to service={} node={}", ticketId, effectiveServiceName, effectiveNodeName);
+            }
+        }
+
+        if (effectiveNodeName != null && effectiveNodeName.matches("^node-\\d+$")) {
+            effectiveNodeName = effectiveNodeName.substring(5);
+        }
+
         int hours = parseRange(range);
         Instant end = Instant.now();
         Instant start = end.minus(hours, ChronoUnit.HOURS);
@@ -52,21 +77,19 @@ public class LogAnalyticsService {
 
         List<Application> apps = new ArrayList<>();
         
-        if (serviceName != null && !serviceName.isBlank()) {
-            Application targetApp = applicationRepository.findByName(serviceName).orElse(null);
-            log.info("ANALYTICS DEBUG: findByName('{}') => {}", serviceName, targetApp != null ? targetApp.getName() + " (env=" + (targetApp.getEnvironment() != null ? targetApp.getEnvironment().getPrometheusLabel() : "null") + ", node=" + targetApp.getTargetNode() + ", keyword=" + targetApp.getServiceNameKeyword() + ")" : "NULL");
+        if (effectiveServiceName != null && !effectiveServiceName.isBlank()) {
+            Application targetApp = applicationRepository.findByName(effectiveServiceName).orElse(null);
             
             if (targetApp != null) {
                 apps.add(targetApp);
-                // For container metrics, use the app's actual environment/node
-                if (targetApp.getEnvironment() != null) {
-                    containerEnvLabel = targetApp.getEnvironment().getPrometheusLabel();
-                }
-                if (targetApp.getTargetNode() != null) {
-                    containerNodeName = targetApp.getTargetNode();
+                // Also try to find related apps by service keyword to ensure we get container metrics correctly
+                if (targetApp.getServiceNameKeyword() != null) {
+                    applicationRepository.findAllByServiceNameKeyword(targetApp.getServiceNameKeyword())
+                        .stream()
+                        .filter(a -> !a.getId().equals(targetApp.getId()))
+                        .forEach(apps::add);
                 }
             } else {
-                // App not found in DB - use wildcard to search everywhere
                 containerEnvLabel = ".*";
                 containerNodeName = null;
             }
@@ -97,63 +120,63 @@ public class LogAnalyticsService {
                 .topErrors(fetchTopErrors(appEnvLabel, springFilter, containerNodeName, start, end))
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
                 .rootCauseChain(calculateRootCauseChain(containerEnvLabel, appFilter, containerNodeName))
-                .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName))
+                .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
                 .build();
     }
 
     private String nodeFilter(String nodeName) {
-        return (nodeName != null && !nodeName.isBlank()) ? String.format(", nodename=~\"%s.*\"", nodeName) : "";
+        return (nodeName != null && !nodeName.isBlank()) ? String.format(", nodename=~\".*%s.*\"", nodeName) : "";
     }
 
     private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, String appNodeName, 
                                                 String containerEnvLabel, String appFilter, String containerNodeName) {
         List<MetricCard> cards = new ArrayList<>();
 
-        // 1. Error Rate (Spring Boot HTTP metric - use environment's own metrics)
+        // 1. Error Rate
         String errRateQuery = String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
                 appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
         Double errRate = prometheusClient.queryMetric(errRateQuery);
-        log.info("ANALYTICS DEBUG [Error Rate]: query={}, result={}", errRateQuery, errRate);
         cards.add(MetricCard.builder()
                 .label("Error rate")
                 .value(String.format("%.2f%%", errRate))
-                .delta(errRate > 5 ? "+2.1%" : "-0.5%")
+                .delta("") // Removed hardcoded delta
                 .status(errRate > 5 ? "danger" : errRate > 1 ? "warning" : "neutral")
                 .source("prometheus")
                 .build());
 
-        // 2. Request Rate (Spring Boot HTTP metric)
+        // 2. Request Rate
         String reqRateQuery = String.format("sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, nodeFilter(appNodeName));
         Double reqRate = prometheusClient.queryMetric(reqRateQuery);
-        log.info("ANALYTICS DEBUG [Request Rate]: query={}, result={}", reqRateQuery, reqRate);
         cards.add(MetricCard.builder()
                 .label("Request rate")
                 .value(String.format("%.1f req/s", reqRate))
-                .delta("+12%")
+                .delta("") // Removed hardcoded delta
                 .status("neutral")
                 .source("prometheus")
                 .build());
 
-        // 3. DB Pool Usage (Spring Boot Hikari metric)
+        // 3. DB Pool Usage
         String dbPoolQuery = String.format("sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
         Double dbPool = prometheusClient.queryMetric(dbPoolQuery);
-        log.info("ANALYTICS DEBUG [DB Pool]: query={}, result={}", dbPoolQuery, dbPool);
         cards.add(MetricCard.builder()
                 .label("DB pool usage")
                 .value(String.format("%.1f%%", dbPool))
-                .delta("+2%")
+                .delta("") // Removed hardcoded delta
                 .status(dbPool > 90 ? "danger" : dbPool > 70 ? "warning" : "neutral")
                 .source("prometheus")
                 .build());
 
-        // 4. Memory Usage (Container metric - use container's actual env/node)
-        String memQuery = String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / 4294967296 * 100 or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName));
+        // 4. Memory Usage (Dynamic Limit)
+        String limitQuery = String.format("sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName));
+        Double memLimit = prometheusClient.queryMetric(limitQuery);
+        if (memLimit == null || memLimit <= 0) memLimit = 4294967296.0; // Fallback to 4GB if not set
+
+        String memQuery = String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), memLimit);
         Double memUsage = prometheusClient.queryMetric(memQuery);
-        log.info("ANALYTICS DEBUG [Memory]: query={}, result={}", memQuery, memUsage);
         cards.add(MetricCard.builder()
                 .label("Backend memory")
                 .value(String.format("%.1f%%", memUsage))
-                .delta("+5%")
+                .delta("") // Removed hardcoded delta
                 .status(memUsage > 85 ? "danger" : memUsage > 70 ? "warning" : "neutral")
                 .source("cadvisor")
                 .build());
@@ -164,7 +187,7 @@ public class LogAnalyticsService {
         cards.add(MetricCard.builder()
                 .label("Blackbox probe")
                 .value(String.format("%.1f%%", probeSuccess))
-                .delta("0%")
+                .delta("") // Removed hardcoded delta
                 .status(probeSuccess < 95 ? "danger" : "neutral")
                 .source("blackbox")
                 .build());
@@ -226,9 +249,8 @@ public class LogAnalyticsService {
 
     private List<ErrorPattern> fetchTopErrors(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
-            // Use the client to search for ERROR logs in the range
             org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
-                    envLabel, appFilter, nodeName, "ERROR", start, end, 
+                    envLabel, appFilter, nodeName, null, "ERROR", start, end, 
                     org.springframework.data.domain.PageRequest.of(0, 100));
 
             // Group by message/summary to find patterns
@@ -287,7 +309,11 @@ public class LogAnalyticsService {
     private List<RootCauseRule> calculateRootCauseChain(String envLabel, String appFilter, String nodeName) {
         List<RootCauseRule> rules = new ArrayList<>();
         
-        Double memUsage = prometheusClient.queryMetric(String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / 4294967296 * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName)));
+        String limitQuery = String.format("sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", envLabel, appFilter, nodeFilter(nodeName));
+        Double memLimit = prometheusClient.queryMetric(limitQuery);
+        if (memLimit == null || memLimit <= 0) memLimit = 4294967296.0;
+
+        Double memUsage = prometheusClient.queryMetric(String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), memLimit));
         Double dbPool = prometheusClient.queryMetric(String.format("sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)));
         Double errRate = prometheusClient.queryMetric(String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) or vector(0)", envLabel, appFilter, nodeFilter(nodeName)));
 
@@ -314,11 +340,11 @@ public class LogAnalyticsService {
         return rules;
     }
 
-    private List<LogEventDTO> fetchLiveLogs(String envLabel, String appFilter, String nodeName) {
+    private List<LogEventDTO> fetchLiveLogs(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
             org.springframework.data.domain.Page<LogEventDTO> logs = elasticsearchLogClient.searchLogs(
-                    envLabel, appFilter, nodeName, "ALL", 
-                    Instant.now().minus(15, ChronoUnit.MINUTES), Instant.now(), 
+                    envLabel, appFilter, nodeName, null, "ALL", 
+                    start, end, 
                     org.springframework.data.domain.PageRequest.of(0, 50));
             return logs.getContent();
         } catch (Exception e) {

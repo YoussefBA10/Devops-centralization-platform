@@ -155,8 +155,8 @@ export const triggerPipeline = (data: { jobName: string; appId: string; env: str
   api.post(`/cicd/trigger`, data);
 
 // Analytics
-export const getAnalyticsDashboard = (envId: number, range: string, serviceName?: string, nodeName?: string) => 
-  api.get('/analytics/dashboard', { params: { environmentId: envId, range, serviceName, nodeName } });
+export const getAnalyticsDashboard = (envId: number, range: string, serviceName?: string, nodeName?: string, ticketId?: number) => 
+  api.get('/analytics/dashboard', { params: { environmentId: envId, range, serviceName, nodeName, ticketId } });
 
 // Prometheus Proxy
 export const prometheusQuery = (query: string) => api.get('/prometheus/query', { params: { query } });

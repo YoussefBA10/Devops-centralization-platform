@@ -41,16 +41,25 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String queryStr, String severity, Instant from,
+    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, queryStr, severity, from, to, pageable))
+        return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, nodeName, queryStr, severity, from, to, pageable))
                 .join();
     }
 
-    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
+
+            if (nodeName != null && !nodeName.isBlank() && !nodeName.equals(".*")) {
+                boolQuery.must(m -> m.bool(b -> b
+                    .should(s -> s.term(t -> t.field("agent.hostname.keyword").value(nodeName)))
+                    .should(s -> s.term(t -> t.field("host.name.keyword").value(nodeName)))
+                    .should(s -> s.wildcard(w -> w.field("nodename.keyword").value("*" + nodeName + "*")))
+                    .minimumShouldMatch("1")
+                ));
+            }
 
             // Build a list of possible matching names
             List<String> namesToMatch = new ArrayList<>();
@@ -62,14 +71,6 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             if (keywordName != null) {
                 namesToMatch.add(keywordName);
                 namesToMatch.add(keywordName.replace("-", "_"));
-            }
-
-            // Special handling for common mismatches
-            if ("frontend-service".equalsIgnoreCase(displayName) || "angular-nginx-app".equalsIgnoreCase(displayName)) {
-                namesToMatch.add("angular-nginx-app");
-                namesToMatch.add("frontend-service");
-                namesToMatch.add("frontend");
-                namesToMatch.add("nginx");
             }
 
             // Filter to match any of the common service identifier fields with any of the names (using wildcard for compose prefixes)

@@ -21,6 +21,20 @@
     job: "filebeat"
     environment: "central-node"
 - targets:
+  - "backend:8880"
+  labels:
+    node_id: "1"
+    nodename: "central-node"
+    job: "monetique-backend"
+    environment: "central-node"
+- targets:
+  - "frontend:80"
+  labels:
+    node_id: "1"
+    nodename: "central-node"
+    job: "monetique-frontend"
+    environment: "central-node"
+- targets:
   - "192.168.126.131:9100"
   labels:
     node_id: "2"
@@ -40,6 +54,20 @@
     node_id: "2"
     nodename: "node-192-168-126-131"
     job: "filebeat"
+    environment: "test"
+- targets:
+  - "192.168.126.131:8880"
+  labels:
+    node_id: "2"
+    nodename: "node-192-168-126-131"
+    job: "monetique-backend"
+    environment: "test"
+- targets:
+  - "192.168.126.131:80"
+  labels:
+    node_id: "2"
+    nodename: "node-192-168-126-131"
+    job: "monetique-frontend"
     environment: "test"
 - targets:
   - "192.168.126.135:9100"
@@ -63,9 +91,16 @@
     job: "filebeat"
     environment: "test"
 - targets:
-  - "backend:8880"
+  - "192.168.126.135:8880"
   labels:
+    node_id: "3"
+    nodename: "node-192-168-126-135"
     job: "monetique-backend"
-    environment: "central-node"
-    nodename: "central-node"
-    node_id: "1"
+    environment: "test"
+- targets:
+  - "192.168.126.135:80"
+  labels:
+    node_id: "3"
+    nodename: "node-192-168-126-135"
+    job: "monetique-frontend"
+    environment: "test"

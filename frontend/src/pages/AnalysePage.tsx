@@ -63,6 +63,7 @@ const AnalysePage: React.FC = () => {
   
   const serviceContext = searchParams.get('service') || undefined;
   const nodeContext = searchParams.get('node') || undefined;
+  const ticketContext = searchParams.get('ticket') || undefined;
   
   const [timeRange, setTimeRange] = useState('6h');
   const [loading, setLoading] = useState(true);
@@ -90,7 +91,13 @@ const AnalysePage: React.FC = () => {
     if (!selectedEnvironment) return;
     setLoading(true);
     try {
-      const response = await getAnalyticsDashboard(selectedEnvironment.id, timeRange, serviceContext, nodeContext);
+      const response = await getAnalyticsDashboard(
+        selectedEnvironment.id, 
+        timeRange, 
+        serviceContext, 
+        nodeContext, 
+        ticketContext ? parseInt(ticketContext) : undefined
+      );
       setData(response.data);
     } catch (error) {
       console.error('Failed to fetch analytics data', error);
@@ -103,7 +110,7 @@ const AnalysePage: React.FC = () => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [selectedEnvironment, timeRange, serviceContext, nodeContext]);
+  }, [selectedEnvironment, timeRange, serviceContext, nodeContext, ticketContext]);
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -127,7 +134,8 @@ const AnalysePage: React.FC = () => {
     if (ticket) {
       const service = ticket.application?.serviceNameKeyword || ticket.application?.name;
       const node = ticket.node;
-      let url = `/analyse?service=${service || ''}`;
+      let url = `/analyse?ticket=${ticketId}`;
+      if (service) url += `&service=${service}`;
       if (node) url += `&node=${node}`;
       navigate(url);
     }
@@ -250,17 +258,21 @@ const AnalysePage: React.FC = () => {
         </div>
         
         <div className="flex-1 max-w-md relative group">
+          <div className="absolute -top-6 left-0 flex items-center gap-1.5">
+            <TicketIcon className="w-3 h-3 text-primary" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Select Ticket for Root Cause Analysis</span>
+          </div>
           <TicketIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <select 
             onChange={(e) => handleTicketSelect(e.target.value)}
             className="w-full bg-secondary/50 border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none cursor-pointer"
-            defaultValue=""
+            value={ticketContext || ""}
           >
-            <option value="" disabled>Select Incident Ticket for Analysis...</option>
-            <option value="">Clear Filter (Show All)</option>
+            <option value="" disabled>Choose an incident to start analysis...</option>
+            <option value="">Clear Filter (Global View)</option>
             {tickets.map(ticket => (
               <option key={ticket.id} value={ticket.id}>
-                {ticket.id} - {ticket.title} ({ticket.application?.name || 'System'})
+                {ticket.title}
               </option>
             ))}
           </select>
