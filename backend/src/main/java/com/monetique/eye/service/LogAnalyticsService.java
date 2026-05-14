@@ -261,7 +261,7 @@ public class LogAnalyticsService {
         try {
             org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
                     envLabel, appFilter, nodeName, null, "ERROR", start, end, 
-                    org.springframework.data.domain.PageRequest.of(0, 100));
+                    org.springframework.data.domain.PageRequest.of(0, 2000));
 
             // Group by message/summary to find patterns
             Map<String, List<LogEventDTO>> patterns = errorLogs.getContent().stream()
@@ -378,11 +378,43 @@ public class LogAnalyticsService {
 
     private List<LogEventDTO> fetchLiveLogs(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
-            org.springframework.data.domain.Page<LogEventDTO> logs = elasticsearchLogClient.searchLogs(
+            org.springframework.data.domain.Page<LogEventDTO> logsPage = elasticsearchLogClient.searchLogs(
                     envLabel, appFilter, nodeName, null, "ALL", 
                     start, end, 
-                    org.springframework.data.domain.PageRequest.of(0, 50));
-            return logs.getContent();
+                    org.springframework.data.domain.PageRequest.of(0, 100));
+            
+            List<LogEventDTO> rawLogs = logsPage.getContent();
+            List<LogEventDTO> grouped = new ArrayList<>();
+            
+            // Process in chronological order (reverse of DESC) for easy merging
+            List<LogEventDTO> chronoLogs = new ArrayList<>(rawLogs);
+            java.util.Collections.reverse(chronoLogs);
+            
+            for (LogEventDTO log : chronoLogs) {
+                if (grouped.isEmpty()) {
+                    grouped.add(log);
+                    continue;
+                }
+                
+                LogEventDTO last = grouped.get(grouped.size() - 1);
+                boolean sameOrigin = java.util.Objects.equals(last.getService(), log.getService()) && 
+                                   java.util.Objects.equals(last.getNode(), log.getNode());
+                
+                String msg = log.getRawMessage() != null ? log.getRawMessage().trim() : "";
+                boolean isContinuation = msg.startsWith("at ") || msg.startsWith("Caused by:") || 
+                                       msg.startsWith("...") || !msg.matches("^([0-9]{4}-|time=).*");
+                
+                // Merge if very close in time (<200ms) and looks like a continuation
+                if (sameOrigin && isContinuation && 
+                    Math.abs(log.getTimestamp().toEpochMilli() - last.getTimestamp().toEpochMilli()) < 200) {
+                    last.setRawMessage(last.getRawMessage() + "\n" + log.getRawMessage());
+                } else {
+                    grouped.add(log);
+                }
+            }
+            
+            java.util.Collections.reverse(grouped);
+            return grouped.stream().limit(50).collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Failed to fetch live logs from ES", e);
             return new ArrayList<>();
