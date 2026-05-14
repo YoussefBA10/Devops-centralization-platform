@@ -285,9 +285,21 @@ public class LogAnalyticsService {
 
     private List<ErrorPattern> fetchTopErrors(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
+            log.info("TOP_ERRORS_DEBUG: envLabel={}, appFilter={}, nodeName={}, start={}, end={}", 
+                    envLabel, appFilter, nodeName, start, end);
+            
             org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
                     envLabel, appFilter, nodeName, null, "ERROR", start, end, 
                     org.springframework.data.domain.PageRequest.of(0, 500));
+
+            log.info("TOP_ERRORS_DEBUG: ES returned {} error logs (total={})", 
+                    errorLogs.getContent().size(), errorLogs.getTotalElements());
+
+            // Log first few raw messages for debugging
+            errorLogs.getContent().stream().limit(3).forEach(l -> 
+                log.info("TOP_ERRORS_DEBUG: Sample error - service={}, severity={}, rawMsg={}", 
+                    l.getService(), l.getSeverity(), 
+                    l.getRawMessage() != null ? l.getRawMessage().substring(0, Math.min(100, l.getRawMessage().length())) : "null"));
 
             // Filter out stack trace continuation lines — these are noise, not top-level errors
             List<LogEventDTO> meaningfulErrors = errorLogs.getContent().stream()
@@ -301,6 +313,8 @@ public class LogAnalyticsService {
                     })
                     .collect(Collectors.toList());
 
+            log.info("TOP_ERRORS_DEBUG: After stack trace filtering: {} meaningful errors", meaningfulErrors.size());
+
             // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
             Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
                     .collect(Collectors.groupingBy(log -> {
@@ -308,6 +322,10 @@ public class LogAnalyticsService {
                         String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
                         return service + "::" + normalizeErrorKey(msg);
                     }));
+
+            log.info("TOP_ERRORS_DEBUG: Grouped into {} unique patterns", patterns.size());
+            patterns.forEach((key, list) -> log.info("TOP_ERRORS_DEBUG: Pattern '{}' -> count={}", 
+                    key.substring(0, Math.min(80, key.length())), list.size()));
 
             return patterns.entrySet().stream()
                     .map(entry -> {
