@@ -265,7 +265,11 @@ public class LogAnalyticsService {
 
             // Group by message/summary to find patterns
             Map<String, List<LogEventDTO>> patterns = errorLogs.getContent().stream()
-                    .collect(Collectors.groupingBy(log -> log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage()));
+                    .collect(Collectors.groupingBy(log -> {
+                        if (log.getNormalizedSummary() != null) return log.getNormalizedSummary();
+                        if (log.getRawMessage() != null) return log.getRawMessage();
+                        return "Unknown Error Pattern";
+                    }));
 
             return patterns.entrySet().stream()
                     .map(entry -> {
