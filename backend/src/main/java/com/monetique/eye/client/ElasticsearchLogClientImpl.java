@@ -119,7 +119,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     .index(getIndexName())
                     .query(query)
                     .from((int) pageable.getOffset())
-                    .size(pageable.getPageSize() > 200 ? 200 : pageable.getPageSize())
+                    .size(Math.min(pageable.getPageSize(), 10000))
                     .sort(s -> s.field(f -> f.field("@timestamp").order(SortOrder.Desc)))
                     .build();
 
