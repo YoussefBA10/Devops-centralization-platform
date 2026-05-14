@@ -25,15 +25,18 @@ public class AlertGroupService {
     private final com.monetique.eye.repository.TicketRepository ticketRepository;
     private final com.monetique.eye.repository.ApplicationRepository applicationRepository;
     private final com.monetique.eye.repository.EnvironmentRepository environmentRepository;
+    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
 
     @Transactional
-    public void ingestAlert(Map<String, String> labels, Map<String, String> annotations, String status, String fingerprint) {
+    public void ingestAlert(Map<String, String> labels, Map<String, String> annotations, String status,
+            String fingerprint) {
         String severity = labels.getOrDefault("severity", "warning");
         log.info("=== ALERT INGESTION === status='{}', fingerprint='{}', labels={}", status, fingerprint, labels);
-        
+
         AlertGroup group = correlationEngine.correlate(labels, severity);
-        log.info("Correlated to group: id={}, name='{}', hasTicket={}", group.getId(), group.getName(), group.getTicket() != null);
-        
+        log.info("Correlated to group: id={}, name='{}', hasTicket={}", group.getId(), group.getName(),
+                group.getTicket() != null);
+
         Alert alert = Alert.builder()
                 .group(group)
                 .prometheusFingerprint(fingerprint)
@@ -42,81 +45,108 @@ public class AlertGroupService {
                 .status(status)
                 .firedAt(LocalDateTime.now())
                 .build();
-        
+
         alertRepository.save(alert);
 
-        // Auto-raise ticket if needed — use case-insensitive check since Alertmanager sends "firing"
+        // Auto-raise ticket if needed — use case-insensitive check since Alertmanager
+        // sends "firing"
         boolean isFiring = "firing".equalsIgnoreCase(status);
         boolean needsTicket = group.getTicket() == null;
         log.info("Ticket check: isFiring={}, needsTicket={}", isFiring, needsTicket);
-        
+
         if (needsTicket && isFiring) {
             String alertName = labels.getOrDefault("alertname", "unknown");
-            
+
             // 1. Resolve Environment (Mandatory for Ticket)
             String envName = labels.getOrDefault("environment", labels.getOrDefault("env", "unknown"));
             com.monetique.eye.entity.Environment env = environmentRepository.findByName(envName)
-                    .orElseGet(() -> environmentRepository.findAll().stream().findFirst().orElse(null));
+                    .orElseGet(() -> {
+                        // Fallback 1: Try to resolve environment from node IP (instance/node label)
+                        String instance = labels.getOrDefault("instance", labels.get("node"));
+                        if (instance != null) {
+                            String ip = instance.contains(":") ? instance.substring(0, instance.indexOf(":")) : instance;
+                            return managedNodeRepository.findByIp(ip)
+                                    .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
+                                    .orElse(null);
+                        }
+                        return null;
+                    });
+
+            // Fallback 2: Pick first environment if still not found
+            if (env == null) {
+                log.warn("Environment '{}' not found by name or IP, falling back to first available", envName);
+                env = environmentRepository.findAll().stream().findFirst().orElse(null);
+            }
 
             if (env != null) {
                 // 2. Resolve Application (Optional for Ticket)
                 String appName = labels.getOrDefault("application", labels.getOrDefault("service_name", "unknown"));
                 com.monetique.eye.entity.Application app = applicationRepository.findByName(appName).orElse(null);
 
-                log.info("AUTO-RAISING TICKET for alert '{}' on env '{}' (App: {})", alertName, env.getName(), app != null ? app.getName() : "None");
-                
+                log.info("AUTO-RAISING TICKET for alert '{}' on env '{}' (App: {})", alertName, env.getName(),
+                        app != null ? app.getName() : "None");
+
                 com.monetique.eye.entity.Ticket ticket = com.monetique.eye.entity.Ticket.builder()
                         .title("[ALERT] " + group.getName())
-                        .description("Automated ticket raised from Prometheus alert: " + alertName + "\nLabels: " + labels)
+                        .description(
+                                "Automated ticket raised from Prometheus alert: " + alertName + "\nLabels: " + labels)
                         .status(com.monetique.eye.entity.enums.TicketStatus.OPEN)
                         .priority("critical".equalsIgnoreCase(severity) ? "CRITICAL" : "HIGH")
                         .application(app)
                         .environment(env)
-                        .node(labels.get("nodename"))
+                        .node(labels.getOrDefault("nodename", labels.getOrDefault("instance", labels.get("node"))))
                         .build();
-                
+
                 com.monetique.eye.entity.Ticket savedTicket = ticketRepository.save(ticket);
                 group.setTicket(savedTicket);
                 log.info("TICKET CREATED: id={}, title='{}'", savedTicket.getId(), savedTicket.getTitle());
             } else {
-                log.error("Cannot raise ticket: No environment found for label '{}' and no default environment exists.", envName);
+                log.error("Cannot raise ticket: No environment found for label '{}' and no default environment exists.",
+                        envName);
             }
         } else if (isFiring && group.getTicket() != null) {
-            // Update existing ticket if new alert joins the same group (e.g. FrontendDown joining Monetique App Down)
+            // Update existing ticket if new alert joins the same group (e.g. FrontendDown
+            // joining Monetique App Down)
             String alertName = labels.getOrDefault("alertname", "unknown");
             com.monetique.eye.entity.Ticket ticket = group.getTicket();
-            
+
             String appName = labels.getOrDefault("application", labels.getOrDefault("service_name", "unknown"));
             boolean needsSave = false;
-            
+
             // Check if this alert belongs to a different app than the current ticket tag
             com.monetique.eye.entity.Application currentApp = ticket.getApplication();
             if (currentApp != null && !currentApp.getName().equalsIgnoreCase(appName)) {
-                // Outage spans multiple applications. We keep the primary app tag, but we update the TITLE to show both!
+                // Outage spans multiple applications. We keep the primary app tag, but we
+                // update the TITLE to show both!
                 String newTag = appName.toLowerCase();
                 if (!ticket.getTitle().toLowerCase().contains(newTag)) {
-                    // E.g. changes "[ALERT] Monetique App Down" to "[ALERT] Monetique App Down (backend, frontend)"
+                    // E.g. changes "[ALERT] Monetique App Down" to "[ALERT] Monetique App Down
+                    // (backend, frontend)"
                     if (ticket.getTitle().endsWith(")")) {
-                        ticket.setTitle(ticket.getTitle().substring(0, ticket.getTitle().length() - 1) + ", " + newTag + ")");
+                        ticket.setTitle(
+                                ticket.getTitle().substring(0, ticket.getTitle().length() - 1) + ", " + newTag + ")");
                     } else {
-                        ticket.setTitle(ticket.getTitle() + " (" + currentApp.getName().toLowerCase() + ", " + newTag + ")");
+                        ticket.setTitle(
+                                ticket.getTitle() + " (" + currentApp.getName().toLowerCase() + ", " + newTag + ")");
                     }
                     needsSave = true;
                 }
             }
-            
+
             // Append the new alert info to the description if it's not already there
             if (!ticket.getDescription().contains(alertName)) {
-                ticket.setDescription(ticket.getDescription() + "\n\nAdditional Alert: " + alertName + "\nLabels: " + labels);
+                ticket.setDescription(
+                        ticket.getDescription() + "\n\nAdditional Alert: " + alertName + "\nLabels: " + labels);
                 needsSave = true;
             }
-            
+
             if (needsSave) {
                 ticketRepository.save(ticket);
-                log.info("TICKET UPDATED: id={}, appended alert '{}' and updated title to '{}'", ticket.getId(), alertName, ticket.getTitle());
+                log.info("TICKET UPDATED: id={}, appended alert '{}' and updated title to '{}'", ticket.getId(),
+                        alertName, ticket.getTitle());
             }
         }
-        
+
         groupRepository.save(group);
     }
 
@@ -125,14 +155,14 @@ public class AlertGroupService {
         groupRepository.findByFingerprint(fingerprint).ifPresent(group -> {
             group.setStatus(AlertGroupStatus.RESOLVED);
             group.setResolvedAt(LocalDateTime.now());
-            
+
             if (group.getTicket() != null) {
                 com.monetique.eye.entity.Ticket ticket = group.getTicket();
                 ticket.setStatus(com.monetique.eye.entity.enums.TicketStatus.RESOLVED);
                 ticketRepository.save(ticket);
                 log.info("TICKET RESOLVED: id={}, title='{}'", ticket.getId(), ticket.getTitle());
             }
-            
+
             groupRepository.save(group);
         });
     }

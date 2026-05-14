@@ -46,7 +46,11 @@ public class PrometheusClient {
                 if (!results.isEmpty()) {
                     Map firstResult = (Map) results.get(0);
                     List valuePair = (List) firstResult.get("value");
-                    return Double.parseDouble(valuePair.get(1).toString());
+                    String val = valuePair.get(1).toString();
+                    if (val.equals("+Inf") || val.equals("Inf") || val.equals("-Inf") || val.equals("NaN")) {
+                        return 0.0;
+                    }
+                    return Double.parseDouble(val);
                 }
             }
         } catch (Exception e) {

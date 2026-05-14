@@ -14,5 +14,6 @@ public interface ManagedNodeRepository extends JpaRepository<ManagedNode, Long> 
     java.util.List<ManagedNode> findByEnvironment(Environment environment);
     Optional<ManagedNode> findByEnvironmentAndIp(Environment environment, String ip);
     Optional<ManagedNode> findByEnvironmentAndNodeName(Environment environment, String nodeName);
+    Optional<ManagedNode> findByIp(String ip);
     long countByEnvironment(Environment environment);
 }

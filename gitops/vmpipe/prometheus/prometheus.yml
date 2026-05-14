@@ -19,15 +19,25 @@ rule_files:
 # Scrape configurations
 scrape_configs:
 
-  # 1. Scrape the Monetique-Eye Backend itself (self-monitoring)
+  # 1. Scrape the Monetique-Eye Backend
   - job_name: 'monetique-backend'
     metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['backend:8880'] # Updated to match backend internal port
-        labels:
-          environment: "central-node"
-          nodename: "central-node"
-          app_id: "1"
+    file_sd_configs:
+      - files: ['/etc/prometheus/file_sd/agent_targets.yml']
+    relabel_configs:
+      - source_labels: [job]
+        regex: 'monetique-backend'
+        action: keep
+
+  # 1.1 Scrape the Monetique-Eye Frontend
+  - job_name: 'monetique-frontend'
+    metrics_path: '/metrics' # Placeholder for frontend metrics
+    file_sd_configs:
+      - files: ['/etc/prometheus/file_sd/agent_targets.yml']
+    relabel_configs:
+      - source_labels: [job]
+        regex: 'monetique-frontend'
+        action: keep
 
   # 2. Central Node (central-node) - Self monitoring
   - job_name: 'central-node'
@@ -120,27 +130,14 @@ scrape_configs:
           environment: "central-node"
           nodename: "central-node"
 
-  # 11. Blackbox Exporter (for external probing - optional)
+  # 11. Blackbox Exporter (Health probing for all nodes)
   - job_name: 'blackbox'
     metrics_path: '/probe'
     params:
       module: [http_2xx]
-    static_configs:
-      - targets: []   # Add important external URLs here if needed
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox-exporter:9115
-
-  # 12. Network Monitor (Dynamic discovery via Monetique-Eye)
-  - job_name: 'network-monitor-dynamic'
-    metrics_path: '/probe'
     file_sd_configs:
       - files:
-          - '/etc/prometheus/conf.d/*.yml'
+          - '/etc/prometheus/file_sd/blackbox_targets.yml'
         refresh_interval: 15s
     relabel_configs:
       - source_labels: [__address__]

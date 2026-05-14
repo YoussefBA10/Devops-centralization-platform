@@ -27,25 +27,26 @@ public class CorrelationEngine {
             serviceName = labels.getOrDefault("application", "unknown");
         }
         String alertName = labels.getOrDefault("alertname", "unknown");
-        
+
         // Rule 1: Fingerprinting for deduplication
         String fingerprint = generateFingerprint(serviceName, alertName, severity);
         String groupName = alertName + " on " + serviceName;
         String groupingFingerprint = fingerprint;
 
-        // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App Down"
+        // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App
+        // Down"
         if (alertName.contains("Down") && (alertName.contains("Backend") || alertName.contains("Frontend"))) {
             groupName = "Monetique App Down";
             groupingFingerprint = generateFingerprint("monetique-app", "app-down", severity);
         }
 
         Optional<AlertGroup> existingGroup = alertGroupRepository.findByFingerprint(groupingFingerprint);
-        
+
         AlertGroup group;
         if (existingGroup.isPresent()) {
             group = existingGroup.get();
             group.setLastFiredAt(LocalDateTime.now());
-            
+
             // If it was resolved, but is now firing again
             if (group.getStatus() != AlertGroupStatus.FIRING) {
                 group.setStatus(AlertGroupStatus.FIRING);
@@ -97,9 +98,11 @@ public class CorrelationEngine {
     }
 
     private boolean isSecurityIssue(Map<String, String> labels) {
-        // Simple heuristic: >5 alerts from same IP would be handled by counting in a window,
-        // but the rule says "if labels contain...". 
-        // We'll simplify to checking if it's a security-related alert name for now or has source_ip.
+        // Simple heuristic: >5 alerts from same IP would be handled by counting in a
+        // window,
+        // but the rule says "if labels contain...".
+        // We'll simplify to checking if it's a security-related alert name for now or
+        // has source_ip.
         return labels.containsKey("source_ip") && labels.getOrDefault("alertname", "").toLowerCase().contains("attack");
     }
 }

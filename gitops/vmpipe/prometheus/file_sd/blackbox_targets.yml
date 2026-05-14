@@ -1,0 +1,16 @@
+- targets:
+  - http://backend:8880/actuator/health
+  labels:
+    job: blackbox
+    environment: central-node
+    nodename: central-node
+    probe_module: http_2xx
+    target_type: node
+- targets:
+  - http://frontend:80
+  labels:
+    job: blackbox
+    environment: central-node
+    nodename: central-node
+    probe_module: http_2xx
+    target_type: frontend

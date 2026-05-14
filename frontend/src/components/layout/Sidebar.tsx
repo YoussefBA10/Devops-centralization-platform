@@ -11,8 +11,8 @@ import {
   Settings,
   Box,
   Book,
-  ShieldAlert,
-  Network
+  Network,
+  BarChart2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
@@ -69,6 +69,12 @@ const Sidebar: React.FC = () => {
       path: '/logs', 
       icon: Terminal,
       show: isAdmin || permissions?.monitoring?.logs
+    },
+    { 
+      name: 'Analyse', 
+      path: '/analyse', 
+      icon: BarChart2,
+      show: isAdmin || permissions?.monitoring?.observability
     },
     { 
       name: 'Tickets', 

@@ -909,82 +909,107 @@ public class DeploymentService {
     public void registerNodeInPrometheus(Environment environment, String ip, Long nodeId) {
         log.info("Registering node {} in Prometheus for environment {}", ip, environment.getName());
         try {
-            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
-            configFile.getParentFile().mkdirs();
-
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
-                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-            java.util.List<java.util.Map<String, Object>> targets;
-
-            if (configFile.exists() && configFile.length() > 0) {
-                targets = mapper.readValue(configFile,
-                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
-                        });
-            } else {
-                targets = new java.util.ArrayList<>();
-            }
-
             String envLabel = environment.getSafeName();
-            
-            // SANITIZE IP
-            String cleanIp = ip;
-            if (cleanIp != null) {
-                cleanIp = cleanIp.replaceAll("^https?://", "").replaceAll("/$", "");
-            }
-            final String finalIp = cleanIp;
-
+            String cleanIp = ip != null ? ip.replaceAll("^https?://", "").replaceAll("/$", "") : "";
             String centralIp = getCentralIp(environment);
-            String nodeName = finalIp.equals(centralIp) ? "central-node" : "node-" + finalIp.replace(".", "-");
+            String nodeName = cleanIp.equals(centralIp) ? "central-node" : "node-" + cleanIp.replace(".", "-");
 
-            // Fetch dynamic ports from ManagedNode if possible
-            Integer nodeExporterPort = 9100;
-            Integer cadvisorPort = 8085;
-            com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findById(nodeId).orElse(null);
-            if (node != null) {
-                if (node.getNodeExporterPort() != null) nodeExporterPort = node.getNodeExporterPort();
-                if (node.getCadvisorPort() != null) cadvisorPort = node.getCadvisorPort();
-            }
+            // 1. Update agent_targets.yml (Metrics)
+            updateTargetFile(
+                new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml"),
+                generateMetricsTargets(cleanIp, centralIp, envLabel, nodeName, nodeId)
+            );
 
-            String nodeExporterTarget = finalIp + ":" + nodeExporterPort;
-            String cadvisorTarget = finalIp + ":" + cadvisorPort;
-            String filebeatTarget = finalIp + ":5066";
+            // 2. Update blackbox_targets.yml (Probes)
+            updateTargetFile(
+                new File(gitopsPath + "/vmpipe/prometheus/file_sd/blackbox_targets.yml"),
+                generateBlackboxTargets(cleanIp, centralIp, envLabel, nodeName)
+            );
 
-            if (ip.equals(centralIp)) {
-                log.info("Node {} is detected as Central Node. Using internal service names.", ip);
-                nodeExporterTarget = "node-exporter:9100";
-                cadvisorTarget = "cadvisor:8080";
-                filebeatTarget = "filebeat:5066";
-            }
-
-            // Add Node Exporter target
-            java.util.Map<String, Object> nodeExporter = new java.util.HashMap<>();
-            nodeExporter.put("targets", java.util.List.of(nodeExporterTarget));
-            nodeExporter.put("labels",
-                    java.util.Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
-
-            // Add cAdvisor target
-            java.util.Map<String, Object> cadvisor = new java.util.HashMap<>();
-            cadvisor.put("targets", java.util.List.of(cadvisorTarget));
-            cadvisor.put("labels", java.util.Map.of("job", "cadvisor", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
-
-            // Add Filebeat target
-            java.util.Map<String, Object> filebeat = new java.util.HashMap<>();
-            filebeat.put("targets", java.util.List.of(filebeatTarget));
-            filebeat.put("labels", java.util.Map.of("job", "filebeat", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
-
-            // Check for duplicates and update or add
-            updateOrAdd(targets, nodeExporter);
-            updateOrAdd(targets, cadvisor);
-            updateOrAdd(targets, filebeat);
-
-            mapper.writeValue(configFile, targets);
-            log.info("Updated Prometheus targets in {}", configFile.getAbsolutePath());
-
+            log.info("Updated Prometheus targets for node {}", cleanIp);
             triggerPrometheusReload();
 
         } catch (Exception e) {
             log.error("Failed to register node in Prometheus: {}", e.getMessage(), e);
         }
+    }
+
+    private void updateTargetFile(File configFile, List<Map<String, Object>> newItems) throws IOException {
+        configFile.getParentFile().mkdirs();
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
+                new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+        
+        List<Map<String, Object>> targets = new ArrayList<>();
+        if (configFile.exists() && configFile.length() > 0) {
+            targets = mapper.readValue(configFile,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+        }
+
+        for (Map<String, Object> newItem : newItems) {
+            updateOrAdd(targets, newItem);
+        }
+
+        mapper.writeValue(configFile, targets);
+    }
+
+    private List<Map<String, Object>> generateMetricsTargets(String ip, String centralIp, String envLabel, String nodeName, Long nodeId) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        
+        Integer nodeExporterPort = 9100;
+        Integer cadvisorPort = 8085;
+        com.monetique.eye.entity.ManagedNode node = managedNodeRepository.findById(nodeId).orElse(null);
+        if (node != null) {
+            if (node.getNodeExporterPort() != null) nodeExporterPort = node.getNodeExporterPort();
+            if (node.getCadvisorPort() != null) cadvisorPort = node.getCadvisorPort();
+        }
+
+        String nodeExporterTarget = ip + ":" + nodeExporterPort;
+        String cadvisorTarget = ip + ":" + cadvisorPort;
+        String filebeatTarget = ip + ":5066";
+        String backendTarget = ip + ":8880";
+        String frontendTarget = ip + ":80";
+
+        if (ip.equals(centralIp)) {
+            nodeExporterTarget = "node-exporter:9100";
+            cadvisorTarget = "cadvisor:8080";
+            filebeatTarget = "filebeat:5066";
+            backendTarget = "backend:8880";
+            frontendTarget = "frontend:80";
+        }
+
+        list.add(createTarget(nodeExporterTarget, Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        list.add(createTarget(cadvisorTarget, Map.of("job", "cadvisor", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        list.add(createTarget(filebeatTarget, Map.of("job", "filebeat", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        list.add(createTarget(backendTarget, Map.of("job", "monetique-backend", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        list.add(createTarget(frontendTarget, Map.of("job", "monetique-frontend", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        
+        return list;
+    }
+
+    private List<Map<String, Object>> generateBlackboxTargets(String ip, String centralIp, String envLabel, String nodeName) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        
+        // 1. Node Health (ICMP)
+        String nodeTarget = ip;
+        String nodeModule = "icmp";
+        if (ip.equals(centralIp)) {
+            nodeTarget = "http://backend:8880/actuator/health";
+            nodeModule = "http_2xx";
+        }
+        list.add(createTarget(nodeTarget, Map.of("job", "blackbox", "environment", envLabel, "nodename", nodeName, "probe_module", nodeModule, "target_type", "node")));
+
+        // 2. Frontend Health (HTTP)
+        String frontendTarget = "http://" + (ip.equals(centralIp) ? "frontend" : ip) + ":80";
+        list.add(createTarget(frontendTarget, Map.of("job", "blackbox", "environment", envLabel, "nodename", nodeName, "probe_module", "http_2xx", "target_type", "frontend")));
+        
+        return list;
+    }
+
+    private Map<String, Object> createTarget(String target, Map<String, String> labels) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("targets", List.of(target));
+        map.put("labels", labels);
+        return map;
     }
 
     @Async
@@ -993,30 +1018,32 @@ public class DeploymentService {
     private void deregisterNodeFromPrometheus(String ip) {
         log.info("Deregistering node {} from Prometheus", ip);
         try {
-            File configFile = new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml");
-            if (!configFile.exists())
-                return;
-
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
-                    new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-
-            java.util.List<java.util.Map<String, Object>> targets = mapper.readValue(configFile,
-                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, Object>>>() {
-                    });
-
-            boolean removed = targets.removeIf(item -> {
-                String targetStr = ((java.util.List<String>) item.get("targets")).get(0);
-                return targetStr.startsWith(ip + ":");
-            });
-
-            if (removed) {
-                mapper.writeValue(configFile, targets);
-                log.info("Removed Prometheus targets for {} and updated file", ip);
-                triggerPrometheusReload();
-            }
-
+            deregisterFromFile(new File(gitopsPath + "/vmpipe/prometheus/file_sd/agent_targets.yml"), ip);
+            deregisterFromFile(new File(gitopsPath + "/vmpipe/prometheus/file_sd/blackbox_targets.yml"), ip);
+            
+            triggerPrometheusReload();
         } catch (Exception e) {
             log.error("Failed to deregister node from Prometheus: {}", e.getMessage(), e);
+        }
+    }
+
+    private void deregisterFromFile(File configFile, String ip) throws IOException {
+        if (!configFile.exists()) return;
+
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper(
+                new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
+
+        List<Map<String, Object>> targets = mapper.readValue(configFile,
+                new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+
+        boolean removed = targets.removeIf(item -> {
+            String targetStr = ((List<String>) item.get("targets")).get(0);
+            return targetStr.contains(ip);
+        });
+
+        if (removed) {
+            mapper.writeValue(configFile, targets);
+            log.info("Updated file {} after removing {}", configFile.getName(), ip);
         }
     }
 

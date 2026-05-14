@@ -2,18 +2,77 @@
 - targets:
   - "node-exporter:9100"
   labels:
+    node_id: "1"
     nodename: "central-node"
-    environment: "central-node"
     job: "node-exporter"
+    environment: "central-node"
 - targets:
   - "cadvisor:8080"
   labels:
+    node_id: "1"
     nodename: "central-node"
-    environment: "central-node"
     job: "cadvisor"
+    environment: "central-node"
 - targets:
   - "filebeat:5066"
   labels:
+    node_id: "1"
     nodename: "central-node"
-    environment: "central-node"
     job: "filebeat"
+    environment: "central-node"
+- targets:
+  - "192.168.126.131:9100"
+  labels:
+    node_id: "2"
+    nodename: "node-192-168-126-131"
+    job: "node-exporter"
+    environment: "test"
+- targets:
+  - "192.168.126.131:8081"
+  labels:
+    node_id: "2"
+    nodename: "node-192-168-126-131"
+    job: "cadvisor"
+    environment: "test"
+- targets:
+  - "192.168.126.131:5066"
+  labels:
+    node_id: "2"
+    nodename: "node-192-168-126-131"
+    job: "filebeat"
+    environment: "test"
+- targets:
+  - "192.168.126.135:9100"
+  labels:
+    node_id: "3"
+    nodename: "node-192-168-126-135"
+    job: "node-exporter"
+    environment: "test"
+- targets:
+  - "192.168.126.135:8081"
+  labels:
+    node_id: "3"
+    nodename: "node-192-168-126-135"
+    job: "cadvisor"
+    environment: "test"
+- targets:
+  - "192.168.126.135:5066"
+  labels:
+    node_id: "3"
+    nodename: "node-192-168-126-135"
+    job: "filebeat"
+    environment: "test"
+- targets:
+  - "backend:8880"
+  labels:
+    job: "monetique-backend"
+    environment: "central-node"
+    nodename: "central-node"
+    node_id: "1"
+- targets:
+  - "frontend:80"
+  labels:
+    job: "monetique-frontend"
+    environment: "central-node"
+    nodename: "central-node"
+    node_id: "1"
