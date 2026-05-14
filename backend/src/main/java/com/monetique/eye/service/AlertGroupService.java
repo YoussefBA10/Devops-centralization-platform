@@ -125,6 +125,14 @@ public class AlertGroupService {
         groupRepository.findByFingerprint(fingerprint).ifPresent(group -> {
             group.setStatus(AlertGroupStatus.RESOLVED);
             group.setResolvedAt(LocalDateTime.now());
+            
+            if (group.getTicket() != null) {
+                com.monetique.eye.entity.Ticket ticket = group.getTicket();
+                ticket.setStatus(com.monetique.eye.entity.enums.TicketStatus.RESOLVED);
+                ticketRepository.save(ticket);
+                log.info("TICKET RESOLVED: id={}, title='{}'", ticket.getId(), ticket.getTitle());
+            }
+            
             groupRepository.save(group);
         });
     }
