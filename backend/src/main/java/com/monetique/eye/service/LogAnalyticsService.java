@@ -196,14 +196,16 @@ public class LogAnalyticsService {
     }
 
     private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
-        String step = "5m";
+        long diff = end.getEpochSecond() - start.getEpochSecond();
+        String step = Math.max(60, diff / 12) + "s";
+        String rateInterval = Math.max(5, (diff / 60) / 12) + "m";
         List<String> labels = generateTimeLabels(start, end, 12);
         
         return ChartData.builder()
                 .labels(labels)
                 .datasets(List.of(
-                        ChartData.Series.builder().label("req/s").data(fetchRangeMetric(String.format("sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12)).color("#3b82f6").fill(false).build(),
-                        ChartData.Series.builder().label("errors/min").data(fetchRangeMetric(String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 60", envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12)).color("#ef4444").fill(true).build(),
+                        ChartData.Series.builder().label("req/s").data(fetchRangeMetric(String.format("sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#3b82f6").fill(false).build(),
+                        ChartData.Series.builder().label("errors/min").data(fetchRangeMetric(String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#ef4444").fill(true).build(),
                         ChartData.Series.builder().label("DB pool %").data(fetchRangeMetric(String.format("avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12)).color("#f59e0b").dashed(true).fill(false).build()
                 ))
                 .build();
@@ -211,18 +213,27 @@ public class LogAnalyticsService {
 
     private List<Double> fetchRangeMetric(String query, Instant start, Instant end, String step, int count) {
         Map<String, Object> rangeData = prometheusClient.queryRange(query, String.valueOf(start.getEpochSecond()), String.valueOf(end.getEpochSecond()), step);
-        List<Double> dataPoints = new ArrayList<>();
+        Double[] dataPoints = new Double[count];
+        java.util.Arrays.fill(dataPoints, 0.0);
+        
+        long startSec = start.getEpochSecond();
+        long endSec = end.getEpochSecond();
+        long stepSec = (endSec - startSec) / count;
+        if (stepSec == 0) stepSec = 1;
         
         try {
             List<Map> results = (List<Map>) rangeData.get("result");
             if (results != null && !results.isEmpty()) {
                 List<List<Object>> values = (List<List<Object>>) results.get(0).get("values");
-                for (int i = 0; i < count; i++) {
-                    int idx = (int) ((double) i / count * values.size());
-                    if (idx < values.size()) {
-                        dataPoints.add(Double.parseDouble(values.get(idx).get(1).toString()));
-                    } else {
-                        dataPoints.add(0.0);
+                for (List<Object> value : values) {
+                    double ts = Double.parseDouble(value.get(0).toString());
+                    double val = Double.parseDouble(value.get(1).toString());
+                    
+                    int bucket = (int) ((ts - startSec) / stepSec);
+                    if (bucket >= 0 && bucket < count) {
+                        dataPoints[bucket] = val;
+                    } else if (bucket == count) {
+                        dataPoints[count - 1] = val;
                     }
                 }
             }
@@ -230,19 +241,18 @@ public class LogAnalyticsService {
             log.warn("Failed to fetch range metric for query: {}", query);
         }
         
-        if (dataPoints.size() < count) {
-            while (dataPoints.size() < count) dataPoints.add(0.0);
-        }
-        return dataPoints;
+        return java.util.Arrays.asList(dataPoints);
     }
 
     private ChartData fetchProbeSuccess(String envLabel, String nodeName, Instant start, Instant end) {
+        long diff = end.getEpochSecond() - start.getEpochSecond();
+        String step = Math.max(60, diff / 12) + "s";
         List<String> labels = generateTimeLabels(start, end, 12);
         String query = String.format("avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilter(nodeName));
         return ChartData.builder()
                 .labels(labels)
                 .datasets(List.of(
-                        ChartData.Series.builder().label("probe_success %").data(fetchRangeMetric(query, start, end, "5m", 12)).color("#14b8a6").fill(false).build()
+                        ChartData.Series.builder().label("probe_success %").data(fetchRangeMetric(query, start, end, step, 12)).color("#14b8a6").fill(false).build()
                 ))
                 .build();
     }
@@ -367,7 +377,9 @@ public class LogAnalyticsService {
         List<String> labels = new ArrayList<>();
         long totalSeconds = start.until(end, ChronoUnit.SECONDS);
         long intervalSeconds = totalSeconds / count;
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+        
+        String pattern = (totalSeconds >= 86400) ? "MMM dd HH:mm" : "HH:mm";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
         
         for (int i = 0; i < count; i++) {
             labels.add(formatter.format(start.plus(i * intervalSeconds, ChronoUnit.SECONDS).atZone(java.time.ZoneId.systemDefault())));
