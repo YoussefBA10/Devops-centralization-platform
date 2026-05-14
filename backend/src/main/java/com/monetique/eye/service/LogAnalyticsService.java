@@ -117,7 +117,7 @@ public class LogAnalyticsService {
                 .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName))
                 .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, springFilter, appNodeName, start, end))
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
-                .topErrors(fetchTopErrors(appEnvLabel, springFilter, containerNodeName, start, end))
+                .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
                 .rootCauseChain(calculateRootCauseChain(containerEnvLabel, appFilter, containerNodeName))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
@@ -283,16 +283,76 @@ public class LogAnalyticsService {
         return key;
     }
 
+    private String extractEndpoint(LogEventDTO log, Map<String, String> serviceTopUris) {
+        // 1. Prefer explicit URI if available
+        if (log.getUri() != null && !log.getUri().isBlank()) {
+            return log.getUri();
+        }
+
+        String msg = log.getRawMessage();
+        if (msg == null) return log.getService() != null ? log.getService() : "unknown";
+
+        // 2. Heuristic: Look for HTTP method + path (e.g. "GET /api/v1/auth/login")
+        java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH)\\s+([^\\s?]+)").matcher(msg);
+        if (m1.find()) {
+            return m1.group(2);
+        }
+
+        // 3. Heuristic: Look for path-like strings starting with /api/
+        java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("(/api/[^\\s?\":,]+)").matcher(msg);
+        if (m2.find()) {
+            return m2.group(1);
+        }
+
+        // 4. Prometheus Lookup: Use the most error-prone URI for this service
+        if (log.getService() != null && serviceTopUris.containsKey(log.getService())) {
+            return serviceTopUris.get(log.getService());
+        }
+
+        // 5. Fallback to service name
+        String endpoint = log.getService() != null ? log.getService() : "unknown";
+        if (log.getCategory() != null && !"APPLICATION".equals(log.getCategory())) {
+            endpoint = endpoint + " [" + log.getCategory() + "]";
+        }
+        return endpoint;
+    }
+
+    private Map<String, String> getServiceTopErrorUris(Instant start, Instant end) {
+        Map<String, String> mapping = new HashMap<>();
+        try {
+            // Get top URI with non-2xx status for EACH service (job)
+            String query = "topk by (job) (1, sum by (job, uri) (increase(http_server_requests_seconds_count{status!~\"2..\"}[24h])))";
+            List<Map<String, Object>> results = prometheusClient.queryList(query);
+            for (Map<String, Object> res : results) {
+                Map<String, String> metric = (Map<String, String>) res.get("metric");
+                String job = metric.get("job");
+                String uri = metric.get("uri");
+                if (job != null && uri != null) {
+                    mapping.put(job, uri);
+                    // Normalize job name (e.g. monetique-backend -> backend) to match ES service labels
+                    String simpleName = job.replace("monetique-", "").replace("-service", "");
+                    mapping.put(simpleName, uri);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch top error URIs from Prometheus: {}", e.getMessage());
+        }
+        return mapping;
+    }
+
     private List<ErrorPattern> fetchTopErrors(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
             log.info("TOP_ERRORS_DEBUG: envLabel={}, appFilter={}, nodeName={}, start={}, end={}", 
                     envLabel, appFilter, nodeName, start, end);
             
+            // Fetch top error URIs from Prometheus to help map logs to endpoints
+            Map<String, String> serviceTopUris = getServiceTopErrorUris(start, end);
+
             org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
                     envLabel, appFilter, nodeName, null, "ERROR", start, end, 
                     org.springframework.data.domain.PageRequest.of(0, 500));
 
-            log.info("TOP_ERRORS_DEBUG: ES returned {} error logs (total={})", 
+            log.info("TOP_ERRORS_DEBUG: ES returned {} docs (total={})", 
                     errorLogs.getContent().size(), errorLogs.getTotalElements());
 
             // Log first few raw messages for debugging
@@ -318,9 +378,9 @@ public class LogAnalyticsService {
             // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
             Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
                     .collect(Collectors.groupingBy(log -> {
-                        String service = log.getService() != null ? log.getService() : "unknown";
+                        String endpoint = extractEndpoint(log, serviceTopUris);
                         String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
-                        return service + "::" + normalizeErrorKey(msg);
+                        return endpoint + "::" + normalizeErrorKey(msg);
                     }));
 
             log.info("TOP_ERRORS_DEBUG: Grouped into {} unique patterns", patterns.size());
@@ -353,11 +413,8 @@ public class LogAnalyticsService {
                             }
                         } catch (Exception e) {}
 
-                        // Use service/category as endpoint label
-                        String endpoint = first.getService() != null ? first.getService() : "unknown";
-                        if (first.getCategory() != null && !"APPLICATION".equals(first.getCategory())) {
-                            endpoint = endpoint + " [" + first.getCategory() + "]";
-                        }
+                        // Use extracted endpoint as label
+                        String endpoint = extractEndpoint(first, serviceTopUris);
 
                         // Build a clean excerpt (use original message, not the normalized key)
                         String excerpt = first.getNormalizedSummary() != null ? first.getNormalizedSummary() : first.getRawMessage();

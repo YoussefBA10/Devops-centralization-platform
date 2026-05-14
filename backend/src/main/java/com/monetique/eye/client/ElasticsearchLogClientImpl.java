@@ -64,29 +64,41 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
             // Build a list of possible matching names
             List<String> namesToMatch = new ArrayList<>();
-            if (displayName != null) {
+            if (displayName != null && !displayName.equals(".*")) {
                 namesToMatch.add(displayName);
                 // Also add a version with underscores instead of hyphens
                 namesToMatch.add(displayName.replace("-", "_"));
             }
-            if (keywordName != null) {
-                namesToMatch.add(keywordName);
-                namesToMatch.add(keywordName.replace("-", "_"));
+            if (keywordName != null && !keywordName.equals(".*")) {
+                // If keywordName contains pipes (PromQL OR syntax), split and add each
+                if (keywordName.contains("|")) {
+                    for (String part : keywordName.split("\\|")) {
+                        if (!part.isBlank()) {
+                            namesToMatch.add(part.trim());
+                            namesToMatch.add(part.trim().replace("-", "_"));
+                        }
+                    }
+                } else {
+                    namesToMatch.add(keywordName);
+                    namesToMatch.add(keywordName.replace("-", "_"));
+                }
             }
 
-            // Filter to match any of the common service identifier fields with any of the names (using wildcard for compose prefixes)
-            boolQuery.must(m -> m.bool(b -> {
-                namesToMatch.forEach(name -> {
-                    // Use wildcard to match names like 'vmpipe_angular-nginx-app_1'
-                    String wildcardName = "*" + name + "*";
-                    b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
-                });
-                return b.minimumShouldMatch("1");
-            }));
+            // Only add the service name filter if we have specific names to match
+            if (!namesToMatch.isEmpty()) {
+                boolQuery.must(m -> m.bool(b -> {
+                    namesToMatch.forEach(name -> {
+                        // Use wildcard to match names like 'vmpipe_angular-nginx-app_1'
+                        String wildcardName = "*" + name + "*";
+                        b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
+                        b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
+                        b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
+                        b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
+                        b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
+                    });
+                    return b.minimumShouldMatch("1");
+                }));
+            }
 
             if (queryStr != null && !queryStr.isBlank()) {
                 // Ensure wildcards for partial matches if not provided
@@ -195,6 +207,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 .normalizedSummary(getField(source, "normalizedSummary", "normalized_summary"))
                 .rawMessage(getField(source, "raw_message", "message"))
                 .traceId(source.has("traceId") ? source.get("traceId").asText() : null)
+                .uri(getField(source, "uri", "url_path", "request_path", "http_path"))
                 .build();
     }
 

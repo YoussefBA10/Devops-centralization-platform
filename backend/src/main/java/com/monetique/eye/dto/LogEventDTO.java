@@ -22,4 +22,5 @@ public class LogEventDTO {
     private String normalizedSummary;
     private String rawMessage;
     private String traceId;        // for multi-line grouping
+    private String uri;            // HTTP endpoint if available
 }

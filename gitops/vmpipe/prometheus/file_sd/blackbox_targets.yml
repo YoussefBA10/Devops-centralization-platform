@@ -2,48 +2,48 @@
 - targets:
   - "http://backend:8880/actuator/health"
   labels:
+    target_type: "node"
     nodename: "central-node"
     environment: "central-node"
     probe_module: "http_2xx"
     job: "blackbox"
-    target_type: "node"
 - targets:
   - "http://frontend:80"
   labels:
+    target_type: "frontend"
     nodename: "central-node"
     environment: "central-node"
     probe_module: "http_2xx"
     job: "blackbox"
-    target_type: "frontend"
 - targets:
   - "192.168.126.131"
   labels:
+    target_type: "node"
     nodename: "node-192-168-126-131"
     environment: "test"
     probe_module: "icmp"
     job: "blackbox"
-    target_type: "node"
 - targets:
   - "http://192.168.126.131:80"
   labels:
+    target_type: "frontend"
     nodename: "node-192-168-126-131"
     environment: "test"
     probe_module: "http_2xx"
     job: "blackbox"
-    target_type: "frontend"
 - targets:
   - "192.168.126.135"
   labels:
+    target_type: "node"
     nodename: "node-192-168-126-135"
     environment: "test"
     probe_module: "icmp"
     job: "blackbox"
-    target_type: "node"
 - targets:
   - "http://192.168.126.135:80"
   labels:
+    target_type: "frontend"
     nodename: "node-192-168-126-135"
     environment: "test"
     probe_module: "http_2xx"
     job: "blackbox"
-    target_type: "frontend"
