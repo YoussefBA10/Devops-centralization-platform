@@ -257,18 +257,56 @@ public class LogAnalyticsService {
                 .build();
     }
 
+    /**
+     * Normalize an error message by stripping variable parts (timestamps, IPs, durations, UUIDs)
+     * so that repeated occurrences of the same root error group together.
+     */
+    private String normalizeErrorKey(String msg) {
+        if (msg == null) return "Unknown Error";
+        String key = msg;
+        // Strip category prefix like "[NETWORK] " or "[APPLICATION] "
+        key = key.replaceAll("^\\[\\w+\\]\\s*", "");
+        // Strip ISO timestamps (2026-05-14T21:52:39.616Z)
+        key = key.replaceAll("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z?", "<time>");
+        // Strip epoch-style timestamps
+        key = key.replaceAll("\\b\\d{10,13}\\b", "<ts>");
+        // Strip IPs
+        key = key.replaceAll("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(:\\d+)?", "<ip>");
+        // Strip durations like duration_seconds=0.001416494
+        key = key.replaceAll("duration_seconds=\\d+\\.\\d+", "duration_seconds=<dur>");
+        // Strip UUIDs
+        key = key.replaceAll("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>");
+        // Collapse whitespace
+        key = key.replaceAll("\\s+", " ").trim();
+        // Truncate to 200 chars to avoid overly long keys
+        if (key.length() > 200) key = key.substring(0, 200);
+        return key;
+    }
+
     private List<ErrorPattern> fetchTopErrors(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
             org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
                     envLabel, appFilter, nodeName, null, "ERROR", start, end, 
-                    org.springframework.data.domain.PageRequest.of(0, 2000));
+                    org.springframework.data.domain.PageRequest.of(0, 500));
 
-            // Group by message/summary to find patterns
-            Map<String, List<LogEventDTO>> patterns = errorLogs.getContent().stream()
+            // Filter out stack trace continuation lines — these are noise, not top-level errors
+            List<LogEventDTO> meaningfulErrors = errorLogs.getContent().stream()
+                    .filter(log -> {
+                        String msg = log.getRawMessage() != null ? log.getRawMessage().trim() : "";
+                        // Skip Java stack trace continuation lines
+                        if (msg.startsWith("at ") || msg.startsWith("...") || msg.startsWith("Caused by:")) return false;
+                        // Skip lines that are just class names with line numbers (e.g. "java.lang.Thread.run(Unknown Source)")
+                        if (msg.matches("^[a-z]+\\..*\\(.*\\.java:\\d+\\).*")) return false;
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+
+            // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
+            Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
                     .collect(Collectors.groupingBy(log -> {
-                        if (log.getNormalizedSummary() != null) return log.getNormalizedSummary();
-                        if (log.getRawMessage() != null) return log.getRawMessage();
-                        return "Unknown Error Pattern";
+                        String service = log.getService() != null ? log.getService() : "unknown";
+                        String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
+                        return service + "::" + normalizeErrorKey(msg);
                     }));
 
             return patterns.entrySet().stream()
@@ -297,9 +335,21 @@ public class LogAnalyticsService {
                             }
                         } catch (Exception e) {}
 
+                        // Use service/category as endpoint label
+                        String endpoint = first.getService() != null ? first.getService() : "unknown";
+                        if (first.getCategory() != null && !"APPLICATION".equals(first.getCategory())) {
+                            endpoint = endpoint + " [" + first.getCategory() + "]";
+                        }
+
+                        // Build a clean excerpt (use original message, not the normalized key)
+                        String excerpt = first.getNormalizedSummary() != null ? first.getNormalizedSummary() : first.getRawMessage();
+                        if (excerpt != null && excerpt.length() > 120) {
+                            excerpt = excerpt.substring(0, 120) + "...";
+                        }
+
                         return ErrorPattern.builder()
-                                .endpoint(first.getService() != null ? first.getService() : "unknown")
-                                .messageExcerpt(entry.getKey())
+                                .endpoint(endpoint)
+                                .messageExcerpt(excerpt)
                                 .statusCode(statusCode)
                                 .count(occurrences.size())
                                 .sparkline(sparklineList)
