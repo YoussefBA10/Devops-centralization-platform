@@ -197,8 +197,8 @@ public class LogAnalyticsService {
 
     private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         long diff = end.getEpochSecond() - start.getEpochSecond();
-        String step = Math.max(60, diff / 12) + "s";
-        String rateInterval = Math.max(5, (diff / 60) / 12) + "m";
+        String step = Math.max(60, diff / 11) + "s";
+        String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
         List<String> labels = generateTimeLabels(start, end, 12);
         
         return ChartData.builder()
@@ -218,7 +218,7 @@ public class LogAnalyticsService {
         
         long startSec = start.getEpochSecond();
         long endSec = end.getEpochSecond();
-        long stepSec = (endSec - startSec) / count;
+        long stepSec = (endSec - startSec) / (count - 1);
         if (stepSec == 0) stepSec = 1;
         
         try {
@@ -246,7 +246,7 @@ public class LogAnalyticsService {
 
     private ChartData fetchProbeSuccess(String envLabel, String nodeName, Instant start, Instant end) {
         long diff = end.getEpochSecond() - start.getEpochSecond();
-        String step = Math.max(60, diff / 12) + "s";
+        String step = Math.max(60, diff / 11) + "s";
         List<String> labels = generateTimeLabels(start, end, 12);
         String query = String.format("avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilter(nodeName));
         return ChartData.builder()
@@ -376,7 +376,7 @@ public class LogAnalyticsService {
     private List<String> generateTimeLabels(Instant start, Instant end, int count) {
         List<String> labels = new ArrayList<>();
         long totalSeconds = start.until(end, ChronoUnit.SECONDS);
-        long intervalSeconds = totalSeconds / count;
+        long intervalSeconds = totalSeconds / (count - 1);
         
         String pattern = (totalSeconds >= 86400) ? "MMM dd HH:mm" : "HH:mm";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
