@@ -29,16 +29,6 @@ scrape_configs:
         regex: 'monetique-backend'
         action: keep
 
-  # 1.1 Scrape the Monetique-Eye Frontend
-  - job_name: 'monetique-frontend'
-    metrics_path: '/metrics' # Placeholder for frontend metrics
-    file_sd_configs:
-      - files: ['/etc/prometheus/file_sd/agent_targets.yml']
-    relabel_configs:
-      - source_labels: [job]
-        regex: 'monetique-frontend'
-        action: keep
-
   # 2. Central Node (central-node) - Self monitoring
   - job_name: 'central-node'
     static_configs:

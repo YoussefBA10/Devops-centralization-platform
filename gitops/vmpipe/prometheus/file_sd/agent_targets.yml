@@ -69,10 +69,3 @@
     environment: "central-node"
     nodename: "central-node"
     node_id: "1"
-- targets:
-  - "frontend:80"
-  labels:
-    job: "monetique-frontend"
-    environment: "central-node"
-    nodename: "central-node"
-    node_id: "1"

@@ -14,3 +14,19 @@
     nodename: central-node
     probe_module: http_2xx
     target_type: frontend
+- targets:
+  - http://192.168.126.131:80
+  labels:
+    environment: test
+    job: blackbox
+    nodename: node-192-168-126-131
+    probe_module: http_2xx
+    target_type: frontend
+- targets:
+  - http://192.168.126.135:80
+  labels:
+    environment: test
+    job: blackbox
+    nodename: node-192-168-126-135
+    probe_module: http_2xx
+    target_type: frontend
