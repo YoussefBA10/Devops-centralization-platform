@@ -271,12 +271,34 @@ public class LogAnalyticsService {
                     .map(entry -> {
                         List<LogEventDTO> occurrences = entry.getValue();
                         LogEventDTO first = occurrences.get(0);
+                        
+                        // Calculate actual trend (sparkline) across 7 buckets
+                        long diff = end.getEpochSecond() - start.getEpochSecond();
+                        long stepSec = Math.max(1, diff / 7);
+                        long[] sparkline = new long[7];
+                        for (LogEventDTO logEvent : occurrences) {
+                            int bucket = (int) ((logEvent.getTimestamp().getEpochSecond() - start.getEpochSecond()) / stepSec);
+                            if (bucket >= 0 && bucket < 7) {
+                                sparkline[bucket]++;
+                            } else if (bucket == 7) {
+                                sparkline[6]++;
+                            }
+                        }
+                        List<Integer> sparklineList = java.util.Arrays.stream(sparkline).mapToInt(l -> (int)l).boxed().collect(Collectors.toList());
+
+                        int statusCode = 500;
+                        try {
+                            if (first.getErrorType() != null && first.getErrorType().matches("\\d{3}")) {
+                                statusCode = Integer.parseInt(first.getErrorType());
+                            }
+                        } catch (Exception e) {}
+
                         return ErrorPattern.builder()
-                                .endpoint(first.getService())
+                                .endpoint(first.getService() != null ? first.getService() : "unknown")
                                 .messageExcerpt(entry.getKey())
-                                .statusCode(500) // Default for error logs
+                                .statusCode(statusCode)
                                 .count(occurrences.size())
-                                .sparkline(List.of(1, 3, 5, 2, 8, 10, 4)) // Representative trend
+                                .sparkline(sparklineList)
                                 .source("elasticsearch")
                                 .firstSeen(occurrences.get(occurrences.size()-1).getTimestamp().toString())
                                 .lastSeen(first.getTimestamp().toString())

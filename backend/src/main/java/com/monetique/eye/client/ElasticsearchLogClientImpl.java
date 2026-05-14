@@ -57,6 +57,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     .should(s -> s.term(t -> t.field("agent.hostname.keyword").value(nodeName)))
                     .should(s -> s.term(t -> t.field("host.name.keyword").value(nodeName)))
                     .should(s -> s.wildcard(w -> w.field("nodename.keyword").value("*" + nodeName + "*")))
+                    .should(s -> s.wildcard(w -> w.field("node.keyword").value("*" + nodeName + "*")))
                     .minimumShouldMatch("1")
                 ));
             }
