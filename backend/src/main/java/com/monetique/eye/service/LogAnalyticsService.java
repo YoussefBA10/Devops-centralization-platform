@@ -125,7 +125,7 @@ public class LogAnalyticsService {
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
-                .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, start, end))
+                .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, effectiveNodeName, start, end))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
                 .availableServices(availableServices)
                 .build();

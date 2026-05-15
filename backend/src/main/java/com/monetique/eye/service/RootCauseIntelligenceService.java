@@ -20,7 +20,7 @@ public class RootCauseIntelligenceService {
      * Correlates signals to detect root cause categories.
      * Logic: resource_saturation > bug/crash > upstream_failure > traffic_spike > config
      */
-    public List<RootCauseRule> analyze(String envLabel, String appFilter, java.time.Instant start, java.time.Instant end) {
+    public List<RootCauseRule> analyze(String envLabel, String appFilter, String nodeFilter, java.time.Instant start, java.time.Instant end) {
         List<RootCauseRule> insights = new ArrayList<>();
         
         // 1. Fetch SRE signals from Elasticsearch using aggregated fields
@@ -31,7 +31,7 @@ public class RootCauseIntelligenceService {
         Map<String, List<String>> evidenceMap = new HashMap<>();
 
         processDbFailure(signals, scores, evidenceMap);
-        processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter);
+        processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter, nodeFilter);
         processNetworkFailure(signals, scores, evidenceMap);
         processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
@@ -95,7 +95,7 @@ public class RootCauseIntelligenceService {
         }
     }
 
-    private void processMemoryPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter) {
+    private void processMemoryPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter, String nodeFilter) {
         double score = 0;
         List<String> logs = new ArrayList<>();
         
@@ -111,7 +111,7 @@ public class RootCauseIntelligenceService {
 
         // Metric-based signals (Prometheus/cAdvisor)
         try {
-            List<Map<String, Object>> oomEvents = prometheusClient.getOomEvents(envLabel, appFilter);
+            List<Map<String, Object>> oomEvents = prometheusClient.getOomEvents(envLabel, appFilter, nodeFilter);
             if (!oomEvents.isEmpty()) {
                 score += 8.0; // Very high confidence if metric says so
                 logs.add("Container OOM Kill event detected by cAdvisor/cgroups");

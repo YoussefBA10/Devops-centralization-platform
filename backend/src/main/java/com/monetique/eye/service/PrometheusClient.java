@@ -239,9 +239,10 @@ public class PrometheusClient {
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getOomEvents(String envFilter, String appFilter) {
-        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s\"}[15m]) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s\"}[15m]) > 0)",
-                appFilter, envFilter, appFilter, envFilter);
+    public List<Map<String, Object>> getOomEvents(String envFilter, String appFilter, String nodeFilter) {
+        String nodePart = (nodeFilter != null && !nodeFilter.isEmpty()) ? String.format(", nodename=~\".*%s.*\"", nodeFilter) : "";
+        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s|.*\"%s}[15m]) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s|.*\"%s}[15m]) > 0)",
+                appFilter, envFilter, nodePart, appFilter, envFilter, nodePart);
         return queryList(query);
     }
 
