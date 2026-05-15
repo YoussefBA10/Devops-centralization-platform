@@ -37,7 +37,7 @@ public class RootCauseIntelligenceService {
         processTrafficSpike(signals, scores, evidenceMap);
 
         // 3. Final Ranking & Confidence Check
-        return scores.entrySet().stream()
+        List<RootCauseRule> ranked = scores.entrySet().stream()
                 .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
                 .map(entry -> {
                     String category = entry.getKey();
@@ -47,13 +47,30 @@ public class RootCauseIntelligenceService {
                     return RootCauseRule.builder()
                             .id(UUID.randomUUID().toString())
                             .type(getRuleType(category))
-                            .title(category.replace("_", " ").toUpperCase() + " (" + confidence + ")")
+                            .title(category.replace("_", " ").toUpperCase())
                             .description(generateDescription(category, evidenceMap.get(category)))
+                            .confidence(confidence)
+                            .evidence(evidenceMap.get(category))
                             .sources(List.of("Elasticsearch", "Logstash-SRE"))
                             .build();
                 })
                 .limit(3)
                 .collect(Collectors.toList());
+
+        // 4. Fallback if errors exist but no cause identified
+        if (ranked.isEmpty()) {
+            ranked.add(RootCauseRule.builder()
+                    .id(UUID.randomUUID().toString())
+                    .type("trigger")
+                    .title("GENERAL APPLICATION ERRORS")
+                    .description("High error frequency detected but no specific resource saturation or bug patterns identified.")
+                    .confidence("low")
+                    .evidence(List.of("Aggregated status_code >= 500 detected", "Check individual log stream for stack traces"))
+                    .sources(List.of("Elasticsearch"))
+                    .build());
+        }
+        
+        return ranked;
     }
 
     private void processDbFailure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {

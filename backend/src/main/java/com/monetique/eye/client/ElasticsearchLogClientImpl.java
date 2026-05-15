@@ -9,6 +9,7 @@ import co.elastic.clients.elasticsearch.core.DeleteByQueryRequest;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.json.JsonData;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.monetique.eye.dto.LogEventDTO;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -221,18 +222,22 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     public java.util.Map<String, Object> fetchSreSignals(String envLabel, String appFilter, java.time.Instant from, java.time.Instant to) {
         java.util.Map<String, Object> signals = new java.util.HashMap<>();
         try {
-            co.elastic.clients.elasticsearch.core.SearchResponse<Void> response = esClient.search(s -> s
+            SearchResponse<Void> response = esClient.search(s -> s
                 .index(getIndexName())
                 .size(0)
                 .query(q -> q.bool(b -> b
                     .filter(f -> f.term(t -> t.field("environment.keyword").value(envLabel.toLowerCase())))
                     .filter(f -> f.regexp(r -> r.field("service.keyword").value(".*(" + appFilter + ").*")))
-                    .filter(f -> f.range(r -> r.field("@timestamp").gte(co.elastic.clients.json.JsonData.of(from.toString())).lte(co.elastic.clients.json.JsonData.of(to.toString()))))
+                    .filter(f -> f.range(r -> r.field("@timestamp").gte(JsonData.of(from.toString())).lte(JsonData.of(to.toString()))))
                 ))
-                .aggregations("pool_active_max_match", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("pool.active=pool.max"))))))
-                .aggregations("db_wait_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("wait_ms").gte(co.elastic.clients.json.JsonData.of(5000)))))))
+                .aggregations("pool_active_max_match", a -> a.filter(f -> f.bool(b -> b
+                    .must(m1 -> m1.exists(e -> e.field("pool_active")))
+                    .must(m2 -> m2.exists(e -> e.field("pool_max")))
+                    .filter(f1 -> f1.script(sc -> sc.script(s1 -> s1.inline(i -> i.source("doc['pool_active'].value == doc['pool_max'].value && doc['pool_active'].value > 0")))))
+                )))
+                .aggregations("db_wait_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("wait_ms").gte(JsonData.of(5000)))))))
                 .aggregations("oom_error_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("OutOfMemoryError"))))))
-                .aggregations("heap_90_plus", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("heap_pct").gte(co.elastic.clients.json.JsonData.of(90)))))))
+                .aggregations("heap_90_plus", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("heap_pct").gte(JsonData.of(90)))))))
                 .aggregations("cb_open", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("circuit_breaker_state.keyword").value("open"))))))
                 .aggregations("npe_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("exception_type.keyword").value("java.lang.NullPointerException"))))))
                 .aggregations("rate_limit_429", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(429))))))

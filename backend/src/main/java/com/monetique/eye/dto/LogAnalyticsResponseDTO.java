@@ -91,6 +91,8 @@ public class LogAnalyticsResponseDTO {
         private String type; // trigger, root_cause, cascade, impact
         private String title;
         private String description;
+        private String confidence; // high, medium, low
+        private List<String> evidence;
         private List<String> sources;
     }
 }

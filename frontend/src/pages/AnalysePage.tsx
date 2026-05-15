@@ -445,7 +445,16 @@ const AnalysePage: React.FC = () => {
                     className="p-4 rounded-xl bg-background border border-border space-y-3 group hover:border-primary/40 transition-all"
                   >
                     <div className="flex items-center justify-between">
-                      <Badge className={getBadgeColor(rule.type)}>{rule.type.replace('_', ' ').toUpperCase()}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className={getBadgeColor(rule.type)}>{rule.type.replace('_', ' ').toUpperCase()}</Badge>
+                        <Badge variant="outline" className={`text-[9px] uppercase ${
+                          rule.confidence === 'high' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5' :
+                          rule.confidence === 'medium' ? 'border-amber-500 text-amber-500 bg-amber-500/5' :
+                          'border-muted-foreground text-muted-foreground'
+                        }`}>
+                          {rule.confidence} Confidence
+                        </Badge>
+                      </div>
                       <div className="flex gap-1">
                         {rule.sources.map((s: string) => (
                           <Badge key={s} variant="outline" className="text-[8px] uppercase tracking-tighter opacity-50">{s}</Badge>
@@ -455,6 +464,18 @@ const AnalysePage: React.FC = () => {
                     <div className="space-y-1">
                       <h4 className="text-sm font-black text-foreground">{rule.title}</h4>
                       <p className="text-xs text-muted-foreground leading-relaxed">{rule.description}</p>
+                      
+                      {rule.evidence && rule.evidence.length > 0 && (
+                        <div className="mt-3 space-y-1.5 border-t border-border pt-3">
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Evidence</p>
+                          {rule.evidence.map((ev: string, ei: number) => (
+                            <div key={ei} className="flex items-start gap-2">
+                              <div className="w-1 h-1 rounded-full bg-primary mt-1.5 shrink-0" />
+                              <p className="text-[10px] font-mono text-foreground/80 leading-tight">{ev}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <Button variant="outline" size="sm" className="w-full text-[10px] font-black uppercase h-8 gap-2 group-hover:bg-primary/5">
                       Remediation Plan <ExternalLink className="w-3 h-3" />
