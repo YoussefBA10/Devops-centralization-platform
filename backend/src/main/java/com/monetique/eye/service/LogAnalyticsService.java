@@ -36,6 +36,7 @@ public class LogAnalyticsService {
     private final ApplicationRepository applicationRepository;
     private final EnvironmentRepository environmentRepository;
     private final TicketRepository ticketRepository;
+    private final RootCauseIntelligenceService rootCauseIntelligenceService;
 
     public LogAnalyticsResponseDTO getDashboardData(Long environmentId, String range, String serviceName, String nodeName, Long ticketId) {
         // Resolve ticket context if provided
@@ -124,7 +125,7 @@ public class LogAnalyticsService {
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
-                .rootCauseChain(calculateRootCauseChain(containerEnvLabel, appFilter, containerNodeName))
+                .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, start, end))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
                 .availableServices(availableServices)
                 .build();

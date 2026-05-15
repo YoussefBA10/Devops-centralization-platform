@@ -216,4 +216,36 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
         }
         return null;
     }
+
+    @Override
+    public java.util.Map<String, Object> fetchSreSignals(String envLabel, String appFilter, java.time.Instant from, java.time.Instant to) {
+        java.util.Map<String, Object> signals = new java.util.HashMap<>();
+        try {
+            co.elastic.clients.elasticsearch.core.SearchResponse<Void> response = elasticsearchClient.search(s -> s
+                .index(getIndexName())
+                .size(0)
+                .query(q -> q.bool(b -> b
+                    .filter(f -> f.term(t -> t.field("environment.keyword").value(envLabel.toLowerCase())))
+                    .filter(f -> f.regexp(r -> r.field("service.keyword").value(".*(" + appFilter + ").*")))
+                    .filter(f -> f.range(r -> r.field("@timestamp").gte(co.elastic.clients.json.JsonData.of(from.toString())).lte(co.elastic.clients.json.JsonData.of(to.toString()))))
+                ))
+                .aggregations("pool_active_max_match", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("pool.active=pool.max"))))))
+                .aggregations("db_wait_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("wait_ms").gte(co.elastic.clients.json.JsonData.of(5000)))))))
+                .aggregations("oom_error_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("OutOfMemoryError"))))))
+                .aggregations("heap_90_plus", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("heap_pct").gte(co.elastic.clients.json.JsonData.of(90)))))))
+                .aggregations("cb_open", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("circuit_breaker_state.keyword").value("open"))))))
+                .aggregations("npe_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("exception_type.keyword").value("java.lang.NullPointerException"))))))
+                .aggregations("rate_limit_429", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(429))))))
+            , Void.class);
+
+            response.aggregations().forEach((name, agg) -> {
+                if (agg.isFilter() && agg.filter().docCount() > 0) {
+                    signals.put(name, true);
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to fetch SRE signals: {}", e.getMessage());
+        }
+        return signals;
+    }
 }
