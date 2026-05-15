@@ -26,41 +26,39 @@ public class SecurityConfig {
     private final JwtRequestFilter jwtRequestFilter;
     private final AuthenticationProvider authenticationProvider;
 
-    public SecurityConfig(JwtRequestFilter jwtRequestFilter, 
-                          AuthenticationProvider authenticationProvider) {
+    public SecurityConfig(JwtRequestFilter jwtRequestFilter,
+            AuthenticationProvider authenticationProvider) {
         this.jwtRequestFilter = jwtRequestFilter;
         this.authenticationProvider = authenticationProvider;
     }
 
-
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
         return (web) -> web.ignoring()
-            .requestMatchers(new AntPathRequestMatcher("/actuator/**"));
+                .requestMatchers(new AntPathRequestMatcher("/actuator/**"));
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable)
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**", "/api/auth/**", "/auth/**").permitAll()
-                .requestMatchers("/actuator/**").permitAll()
-                .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/v1/setup/sync-monitoring", "/api/setup/sync-monitoring").permitAll()
-                .requestMatchers("/api/v1/version").permitAll() // Allow checking system version without auth
-                .requestMatchers("/api/alerts/ingest").permitAll() // Alertmanager webhook (no JWT)
-                .requestMatchers("/api/alerts/test-ticket").permitAll() // Test endpoint
-                .requestMatchers("/api/v1/**").authenticated()
-                .requestMatchers("/api/**").authenticated()
-                .anyRequest().authenticated()
-            )
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
-            .authenticationProvider(authenticationProvider)
-            .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/auth/**", "/api/auth/**", "/auth/**").permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/api/v1/setup/sync-monitoring", "/api/setup/sync-monitoring").permitAll()
+                        .requestMatchers("/api/v1/version").permitAll() // Allow checking system version without auth
+                        .requestMatchers("/api/alerts/ingest").permitAll() // Alertmanager webhook (no JWT)
+                        .requestMatchers("/api/alerts/test-ticket").permitAll() // Test endpoint
+                        .requestMatchers("/api/v1/test/**").permitAll() // Test endpoint for simulation
+                        .requestMatchers("/api/v1/**").authenticated()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().authenticated())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authenticationProvider(authenticationProvider)
+                .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

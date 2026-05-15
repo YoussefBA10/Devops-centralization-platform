@@ -133,7 +133,7 @@ public class LogAnalyticsService {
         List<MetricCard> cards = new ArrayList<>();
 
         // 1. Error Rate
-        String errRateQuery = String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
+        String errRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
                 appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
         Double errRate = prometheusClient.queryMetric(errRateQuery);
         cards.add(MetricCard.builder()
@@ -145,7 +145,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 2. Request Rate
-        String reqRateQuery = String.format("sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, nodeFilter(appNodeName));
         Double reqRate = prometheusClient.queryMetric(reqRateQuery);
         cards.add(MetricCard.builder()
                 .label("Request rate")
@@ -156,7 +156,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 3. DB Pool Usage
-        String dbPoolQuery = String.format("sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
         Double dbPool = prometheusClient.queryMetric(dbPoolQuery);
         cards.add(MetricCard.builder()
                 .label("DB pool usage")
@@ -167,11 +167,11 @@ public class LogAnalyticsService {
                 .build());
 
         // 4. Memory Usage (Dynamic Limit)
-        String limitQuery = String.format("sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName));
+        String limitQuery = String.format(Locale.US, "sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName));
         Double memLimit = prometheusClient.queryMetric(limitQuery);
         if (memLimit == null || memLimit <= 0) memLimit = 4294967296.0; // Fallback to 4GB if not set
 
-        String memQuery = String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), memLimit);
+        String memQuery = String.format(Locale.US, "sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), memLimit);
         Double memUsage = prometheusClient.queryMetric(memQuery);
         cards.add(MetricCard.builder()
                 .label("Backend memory")
@@ -182,7 +182,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 5. Blackbox Probe
-        String probeQuery = String.format("avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, nodeFilter(appNodeName));
+        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, nodeFilter(appNodeName));
         Double probeSuccess = prometheusClient.queryMetric(probeQuery);
         cards.add(MetricCard.builder()
                 .label("Blackbox probe")
@@ -204,9 +204,9 @@ public class LogAnalyticsService {
         return ChartData.builder()
                 .labels(labels)
                 .datasets(List.of(
-                        ChartData.Series.builder().label("req/s").data(fetchRangeMetric(String.format("sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#3b82f6").fill(false).build(),
-                        ChartData.Series.builder().label("errors/min").data(fetchRangeMetric(String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#ef4444").fill(true).build(),
-                        ChartData.Series.builder().label("DB pool %").data(fetchRangeMetric(String.format("avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12)).color("#f59e0b").dashed(true).fill(false).build()
+                        ChartData.Series.builder().label("req/s").data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#3b82f6").fill(false).build(),
+                        ChartData.Series.builder().label("errors/min").data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#ef4444").fill(true).build(),
+                        ChartData.Series.builder().label("DB pool %").data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12)).color("#f59e0b").dashed(true).fill(false).build()
                 ))
                 .build();
     }
@@ -248,7 +248,7 @@ public class LogAnalyticsService {
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         List<String> labels = generateTimeLabels(start, end, 12);
-        String query = String.format("avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilter(nodeName));
+        String query = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilter(nodeName));
         return ChartData.builder()
                 .labels(labels)
                 .datasets(List.of(
@@ -305,8 +305,11 @@ public class LogAnalyticsService {
         }
 
         // 4. Prometheus Lookup: Use the most error-prone URI for this service
+        // BUT ONLY if the log seems to be a system error (500) and we have a 5xx URI
         if (log.getService() != null && serviceTopUris.containsKey(log.getService())) {
-            return serviceTopUris.get(log.getService());
+            String uri = serviceTopUris.get(log.getService());
+            // If it's a generic backend error, the Prometheus URI is a better guess than just 'backend'
+            return uri;
         }
 
         // 5. Fallback to service name
@@ -320,18 +323,43 @@ public class LogAnalyticsService {
     private Map<String, String> getServiceTopErrorUris(Instant start, Instant end) {
         Map<String, String> mapping = new HashMap<>();
         try {
-            // Get top URI with non-2xx status for EACH service (job)
-            String query = "topk by (job) (1, sum by (job, uri) (increase(http_server_requests_seconds_count{status!~\"2..\"}[24h])))";
-            List<Map<String, Object>> results = prometheusClient.queryList(query);
-            for (Map<String, Object> res : results) {
+            // Get URIs with errors, prioritizing 5xx
+            // Query 1: Top 5xx URIs
+            String query5xx = "sum by (job, uri) (increase(http_server_requests_seconds_count{status=~\"5..\"}[24h])) > 0";
+            List<Map<String, Object>> results5xx = prometheusClient.queryList(query5xx);
+            
+            Map<String, Double> maxCounts = new HashMap<>();
+            
+            for (Map<String, Object> res : results5xx) {
                 Map<String, String> metric = (Map<String, String>) res.get("metric");
                 String job = metric.get("job");
                 String uri = metric.get("uri");
+                double val = Double.parseDouble(res.get("value").toString());
+                
                 if (job != null && uri != null) {
-                    mapping.put(job, uri);
-                    // Normalize job name (e.g. monetique-backend -> backend) to match ES service labels
-                    String simpleName = job.replace("monetique-", "").replace("-service", "");
-                    mapping.put(simpleName, uri);
+                    String simpleJob = job.replace("monetique-", "").replace("-service", "");
+                    if (val > maxCounts.getOrDefault(simpleJob, -1.0)) {
+                        maxCounts.put(simpleJob, val);
+                        mapping.put(simpleJob, uri);
+                    }
+                }
+            }
+            
+            // Query 2: Fallback to 4xx if no 5xx URIs found for a service
+            String query4xx = "sum by (job, uri) (increase(http_server_requests_seconds_count{status=~\"4..\"}[24h])) > 0";
+            List<Map<String, Object>> results4xx = prometheusClient.queryList(query4xx);
+            for (Map<String, Object> res : results4xx) {
+                Map<String, String> metric = (Map<String, String>) res.get("metric");
+                String job = metric.get("job");
+                String uri = metric.get("uri");
+                double val = Double.parseDouble(res.get("value").toString());
+                
+                if (job != null && uri != null) {
+                    String simpleJob = job.replace("monetique-", "").replace("-service", "");
+                    if (!mapping.containsKey(simpleJob) && val > maxCounts.getOrDefault(simpleJob, -1.0)) {
+                        maxCounts.put(simpleJob, val);
+                        mapping.put(simpleJob, uri);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -449,8 +477,8 @@ public class LogAnalyticsService {
             String serviceName = app.getServiceNameKeyword();
             if (serviceName == null) continue;
             
-            Double mem = prometheusClient.queryMetric(String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / 4294967296 * 100", envLabel, serviceName, nodeFilter(nodeName)));
-            Double cpu = prometheusClient.queryMetric(String.format("sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[5m])) * 100", envLabel, serviceName, nodeFilter(nodeName)));
+            Double mem = prometheusClient.queryMetric(String.format(Locale.US, "sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / 4294967296 * 100", envLabel, serviceName, nodeFilter(nodeName)));
+            Double cpu = prometheusClient.queryMetric(String.format(Locale.US, "sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[5m])) * 100", envLabel, serviceName, nodeFilter(nodeName)));
             
             String callout = null;
             if (mem > 85) callout = "Memory pressure detected";
@@ -470,13 +498,13 @@ public class LogAnalyticsService {
     private List<RootCauseRule> calculateRootCauseChain(String envLabel, String appFilter, String nodeName) {
         List<RootCauseRule> rules = new ArrayList<>();
         
-        String limitQuery = String.format("sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", envLabel, appFilter, nodeFilter(nodeName));
+        String limitQuery = String.format(Locale.US, "sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", envLabel, appFilter, nodeFilter(nodeName));
         Double memLimit = prometheusClient.queryMetric(limitQuery);
         if (memLimit == null || memLimit <= 0) memLimit = 4294967296.0;
 
-        Double memUsage = prometheusClient.queryMetric(String.format("sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), memLimit));
-        Double dbPool = prometheusClient.queryMetric(String.format("sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)));
-        Double errRate = prometheusClient.queryMetric(String.format("sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) or vector(0)", envLabel, appFilter, nodeFilter(nodeName)));
+        Double memUsage = prometheusClient.queryMetric(String.format(Locale.US, "sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), memLimit));
+        Double dbPool = prometheusClient.queryMetric(String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)));
+        Double errRate = prometheusClient.queryMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) or vector(0)", envLabel, appFilter, nodeFilter(nodeName)));
 
         if (memUsage > 85 && dbPool > 90) {
             rules.add(RootCauseRule.builder()

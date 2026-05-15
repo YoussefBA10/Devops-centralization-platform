@@ -155,7 +155,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable, Throwable t) {
         log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", displayName,
                 t.getMessage());
