@@ -221,7 +221,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     public java.util.Map<String, Object> fetchSreSignals(String envLabel, String appFilter, java.time.Instant from, java.time.Instant to) {
         java.util.Map<String, Object> signals = new java.util.HashMap<>();
         try {
-            co.elastic.clients.elasticsearch.core.SearchResponse<Void> response = elasticsearchClient.search(s -> s
+            co.elastic.clients.elasticsearch.core.SearchResponse<Void> response = esClient.search(s -> s
                 .index(getIndexName())
                 .size(0)
                 .query(q -> q.bool(b -> b
