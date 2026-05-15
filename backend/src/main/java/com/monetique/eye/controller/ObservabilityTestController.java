@@ -18,11 +18,38 @@ public class ObservabilityTestController {
         if (code >= 400 && code < 600) {
             return ResponseEntity.status(code).body(Map.of(
                 "status", "error",
-                "message", "Simulated error for observability testing",
+                "message", "Simulated generic error",
                 "code", code
             ));
         }
         return ResponseEntity.ok(Map.of("status", "success", "message", "Normal response"));
+    }
+
+    @GetMapping("/db-error")
+    public ResponseEntity<?> triggerDbError() {
+        return ResponseEntity.status(500).body(Map.of(
+            "status", "error",
+            "type", "DATABASE",
+            "message", "SQL Error: 1064, SQLState: 42000 (Simulated)"
+        ));
+    }
+
+    @GetMapping("/io-error")
+    public ResponseEntity<?> triggerIoError() {
+        return ResponseEntity.status(500).body(Map.of(
+            "status", "error",
+            "type", "IO",
+            "message", "Connection reset by peer (Simulated)"
+        ));
+    }
+
+    @GetMapping("/timeout")
+    public ResponseEntity<?> triggerTimeout() {
+        return ResponseEntity.status(504).body(Map.of(
+            "status", "error",
+            "type", "NETWORK",
+            "message", "Gateway Timeout (Simulated)"
+        ));
     }
 
     @GetMapping("/leak")
