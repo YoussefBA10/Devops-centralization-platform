@@ -11,11 +11,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/test")
+@Slf4j
 public class ObservabilityTestController {
 
     @GetMapping("/error")
     public ResponseEntity<?> triggerError(@RequestParam(defaultValue = "500") int code) {
         if (code >= 400 && code < 600) {
+            log.error("[APPLICATION] Simulated generic error for code {}", code);
             return ResponseEntity.status(code).body(Map.of(
                 "status", "error",
                 "message", "Simulated generic error",
@@ -27,6 +29,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/db-error")
     public ResponseEntity<?> triggerDbError() {
+        log.error("[DATABASE] SQL Error: 1064, SQLState: 42000 (Simulated)");
         return ResponseEntity.status(500).body(Map.of(
             "status", "error",
             "type", "DATABASE",
@@ -36,6 +39,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/io-error")
     public ResponseEntity<?> triggerIoError() {
+        log.error("[IO] Connection reset by peer (Simulated)");
         return ResponseEntity.status(500).body(Map.of(
             "status", "error",
             "type", "IO",
@@ -45,6 +49,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/timeout")
     public ResponseEntity<?> triggerTimeout() {
+        log.error("[NETWORK] Gateway Timeout (Simulated)");
         return ResponseEntity.status(504).body(Map.of(
             "status", "error",
             "type", "NETWORK",

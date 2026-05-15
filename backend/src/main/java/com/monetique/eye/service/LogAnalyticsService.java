@@ -315,8 +315,9 @@ public class LogAnalyticsService {
             }
         }
 
-        // 4. Prometheus Lookup: Use the most error-prone URI for this service, skip generic "/**"
-        if (log.getService() != null && serviceTopUris.containsKey(log.getService())) {
+        // 4. Prometheus Lookup: Use the most error-prone URI for this service
+        // Only do this for generic APPLICATION logs, as DATABASE/NETWORK errors shouldn't be mapped to an arbitrary HTTP path.
+        if ("APPLICATION".equals(category) && log.getService() != null && serviceTopUris.containsKey(log.getService())) {
             String uri = serviceTopUris.get(log.getService());
             if (uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
                 return uri;
