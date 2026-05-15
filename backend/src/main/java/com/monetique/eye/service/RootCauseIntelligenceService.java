@@ -90,7 +90,7 @@ public class RootCauseIntelligenceService {
         }
         
         if (score > 0) {
-            scores.put("DB_FAILURE", score + 5.0); // Highest priority category
+            scores.put("DB_FAILURE", score + 10.0); // RESOURCE_SATURATION (Top Priority)
             evidence.put("DB_FAILURE", logs);
         }
     }
@@ -100,16 +100,16 @@ public class RootCauseIntelligenceService {
         List<String> logs = new ArrayList<>();
         
         if (checkField(signals, "heap_90_plus")) {
-            score += 2.5;
+            score += 3.0;
             logs.add("heap usage >90% detected across nodes");
         }
         if (checkField(signals, "oom_error_count")) {
-            score += 3.0;
+            score += 5.0;
             logs.add("OutOfMemoryError detected in log stream");
         }
 
         if (score > 0) {
-            scores.put("MEMORY_OOM", score + 4.0);
+            scores.put("MEMORY_OOM", score + 9.0); // RESOURCE_SATURATION
             evidence.put("MEMORY_OOM", logs);
         }
     }
@@ -119,12 +119,12 @@ public class RootCauseIntelligenceService {
         List<String> logs = new ArrayList<>();
         
         if (checkField(signals, "npe_count")) {
-            score += 2.0;
+            score += 4.0;
             logs.add("NullPointerException detected at specific endpoints");
         }
         
         if (score > 0) {
-            scores.put("BUG_CRASH", score + 3.0);
+            scores.put("BUG_CRASH", score + 7.0); // Higher than impact/traffic
             evidence.put("BUG_CRASH", logs);
         }
     }
@@ -139,7 +139,7 @@ public class RootCauseIntelligenceService {
         }
         
         if (score > 0) {
-            scores.put("NETWORK_FAILURE", score + 2.0);
+            scores.put("NETWORK_FAILURE", score + 4.0); // Impact/Upstream
             evidence.put("NETWORK_FAILURE", logs);
         }
     }
@@ -149,11 +149,11 @@ public class RootCauseIntelligenceService {
         List<String> logs = new ArrayList<>();
         
         if (checkField(signals, "gateway_error_502")) {
-            score += 4.0;
+            score += 2.0;
             logs.add("HTTP 502 (Bad Gateway) reported by ingress/gateway");
         }
         if (checkField(signals, "service_unavailable_503")) {
-            score += 4.0;
+            score += 2.0;
             logs.add("HTTP 503 (Service Unavailable) detected");
         }
         if (checkField(signals, "conn_refused")) {
@@ -162,7 +162,7 @@ public class RootCauseIntelligenceService {
         }
         
         if (score > 0) {
-            scores.put("SERVICE_UNREACHABLE", score + 6.0); // Very high priority
+            scores.put("SERVICE_UNREACHABLE", score + 5.0); // Impact of a restart/oom
             evidence.put("SERVICE_UNREACHABLE", logs);
         }
     }
