@@ -118,8 +118,8 @@ public class AlertGroupService {
                 group.setTicket(savedTicket);
                 log.info("TICKET CREATED: id={}, title='{}'", savedTicket.getId(), savedTicket.getTitle());
             } else {
-                log.error("Cannot raise ticket: No environment found for label '{}' and no default environment exists.",
-                        envName);
+                log.error("Cannot raise ticket: No environment found for labels '{}' and no default environment exists.",
+                        labels);
             }
         } else if (isFiring && group.getTicket() != null) {
             // Update existing ticket if new alert joins the same group (e.g. FrontendDown
