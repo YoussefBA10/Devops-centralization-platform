@@ -266,8 +266,14 @@ public class LogAnalyticsService {
         String key = msg;
         // Strip category prefix like "[NETWORK] " or "[APPLICATION] "
         key = key.replaceAll("^\\[\\w+\\]\\s*", "");
-        // Strip ISO timestamps (2026-05-14T21:52:39.616Z)
-        key = key.replaceAll("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z?", "<time>");
+        // Strip ISO timestamps with optional timezone offsets (2026-05-14T21:52:39.616+01:00)
+        key = key.replaceAll("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([+-]\\d{2}:?\\d{2}|Z)?", "<time>");
+        // Strip common log pattern artifacts: [ thread-name ]
+        key = key.replaceAll("--- \\[[^\\]]+\\]", "--- [<thread>]");
+        // Strip log levels
+        key = key.replaceAll("\\b(ERROR|WARN|INFO|DEBUG|TRACE)\\b", "<level>");
+        // Strip memory addresses/hashes (e.g. @7f8a9b)
+        key = key.replaceAll("@[0-9a-f]{6,16}", "@<addr>");
         // Strip epoch-style timestamps
         key = key.replaceAll("\\b\\d{10,13}\\b", "<ts>");
         // Strip IPs
@@ -370,24 +376,12 @@ public class LogAnalyticsService {
 
     private List<ErrorPattern> fetchTopErrors(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
-            log.info("TOP_ERRORS_DEBUG: envLabel={}, appFilter={}, nodeName={}, start={}, end={}", 
-                    envLabel, appFilter, nodeName, start, end);
-            
             // Fetch top error URIs from Prometheus to help map logs to endpoints
             Map<String, String> serviceTopUris = getServiceTopErrorUris(start, end);
 
             org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
                     envLabel, appFilter, nodeName, null, "ERROR", start, end, 
                     org.springframework.data.domain.PageRequest.of(0, 500));
-
-            log.info("TOP_ERRORS_DEBUG: ES returned {} docs (total={})", 
-                    errorLogs.getContent().size(), errorLogs.getTotalElements());
-
-            // Log first few raw messages for debugging
-            errorLogs.getContent().stream().limit(3).forEach(l -> 
-                log.info("TOP_ERRORS_DEBUG: Sample error - service={}, severity={}, rawMsg={}", 
-                    l.getService(), l.getSeverity(), 
-                    l.getRawMessage() != null ? l.getRawMessage().substring(0, Math.min(100, l.getRawMessage().length())) : "null"));
 
             // Filter out stack trace continuation lines — these are noise, not top-level errors
             List<LogEventDTO> meaningfulErrors = errorLogs.getContent().stream()
@@ -411,10 +405,13 @@ public class LogAnalyticsService {
                         return endpoint + "::" + normalizeErrorKey(msg);
                     }));
 
-            log.info("TOP_ERRORS_DEBUG: Grouped into {} unique patterns", patterns.size());
-            patterns.forEach((key, list) -> log.info("TOP_ERRORS_DEBUG: Pattern '{}' -> count={}", 
-                    key.substring(0, Math.min(80, key.length())), list.size()));
-
+            // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
+            Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
+                    .collect(Collectors.groupingBy(log -> {
+                        String endpoint = extractEndpoint(log, serviceTopUris);
+                        String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
+                        return endpoint + "::" + normalizeErrorKey(msg);
+                    }));
             return patterns.entrySet().stream()
                     .map(entry -> {
                         List<LogEventDTO> occurrences = entry.getValue();
