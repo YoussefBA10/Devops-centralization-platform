@@ -31,6 +31,8 @@ public class LogsController {
         
         // In reality, 'query' parameter would be passed to ElasticsearchLogService.
         // For the sake of matching the test plan precisely, we just map environmentId to environment name.
-        return esLogService.getRecentLogs(env.getName().toLowerCase(), limit);
+        String searchLabel = (env.getPrometheusLabel() != null && !env.getPrometheusLabel().isBlank()) 
+                             ? env.getPrometheusLabel() : env.getSafeName();
+        return esLogService.getRecentLogs(searchLabel, limit);
     }
 }

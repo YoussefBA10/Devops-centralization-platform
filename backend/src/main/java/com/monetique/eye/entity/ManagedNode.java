@@ -18,6 +18,7 @@ public class ManagedNode {
     private Long id;
 
     @Version
+    @Builder.Default
     private Long version = 0L;
 
     @Column(nullable = false)

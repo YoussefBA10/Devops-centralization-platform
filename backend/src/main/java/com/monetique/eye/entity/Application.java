@@ -22,6 +22,7 @@ public class Application {
     private Long id;
 
     @Version
+    @Builder.Default
     private Long version = 0L;
 
     @ManyToOne(fetch = FetchType.LAZY)
