@@ -290,38 +290,43 @@ public class LogAnalyticsService {
     }
 
     private String extractEndpoint(LogEventDTO log, Map<String, String> serviceTopUris) {
-        // 1. Prefer explicit URI if available
-        if (log.getUri() != null && !log.getUri().isBlank()) {
+        String service = log.getService() != null ? log.getService() : "unknown";
+        String category = log.getCategory() != null ? log.getCategory() : "APPLICATION";
+        
+        // 1. Prefer explicit URI if available, but skip generic "/**"
+        if (log.getUri() != null && !log.getUri().isBlank() && !"/ **".equals(log.getUri().replaceAll("\\s+", "")) && !"/**".equals(log.getUri())) {
             return log.getUri();
         }
 
         String msg = log.getRawMessage();
-        if (msg == null) return log.getService() != null ? log.getService() : "unknown";
+        if (msg != null) {
+            // 2. Heuristic: Look for HTTP method + path (e.g. "GET /api/v1/auth/login")
+            java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH)\\s+([^\\s?\":,]+)").matcher(msg);
+            if (m1.find()) {
+                String path = m1.group(2);
+                if (!"/**".equals(path)) return path;
+            }
 
-        // 2. Heuristic: Look for HTTP method + path (e.g. "GET /api/v1/auth/login")
-        java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH)\\s+([^\\s?]+)").matcher(msg);
-        if (m1.find()) {
-            return m1.group(2);
+            // 3. Heuristic: Look for path-like strings starting with /api/
+            java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("(/api/[^\\s?\":,]+)").matcher(msg);
+            if (m2.find()) {
+                String path = m2.group(1);
+                if (!"/**".equals(path)) return path;
+            }
         }
 
-        // 3. Heuristic: Look for path-like strings starting with /api/
-        java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("(/api/[^\\s?\":,]+)").matcher(msg);
-        if (m2.find()) {
-            return m2.group(1);
-        }
-
-        // 4. Prometheus Lookup: Use the most error-prone URI for this service
-        // BUT ONLY if the log seems to be a system error (500) and we have a 5xx URI
+        // 4. Prometheus Lookup: Use the most error-prone URI for this service, skip generic "/**"
         if (log.getService() != null && serviceTopUris.containsKey(log.getService())) {
             String uri = serviceTopUris.get(log.getService());
-            // If it's a generic backend error, the Prometheus URI is a better guess than just 'backend'
-            return uri;
+            if (uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
+                return uri;
+            }
         }
 
-        // 5. Fallback to service name
-        String endpoint = log.getService() != null ? log.getService() : "unknown";
-        if (log.getCategory() != null && !"APPLICATION".equals(log.getCategory())) {
-            endpoint = endpoint + " [" + log.getCategory() + "]";
+        // 5. Fallback to service name + category
+        String endpoint = service;
+        if (!"APPLICATION".equals(category)) {
+            endpoint = endpoint + " [" + category + "]";
         }
         return endpoint;
     }
@@ -342,7 +347,7 @@ public class LogAnalyticsService {
                 String uri = metric.get("uri");
                 double val = Double.parseDouble(res.get("value").toString());
                 
-                if (job != null && uri != null) {
+                if (job != null && uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
                     String simpleJob = job.replace("monetique-", "").replace("-service", "");
                     if (val > maxCounts.getOrDefault(simpleJob, -1.0)) {
                         maxCounts.put(simpleJob, val);
@@ -360,7 +365,7 @@ public class LogAnalyticsService {
                 String uri = metric.get("uri");
                 double val = Double.parseDouble(res.get("value").toString());
                 
-                if (job != null && uri != null) {
+                if (job != null && uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
                     String simpleJob = job.replace("monetique-", "").replace("-service", "");
                     if (!mapping.containsKey(simpleJob) && val > maxCounts.getOrDefault(simpleJob, -1.0)) {
                         maxCounts.put(simpleJob, val);
