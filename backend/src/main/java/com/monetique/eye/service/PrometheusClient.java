@@ -239,6 +239,12 @@ public class PrometheusClient {
         return queryList(query);
     }
 
+    public List<Map<String, Object>> getOomEvents(String envFilter, String appFilter) {
+        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s\"}[15m]) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s\"}[15m]) > 0)",
+                appFilter, envFilter, appFilter, envFilter);
+        return queryList(query);
+    }
+
     private String buildContainerQuery(String baseMetric, String suffix, String envFilter) {
         String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
         return String.format("%1$s{%2$s, environment=~\"%3$s\"}%4$s or %1$s{%2$s, container_label_env=~\"%3$s\"}%4$s", 

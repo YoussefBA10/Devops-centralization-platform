@@ -13,8 +13,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class RootCauseIntelligenceService {
-
     private final ElasticsearchLogClient esClient;
+    private final PrometheusClient prometheusClient;
 
     /**
      * Correlates signals to detect root cause categories.
@@ -31,7 +31,7 @@ public class RootCauseIntelligenceService {
         Map<String, List<String>> evidenceMap = new HashMap<>();
 
         processDbFailure(signals, scores, evidenceMap);
-        processMemoryPressure(signals, scores, evidenceMap);
+        processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter);
         processNetworkFailure(signals, scores, evidenceMap);
         processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
@@ -52,7 +52,7 @@ public class RootCauseIntelligenceService {
                             .description(generateDescription(category, evidenceMap.get(category)))
                             .confidence(confidence)
                             .evidence(evidenceMap.get(category))
-                            .sources(List.of("Elasticsearch", "Logstash-SRE"))
+                            .sources(List.of("Elasticsearch", "Logstash-SRE", "Prometheus", "cAdvisor"))
                             .build();
                 })
                 .limit(3)
@@ -95,10 +95,11 @@ public class RootCauseIntelligenceService {
         }
     }
 
-    private void processMemoryPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+    private void processMemoryPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter) {
         double score = 0;
         List<String> logs = new ArrayList<>();
         
+        // Log-based signals
         if (checkField(signals, "heap_90_plus")) {
             score += 3.0;
             logs.add("heap usage >90% detected across nodes");
@@ -106,6 +107,17 @@ public class RootCauseIntelligenceService {
         if (checkField(signals, "oom_error_count")) {
             score += 5.0;
             logs.add("OutOfMemoryError detected in log stream");
+        }
+
+        // Metric-based signals (Prometheus/cAdvisor)
+        try {
+            List<Map<String, Object>> oomEvents = prometheusClient.getOomEvents(envLabel, appFilter);
+            if (!oomEvents.isEmpty()) {
+                score += 8.0; // Very high confidence if metric says so
+                logs.add("Container OOM Kill event detected by cAdvisor/cgroups");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch Prometheus OOM signals: {}", e.getMessage());
         }
 
         if (score > 0) {
