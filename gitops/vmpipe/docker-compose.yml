@@ -298,6 +298,10 @@ services:
       MONETIQUE_GITOPS_PATH: "./gitops"
     ports:
       - "8880:8880"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     depends_on:
       mysql:
         condition: service_healthy
