@@ -395,16 +395,6 @@ public class LogAnalyticsService {
                     })
                     .collect(Collectors.toList());
 
-            log.info("TOP_ERRORS_DEBUG: After stack trace filtering: {} meaningful errors", meaningfulErrors.size());
-
-            // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
-            Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
-                    .collect(Collectors.groupingBy(log -> {
-                        String endpoint = extractEndpoint(log, serviceTopUris);
-                        String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
-                        return endpoint + "::" + normalizeErrorKey(msg);
-                    }));
-
             // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
             Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
                     .collect(Collectors.groupingBy(log -> {
