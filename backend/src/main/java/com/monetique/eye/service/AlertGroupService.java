@@ -58,7 +58,11 @@ public class AlertGroupService {
             String alertName = labels.getOrDefault("alertname", "unknown");
 
             // 1. Resolve Environment (Mandatory for Ticket)
-            String envName = labels.getOrDefault("environment", labels.getOrDefault("env", "unknown"));
+            String envName = labels.getOrDefault("environment", 
+                             labels.getOrDefault("env", 
+                             labels.getOrDefault("container_label_env",
+                             labels.getOrDefault("container_label_com_monetique_environment",
+                             labels.getOrDefault("nodename", "unknown")))));
             com.monetique.eye.entity.Environment env = environmentRepository.findByName(envName)
                     .orElseGet(() -> {
                         // Fallback 1: Try to resolve environment from node IP (instance/node label)
