@@ -59,6 +59,7 @@ public class LogAnalyticsResponseDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ErrorPattern {
+        private String service;
         private String endpoint;
         private String messageExcerpt;
         private int statusCode;

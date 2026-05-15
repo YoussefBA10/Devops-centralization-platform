@@ -24,7 +24,7 @@ public class CorrelationEngine {
     public AlertGroup correlate(Map<String, String> labels, String severity) {
         String serviceName = labels.get("service_name");
         if (serviceName == null) {
-            serviceName = labels.getOrDefault("application", "unknown");
+            serviceName = labels.getOrDefault("application", labels.getOrDefault("job", "unknown"));
         }
         String alertName = labels.getOrDefault("alertname", "unknown");
 

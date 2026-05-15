@@ -73,6 +73,8 @@ groups:
         for: "2m"
         labels:
           severity: "critical"
+          application: "{{ $labels.job }}"
+          service_name: "{{ $labels.job }}"
         annotations:
           summary: "High HTTP error rate on {{ $labels.job }}"
           description: "More than 5% of requests to {{ $labels.job }} ({{ $labels.instance }}) are failing with 5xx errors."
@@ -82,6 +84,8 @@ groups:
         for: "5m"
         labels:
           severity: "warning"
+          application: "{{ $labels.job }}"
+          service_name: "{{ $labels.job }}"
         annotations:
           summary: "High latency on {{ $labels.job }}"
           description: "95th percentile latency for {{ $labels.uri }} on {{ $labels.job }} is > 2 seconds."
@@ -93,6 +97,7 @@ groups:
         for: "1m"
         labels:
           severity: "critical"
+          application: "{{ $labels.name }}"
         annotations:
           summary: "Container {{ $labels.name }} OOM Killed"
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} was killed due to out of memory."
@@ -102,6 +107,7 @@ groups:
         for: "5m"
         labels:
           severity: "warning"
+          application: "{{ $labels.name }}"
         annotations:
           summary: "Container {{ $labels.name }} using high memory"
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} is using >90% of its memory limit."
@@ -111,6 +117,7 @@ groups:
         for: "5m"
         labels:
           severity: "warning"
+          application: "{{ $labels.name }}"
         annotations:
           summary: "Container {{ $labels.name }} using high CPU"
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} is using high CPU."
@@ -120,6 +127,7 @@ groups:
         for: "5m"
         labels:
           severity: "warning"
+          application: "{{ $labels.name }}"
         annotations:
           summary: "Container {{ $labels.name }} CPU throttled"
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} is being heavily CPU throttled."
@@ -129,6 +137,7 @@ groups:
         for: "15m"
         labels:
           severity: "critical"
+          application: "{{ $labels.name }}"
         annotations:
           summary: "Container {{ $labels.name }} in restart loop"
           description: "Container {{ $labels.name }} on {{ $labels.nodename }} restarted >2 times in 15 minutes."

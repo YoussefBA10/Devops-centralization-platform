@@ -75,34 +75,33 @@ public class LogAnalyticsService {
         String appEnvLabel = envLabel;     // For HTTP/DB metrics tied to the environment's backend
         String appNodeName = nodeName;
 
+        String appFilter = (effectiveServiceName != null && !effectiveServiceName.isBlank()) ? effectiveServiceName : ".*";
+
+        // Broaden search to all apps in the environment for a unified view
+        // The frontend will handle filtering if the user wants to isolate a single service.
+        appFilter = ".*";
+        containerEnvLabel = envLabel;
+
         List<Application> apps = new ArrayList<>();
-        
         if (effectiveServiceName != null && !effectiveServiceName.isBlank()) {
             Application targetApp = applicationRepository.findByName(effectiveServiceName).orElse(null);
-            
             if (targetApp != null) {
                 apps.add(targetApp);
-                // Also try to find related apps by service keyword to ensure we get container metrics correctly
                 if (targetApp.getServiceNameKeyword() != null) {
                     applicationRepository.findAllByServiceNameKeyword(targetApp.getServiceNameKeyword())
                         .stream()
                         .filter(a -> !a.getId().equals(targetApp.getId()))
                         .forEach(apps::add);
                 }
-            } else {
-                containerEnvLabel = ".*";
-                containerNodeName = null;
             }
-            // Also load all apps for the selected environment for broader context
-            List<Application> envApps = applicationRepository.findByEnvironmentId(environmentId);
-            for (Application a : envApps) {
-                if (!apps.contains(a)) apps.add(a);
-            }
-        } else {
-            apps = applicationRepository.findByEnvironmentId(environmentId);
         }
         
-        String appFilter = (serviceName != null && !serviceName.isBlank()) ? serviceName : ".*";
+        // Always include all environment apps for broad context as requested
+        List<Application> envApps = applicationRepository.findByEnvironmentId(environmentId);
+        for (Application a : envApps) {
+            if (!apps.contains(a)) apps.add(a);
+        }
+        
         // For Spring Boot metrics (HTTP, DB), use a broader filter that matches any app in the env
         String springFilter = apps.isEmpty() ? ".*" : apps.stream()
                 .map(Application::getServiceNameKeyword)
@@ -110,8 +109,8 @@ public class LogAnalyticsService {
                 .collect(Collectors.joining("|"));
         if (springFilter.isEmpty()) springFilter = ".*";
 
-        log.info("ANALYTICS DEBUG: containerEnv={}, containerNode={}, appEnv={}, appNode={}, appFilter={}, springFilter={}", 
-                containerEnvLabel, containerNodeName, appEnvLabel, appNodeName, appFilter, springFilter);
+        log.info("ANALYTICS: environmentId={} envLabel={} appFilter={} appsCount={}", 
+                environmentId, envLabel, appFilter, apps.size());
 
         return LogAnalyticsResponseDTO.builder()
                 .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName))
@@ -392,9 +391,10 @@ public class LogAnalyticsService {
             // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
             Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
                     .collect(Collectors.groupingBy(log -> {
+                        String service = log.getService() != null ? log.getService() : "unknown";
                         String endpoint = extractEndpoint(log, serviceTopUris);
                         String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
-                        return endpoint + "::" + normalizeErrorKey(msg);
+                        return service + "::" + endpoint + "::" + normalizeErrorKey(msg);
                     }));
             return patterns.entrySet().stream()
                     .map(entry -> {
@@ -432,6 +432,7 @@ public class LogAnalyticsService {
                         }
 
                         return ErrorPattern.builder()
+                                .service(first.getService() != null ? first.getService() : "unknown")
                                 .endpoint(endpoint)
                                 .messageExcerpt(excerpt)
                                 .statusCode(statusCode)
