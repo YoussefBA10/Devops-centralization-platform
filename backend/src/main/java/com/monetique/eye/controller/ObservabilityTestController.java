@@ -63,4 +63,13 @@ public class ObservabilityTestController {
         log.warn("[APPLICATION] Simulated memory leak: heap usage above 90%");
         return ResponseEntity.status(500).body(Map.of("message", "Leak simulation triggered"));
     }
+
+    @GetMapping("/oom")
+    public void triggerOom() {
+        log.error("[CRITICAL] Starting memory exhaustion... Container will be OOM killed.");
+        java.util.List<byte[]> list = new java.util.ArrayList<>();
+        while (true) {
+            list.add(new byte[50 * 1024 * 1024]); // 50MB chunks
+        }
+    }
 }
