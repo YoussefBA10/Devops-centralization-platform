@@ -293,43 +293,39 @@ public class LogAnalyticsService {
         String service = log.getService() != null ? log.getService() : "unknown";
         String category = log.getCategory() != null ? log.getCategory() : "APPLICATION";
         
-        // 1. Prefer explicit URI if available, but skip generic "/**"
-        if (log.getUri() != null && !log.getUri().isBlank() && !"/ **".equals(log.getUri().replaceAll("\\s+", "")) && !"/**".equals(log.getUri())) {
-            return log.getUri();
+        // 1. Trust explicit URI metadata if available (and not generic)
+        String explicitUri = log.getUri();
+        if (explicitUri != null && !explicitUri.isBlank()) {
+            String normalized = explicitUri.replaceAll("\\s+", "");
+            if (!"/**".equals(normalized) && !"/ **".equals(normalized)) {
+                return explicitUri;
+            }
         }
 
+        // 2. Heuristic parsing of the log message
         String msg = log.getRawMessage();
         if (msg != null) {
-            // 2. Heuristic: Look for HTTP method + path (e.g. "GET /api/v1/auth/login")
-            java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH)\\s+([^\\s?\":,]+)").matcher(msg);
-            if (m1.find()) {
-                String path = m1.group(2);
+            // Look for common patterns like "GET /path" or "at /path"
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH|at)\\s+([^\\s?\":,]+)").matcher(msg);
+            if (m.find()) {
+                String path = m.group(2);
                 if (!"/**".equals(path)) return path;
             }
 
-            // 3. Heuristic: Look for path-like strings starting with /api/
-            java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("(/api/[^\\s?\":,]+)").matcher(msg);
-            if (m2.find()) {
-                String path = m2.group(1);
+            // Look for generic /api/ paths
+            java.util.regex.Matcher mApi = java.util.regex.Pattern.compile("(/api/[^\\s?\":,]+)").matcher(msg);
+            if (mApi.find()) {
+                String path = mApi.group(1);
                 if (!"/**".equals(path)) return path;
             }
         }
 
-        // 4. Prometheus Lookup: Use the most error-prone URI for this service
-        // Only do this for generic APPLICATION logs, as DATABASE/NETWORK errors shouldn't be mapped to an arbitrary HTTP path.
-        if ("APPLICATION".equals(category) && log.getService() != null && serviceTopUris.containsKey(log.getService())) {
-            String uri = serviceTopUris.get(log.getService());
-            if (uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
-                return uri;
-            }
+        // 3. Fallback to Service Name + Category
+        // This is the most reliable "standard" way when URIs aren't logged.
+        if ("APPLICATION".equals(category)) {
+            return service;
         }
-
-        // 5. Fallback to service name + category
-        String endpoint = service;
-        if (!"APPLICATION".equals(category)) {
-            endpoint = endpoint + " [" + category + "]";
-        }
-        return endpoint;
+        return service + " [" + category + "]";
     }
 
     private Map<String, String> getServiceTopErrorUris(Instant start, Instant end) {

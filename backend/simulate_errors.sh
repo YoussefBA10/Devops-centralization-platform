@@ -1,9 +1,9 @@
 #!/bin/bash
 
 BASE_URL="http://localhost:8880/api/v1/test"
-ENDPOINTS=("error" "db-error" "io-error" "timeout")
-TOTAL_REQUESTS=40 # 10 per endpoint per iteration
-ERROR_RATE=25 # 25% chance of error on the generic "error" endpoint
+ENDPOINTS=("error" "db-error" "io-error" "timeout" "leak")
+TOTAL_REQUESTS=50 # 10 per endpoint per iteration
+ERROR_RATE=25
 
 echo -e "\e[36mStarting multi-endpoint error burst to trigger observability alerts...\e[0m"
 echo "Target Base: $BASE_URL"
