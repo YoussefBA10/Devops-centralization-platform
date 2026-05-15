@@ -75,11 +75,7 @@ public class LogAnalyticsService {
         String appEnvLabel = envLabel;     // For HTTP/DB metrics tied to the environment's backend
         String appNodeName = nodeName;
 
-        String appFilter = (effectiveServiceName != null && !effectiveServiceName.isBlank()) ? effectiveServiceName : ".*";
-
-        // Broaden search to all apps in the environment for a unified view
-        // The frontend will handle filtering if the user wants to isolate a single service.
-        appFilter = ".*";
+        // We will build a specific appFilter later based on registered apps
         containerEnvLabel = envLabel;
 
         List<Application> apps = new ArrayList<>();
@@ -108,6 +104,9 @@ public class LogAnalyticsService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.joining("|"));
         if (springFilter.isEmpty()) springFilter = ".*";
+
+        // Restricted appFilter: Only include registered microservices, not infra tools
+        String appFilter = springFilter;
 
         log.info("ANALYTICS: environmentId={} envLabel={} appFilter={} appsCount={}", 
                 environmentId, envLabel, appFilter, apps.size());
@@ -211,13 +210,13 @@ public class LogAnalyticsService {
                 .build());
 
         // Individual Service Traffic (If looking at multiple apps)
-        if (".*".equals(appFilter)) {
+        if (".*".equals(appFilter) || apps.size() > 1) {
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\"%s}[%s]))", envLabel, nodeFilter(nodeName), rateInterval),
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
                 "req/s", start, end, step, 12));
             
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\"%s}[%s])) * 60", envLabel, nodeFilter(nodeName), rateInterval),
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
                 "errors/min", start, end, step, 12));
         } else {
             datasets.add(ChartData.Series.builder()
