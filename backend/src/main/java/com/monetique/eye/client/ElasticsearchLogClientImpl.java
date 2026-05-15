@@ -241,6 +241,9 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 .aggregations("cb_open", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("circuit_breaker_state.keyword").value("open"))))))
                 .aggregations("npe_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("exception_type.keyword").value("java.lang.NullPointerException"))))))
                 .aggregations("rate_limit_429", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(429))))))
+                .aggregations("gateway_error_502", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(502))))))
+                .aggregations("service_unavailable_503", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(503))))))
+                .aggregations("conn_refused", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Connection refused"))))))
             , Void.class);
 
             response.aggregations().forEach((name, agg) -> {

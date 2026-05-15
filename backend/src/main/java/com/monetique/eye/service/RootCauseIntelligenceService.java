@@ -33,6 +33,7 @@ public class RootCauseIntelligenceService {
         processDbFailure(signals, scores, evidenceMap);
         processMemoryPressure(signals, scores, evidenceMap);
         processNetworkFailure(signals, scores, evidenceMap);
+        processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
         processTrafficSpike(signals, scores, evidenceMap);
 
@@ -143,6 +144,29 @@ public class RootCauseIntelligenceService {
         }
     }
 
+    private void processServiceUnreachable(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+        double score = 0;
+        List<String> logs = new ArrayList<>();
+        
+        if (checkField(signals, "gateway_error_502")) {
+            score += 4.0;
+            logs.add("HTTP 502 (Bad Gateway) reported by ingress/gateway");
+        }
+        if (checkField(signals, "service_unavailable_503")) {
+            score += 4.0;
+            logs.add("HTTP 503 (Service Unavailable) detected");
+        }
+        if (checkField(signals, "conn_refused")) {
+            score += 3.0;
+            logs.add("'Connection refused' detected in peer logs");
+        }
+        
+        if (score > 0) {
+            scores.put("SERVICE_UNREACHABLE", score + 6.0); // Very high priority
+            evidence.put("SERVICE_UNREACHABLE", logs);
+        }
+    }
+
     private void processTrafficSpike(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
         double score = 0;
         List<String> logs = new ArrayList<>();
@@ -163,7 +187,7 @@ public class RootCauseIntelligenceService {
     }
 
     private String getRuleType(String category) {
-        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM")) return "root_cause";
+        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM") || category.equals("SERVICE_UNREACHABLE")) return "root_cause";
         if (category.equals("BUG_CRASH")) return "trigger";
         return "impact";
     }
