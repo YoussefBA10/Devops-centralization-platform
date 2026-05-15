@@ -20,6 +20,7 @@ public class LogAnalyticsResponseDTO {
     private List<ResourcePressure> resourcePressure;
     private List<RootCauseRule> rootCauseChain;
     private List<LogEventDTO> liveLogs;
+    private List<String> availableServices;
 
     @Data
     @Builder

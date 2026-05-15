@@ -106,10 +106,17 @@ public class LogAnalyticsService {
         if (springFilter.isEmpty()) springFilter = ".*";
 
         // Restricted appFilter: Only include registered microservices, not infra tools
-        String appFilter = springFilter;
+        // If a specific service is requested, we isolate it. Otherwise, we show everything in the env.
+        String appFilter = (serviceName != null && !serviceName.isBlank()) ? serviceName : springFilter;
 
-        log.info("ANALYTICS: environmentId={} envLabel={} appFilter={} appsCount={}", 
-                environmentId, envLabel, appFilter, apps.size());
+        List<String> availableServices = apps.stream()
+                .map(Application::getName)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        log.info("ANALYTICS: environmentId={} envLabel={} appFilter={} appsCount={} requestedService={}", 
+                environmentId, envLabel, appFilter, apps.size(), serviceName);
 
         return LogAnalyticsResponseDTO.builder()
                 .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName))
@@ -119,6 +126,7 @@ public class LogAnalyticsService {
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
                 .rootCauseChain(calculateRootCauseChain(containerEnvLabel, appFilter, containerNodeName))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
+                .availableServices(availableServices)
                 .build();
     }
 
