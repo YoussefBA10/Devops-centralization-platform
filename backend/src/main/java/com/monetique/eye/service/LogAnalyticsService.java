@@ -246,9 +246,13 @@ public class LogAnalyticsService {
         List<ChartData.Series> seriesList = new ArrayList<>();
         Map<String, Object> rangeData = prometheusClient.queryRange(query, String.valueOf(start.getEpochSecond()), String.valueOf(end.getEpochSecond()), step);
         
+        // Vibrant color palette for microservices (excluding black)
+        String[] palette = {"#8b5cf6", "#ec4899", "#10b981", "#06b6d4", "#f97316", "#a855f7", "#14b8a6", "#f43f5e"};
+        
         try {
             List<Map> results = (List<Map>) rangeData.get("result");
             if (results != null) {
+                int colorIdx = 0;
                 for (Map res : results) {
                     Map<String, String> metric = (Map<String, String>) res.get("metric");
                     String job = metric.get("job");
@@ -275,8 +279,11 @@ public class LogAnalyticsService {
                     seriesList.add(ChartData.Series.builder()
                             .label(serviceName + " " + labelSuffix)
                             .data(java.util.Arrays.asList(dataPoints))
+                            .color(palette[colorIdx % palette.length])
                             .fill(false)
                             .build());
+                    
+                    colorIdx++;
                 }
             }
         } catch (Exception e) {
