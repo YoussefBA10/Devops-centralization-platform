@@ -58,27 +58,40 @@ public class AlertGroupService {
             String alertName = labels.getOrDefault("alertname", "unknown");
 
             // 1. Resolve Environment (Mandatory for Ticket)
-            String envName = labels.getOrDefault("environment", 
-                             labels.getOrDefault("env", 
-                             labels.getOrDefault("container_label_env",
-                             labels.getOrDefault("container_label_com_monetique_environment",
-                             labels.getOrDefault("nodename", "unknown")))));
-            com.monetique.eye.entity.Environment env = environmentRepository.findByName(envName)
-                    .orElseGet(() -> {
-                        // Fallback 1: Try to resolve environment from node IP (instance/node label)
-                        String instance = labels.getOrDefault("instance", labels.get("node"));
-                        if (instance != null) {
-                            String ip = instance.contains(":") ? instance.substring(0, instance.indexOf(":")) : instance;
-                            return managedNodeRepository.findByIp(ip)
-                                    .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
-                                    .orElse(null);
-                        }
-                        return null;
-                    });
+            // Strategy: Node DB Lookup > IP DB Lookup > Label 'environment' > Label 'env'
+            com.monetique.eye.entity.Environment env = null;
 
-            // Fallback 2: Pick first environment if still not found
+            // Attempt A: Node Name Lookup
+            String nodeLabel = labels.getOrDefault("nodename", labels.get("node"));
+            if (nodeLabel != null) {
+                env = managedNodeRepository.findByNodeName(nodeLabel)
+                        .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
+                        .orElse(null);
+            }
+
+            // Attempt B: IP Lookup
             if (env == null) {
-                log.warn("Environment '{}' not found by name or IP, falling back to first available", envName);
+                String instance = labels.get("instance");
+                if (instance != null) {
+                    String ip = instance.contains(":") ? instance.substring(0, instance.indexOf(":")) : instance;
+                    env = managedNodeRepository.findByIp(ip)
+                            .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
+                            .orElse(null);
+                }
+            }
+
+            // Attempt C: Labels
+            if (env == null) {
+                String envName = labels.getOrDefault("environment", 
+                                 labels.getOrDefault("env", 
+                                 labels.getOrDefault("container_label_env",
+                                 labels.getOrDefault("container_label_com_monetique_environment", "unknown"))));
+                env = environmentRepository.findByName(envName).orElse(null);
+            }
+
+            // Fallback: Pick first environment if still not found
+            if (env == null) {
+                log.warn("Environment could not be resolved from node/IP or labels, falling back to first available");
                 env = environmentRepository.findAll().stream().findFirst().orElse(null);
             }
 
