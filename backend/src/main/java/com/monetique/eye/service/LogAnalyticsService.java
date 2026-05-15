@@ -200,14 +200,90 @@ public class LogAnalyticsService {
         String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
         List<String> labels = generateTimeLabels(start, end, 12);
         
+        List<ChartData.Series> datasets = new ArrayList<>();
+        
+        // Total Traffic (The primary line)
+        datasets.add(ChartData.Series.builder()
+                .label("Total req/s")
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .color("#3b82f6")
+                .fill(false)
+                .build());
+
+        // Individual Service Traffic (If looking at multiple apps)
+        if (".*".equals(appFilter)) {
+            datasets.addAll(fetchMultiRangeMetric(
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\"%s}[%s]))", envLabel, nodeFilter(nodeName), rateInterval),
+                "req/s", start, end, step, 12));
+            
+            datasets.addAll(fetchMultiRangeMetric(
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\"%s}[%s])) * 60", envLabel, nodeFilter(nodeName), rateInterval),
+                "errors/min", start, end, step, 12));
+        } else {
+            datasets.add(ChartData.Series.builder()
+                .label("errors/min")
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .color("#ef4444")
+                .fill(true)
+                .build());
+        }
+
+        // DB Pool (Aggregated)
+        datasets.add(ChartData.Series.builder()
+                .label("DB pool %")
+                .data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12))
+                .color("#f59e0b")
+                .dashed(true)
+                .fill(false)
+                .build());
+
         return ChartData.builder()
                 .labels(labels)
-                .datasets(List.of(
-                        ChartData.Series.builder().label("req/s").data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#3b82f6").fill(false).build(),
-                        ChartData.Series.builder().label("errors/min").data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12)).color("#ef4444").fill(true).build(),
-                        ChartData.Series.builder().label("DB pool %").data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12)).color("#f59e0b").dashed(true).fill(false).build()
-                ))
+                .datasets(datasets)
                 .build();
+    }
+
+    private List<ChartData.Series> fetchMultiRangeMetric(String query, String labelSuffix, Instant start, Instant end, String step, int count) {
+        List<ChartData.Series> seriesList = new ArrayList<>();
+        Map<String, Object> rangeData = prometheusClient.queryRange(query, String.valueOf(start.getEpochSecond()), String.valueOf(end.getEpochSecond()), step);
+        
+        try {
+            List<Map> results = (List<Map>) rangeData.get("result");
+            if (results != null) {
+                for (Map res : results) {
+                    Map<String, String> metric = (Map<String, String>) res.get("metric");
+                    String job = metric.get("job");
+                    if (job == null) job = "unknown";
+                    String serviceName = job.replace("monetique-", "").replace("-service", "");
+                    
+                    Double[] dataPoints = new Double[count];
+                    java.util.Arrays.fill(dataPoints, 0.0);
+                    
+                    List<List<Object>> values = (List<List<Object>>) res.get("values");
+                    long startSec = start.getEpochSecond();
+                    long endSec = end.getEpochSecond();
+                    long stepSec = Math.max(1, (endSec - startSec) / (count - 1));
+
+                    for (List<Object> value : values) {
+                        double ts = Double.parseDouble(value.get(0).toString());
+                        double val = Double.parseDouble(value.get(1).toString());
+                        int bucket = (int) ((ts - startSec) / stepSec);
+                        if (bucket >= 0 && bucket < count) {
+                            dataPoints[bucket] = val;
+                        }
+                    }
+
+                    seriesList.add(ChartData.Series.builder()
+                            .label(serviceName + " " + labelSuffix)
+                            .data(java.util.Arrays.asList(dataPoints))
+                            .fill(false)
+                            .build());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch multi-range metric: {}", e.getMessage());
+        }
+        return seriesList;
     }
 
     private List<Double> fetchRangeMetric(String query, Instant start, Instant end, String step, int count) {

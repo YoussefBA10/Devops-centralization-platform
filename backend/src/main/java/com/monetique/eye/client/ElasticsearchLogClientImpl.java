@@ -62,15 +62,14 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 ));
             }
 
-            // Build a list of possible matching names
-            List<String> namesToMatch = new ArrayList<>();
+            // 1. Environment Filter (Mandatory if provided)
             if (displayName != null && !displayName.equals(".*")) {
-                namesToMatch.add(displayName);
-                // Also add a version with underscores instead of hyphens
-                namesToMatch.add(displayName.replace("-", "_"));
+                boolQuery.filter(f -> f.term(t -> t.field("environment.keyword").value(displayName.toLowerCase())));
             }
-            if (keywordName != null && !keywordName.equals(".*")) {
-                // If keywordName contains pipes (PromQL OR syntax), split and add each
+
+            // 2. Service Filter (Conditional)
+            if (keywordName != null && !keywordName.isBlank() && !keywordName.equals(".*")) {
+                List<String> namesToMatch = new ArrayList<>();
                 if (keywordName.contains("|")) {
                     for (String part : keywordName.split("\\|")) {
                         if (!part.isBlank()) {
@@ -82,22 +81,20 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     namesToMatch.add(keywordName);
                     namesToMatch.add(keywordName.replace("-", "_"));
                 }
-            }
 
-            // Only add the service name filter if we have specific names to match
-            if (!namesToMatch.isEmpty()) {
-                boolQuery.must(m -> m.bool(b -> {
-                    namesToMatch.forEach(name -> {
-                        // Use wildcard to match names like 'vmpipe_angular-nginx-app_1'
-                        String wildcardName = "*" + name + "*";
-                        b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
-                        b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
-                        b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
-                        b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
-                        b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
-                    });
-                    return b.minimumShouldMatch("1");
-                }));
+                if (!namesToMatch.isEmpty()) {
+                    boolQuery.must(m -> m.bool(b -> {
+                        namesToMatch.forEach(name -> {
+                            String wildcardName = "*" + name + "*";
+                            b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
+                        });
+                        return b.minimumShouldMatch("1");
+                    }));
+                }
             }
 
             if (queryStr != null && !queryStr.isBlank()) {
