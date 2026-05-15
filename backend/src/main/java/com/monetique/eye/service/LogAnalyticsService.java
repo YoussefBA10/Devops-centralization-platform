@@ -113,7 +113,7 @@ public class LogAnalyticsService {
 
         return LogAnalyticsResponseDTO.builder()
                 .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName))
-                .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, springFilter, appNodeName, start, end))
+                .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, appFilter, appNodeName, apps, start, end))
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
@@ -193,7 +193,7 @@ public class LogAnalyticsService {
         return cards;
     }
 
-    private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
+    private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, String nodeName, List<Application> apps, Instant start, Instant end) {
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
