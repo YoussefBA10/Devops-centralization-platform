@@ -18,7 +18,7 @@ public class ObservabilityTestController {
     @GetMapping("/error")
     public ResponseEntity<?> triggerError(@RequestParam(defaultValue = "500") int code) {
         if (code >= 400 && code < 600) {
-            log.error("[APPLICATION] Simulated generic error for code {} at /api/v1/test/error", code);
+            log.error("[APPLICATION] Simulated generic error for code {}", code);
             return ResponseEntity.status(code).body(Map.of(
                 "status", "error",
                 "message", "Simulated generic error",
@@ -30,7 +30,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/db-error")
     public ResponseEntity<?> triggerDbError() {
-        log.error("[DATABASE] SQL Error: 1064, SQLState: 42000 at /api/v1/test/db-error");
+        log.error("[DATABASE] Simulated SQL exception in user repository");
         return ResponseEntity.status(500).body(Map.of(
             "status", "error",
             "type", "DATABASE",
@@ -40,7 +40,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/io-error")
     public ResponseEntity<?> triggerIoError() {
-        log.error("[IO] Connection reset by peer at /api/v1/test/io-error");
+        log.error("[IO] Connection reset by peer during file upload");
         return ResponseEntity.status(500).body(Map.of(
             "status", "error",
             "type", "IO",
@@ -50,7 +50,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/timeout")
     public ResponseEntity<?> triggerTimeout() {
-        log.error("[NETWORK] Gateway Timeout at /api/v1/test/timeout");
+        log.error("[NETWORK] Gateway Timeout: Remote service not responding");
         return ResponseEntity.status(504).body(Map.of(
             "status", "error",
             "type", "NETWORK",
@@ -60,7 +60,7 @@ public class ObservabilityTestController {
 
     @GetMapping("/leak")
     public ResponseEntity<?> simulateLeak() {
-        log.error("[APPLICATION] Simulated memory leak warning at /api/v1/test/leak");
+        log.warn("[APPLICATION] Simulated memory leak: heap usage above 90%");
         return ResponseEntity.status(500).body(Map.of("message", "Leak simulation triggered"));
     }
 }

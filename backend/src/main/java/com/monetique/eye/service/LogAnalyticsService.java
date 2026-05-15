@@ -293,35 +293,27 @@ public class LogAnalyticsService {
         String service = log.getService() != null ? log.getService() : "unknown";
         String category = log.getCategory() != null ? log.getCategory() : "APPLICATION";
         
-        // 1. Trust explicit URI metadata if available (and not generic)
-        String explicitUri = log.getUri();
-        if (explicitUri != null && !explicitUri.isBlank()) {
-            String normalized = explicitUri.replaceAll("\\s+", "");
+        // 1. Trust explicit URI metadata if available (the industry standard for structured logs)
+        if (log.getUri() != null && !log.getUri().isBlank()) {
+            String normalized = log.getUri().replaceAll("\\s+", "");
             if (!"/**".equals(normalized) && !"/ **".equals(normalized)) {
-                return explicitUri;
+                return log.getUri();
             }
         }
 
-        // 2. Heuristic parsing of the log message
+        // 2. Fallback to heuristic parsing of the log message (for legacy apps)
         String msg = log.getRawMessage();
         if (msg != null) {
-            // Look for common patterns like "GET /path" or "at /path"
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH|at)\\s+([^\\s?\":,]+)").matcher(msg);
+            // Look for standard patterns like "GET /path"
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH)\\s+([^\\s?\":,]+)").matcher(msg);
             if (m.find()) {
                 String path = m.group(2);
-                if (!"/**".equals(path)) return path;
-            }
-
-            // Look for generic /api/ paths
-            java.util.regex.Matcher mApi = java.util.regex.Pattern.compile("(/api/[^\\s?\":,]+)").matcher(msg);
-            if (mApi.find()) {
-                String path = mApi.group(1);
                 if (!"/**".equals(path)) return path;
             }
         }
 
         // 3. Fallback to Service Name + Category
-        // This is the most reliable "standard" way when URIs aren't logged.
+        // This is the most honest representation when the exact request context is missing.
         if ("APPLICATION".equals(category)) {
             return service;
         }
