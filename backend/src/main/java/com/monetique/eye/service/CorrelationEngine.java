@@ -30,12 +30,12 @@ public class CorrelationEngine {
 
         // Rule 1: Fingerprinting for deduplication
         String fingerprint = generateFingerprint(serviceName, alertName, severity, envName);
-        String groupName = alertName + " on " + serviceName + " (" + envName + ")";
+        String groupName = alertName + " on " + serviceName;
         String groupingFingerprint = fingerprint;
 
         // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App Down"
         if (alertName.contains("Down") && (alertName.contains("Backend") || alertName.contains("Frontend"))) {
-            groupName = "Monetique App Down (" + envName + ")";
+            groupName = "Monetique App Down";
             groupingFingerprint = generateFingerprint("monetique-app", "app-down", severity, envName);
         }
 
