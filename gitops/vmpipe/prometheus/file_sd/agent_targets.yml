@@ -34,46 +34,5 @@
     nodename: "central-node"
     job: "monetique-frontend"
     environment: "central-node"
-- targets:
-  - "192.168.126.131:9100"
-  labels:
-    node_id: "2"
-    nodename: "node-192-168-126-131"
-    job: "node-exporter"
-    environment: "test"
-- targets:
-  - "192.168.126.131:8081"
-  labels:
-    node_id: "2"
-    nodename: "node-192-168-126-131"
-    job: "cadvisor"
-    environment: "test"
-- targets:
-  - "192.168.126.131:5066"
-  labels:
-    node_id: "2"
-    nodename: "node-192-168-126-131"
-    job: "filebeat"
-    environment: "test"
-- targets:
-  - "192.168.126.135:9100"
-  labels:
-    node_id: "3"
-    nodename: "node-192-168-126-135"
-    job: "node-exporter"
-    environment: "test"
-- targets:
-  - "192.168.126.135:8081"
-  labels:
-    node_id: "3"
-    nodename: "node-192-168-126-135"
-    job: "cadvisor"
-    environment: "test"
-- targets:
-  - "192.168.126.135:5066"
-  labels:
-    node_id: "3"
-    nodename: "node-192-168-126-135"
-    job: "filebeat"
-    environment: "test"
+
 

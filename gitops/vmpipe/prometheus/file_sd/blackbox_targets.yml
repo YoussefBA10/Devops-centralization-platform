@@ -15,35 +15,4 @@
     job: "blackbox"
     probe_module: "http_2xx"
     environment: "central-node"
-- targets:
-  - "192.168.126.131"
-  labels:
-    nodename: "node-192-168-126-131"
-    target_type: "node"
-    job: "blackbox"
-    probe_module: "icmp"
-    environment: "test"
-- targets:
-  - "http://192.168.126.131:80"
-  labels:
-    nodename: "node-192-168-126-131"
-    target_type: "frontend"
-    job: "blackbox"
-    probe_module: "http_2xx"
-    environment: "test"
-- targets:
-  - "192.168.126.135"
-  labels:
-    nodename: "node-192-168-126-135"
-    target_type: "node"
-    job: "blackbox"
-    probe_module: "icmp"
-    environment: "test"
-- targets:
-  - "http://192.168.126.135:80"
-  labels:
-    nodename: "node-192-168-126-135"
-    target_type: "frontend"
-    job: "blackbox"
-    probe_module: "http_2xx"
-    environment: "test"
+

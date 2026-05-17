@@ -246,6 +246,12 @@ public class PrometheusClient {
         return queryList(query);
     }
 
+    public boolean getDiskPressureEvents(String appFilter, String envFilter) {
+        String query = "max by (name) ((1 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})) * 100 > 85)";
+        List<Map<String, Object>> results = queryList(query);
+        return !results.isEmpty();
+    }
+
     private String buildContainerQuery(String baseMetric, String suffix, String envFilter) {
         String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
         return String.format("%1$s{%2$s, environment=~\"%3$s\"}%4$s or %1$s{%2$s, container_label_env=~\"%3$s\"}%4$s", 

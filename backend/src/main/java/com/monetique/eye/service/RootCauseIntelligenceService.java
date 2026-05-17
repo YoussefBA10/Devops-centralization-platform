@@ -32,6 +32,7 @@ public class RootCauseIntelligenceService {
 
         processDbFailure(signals, scores, evidenceMap);
         processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter, nodeFilter);
+        processDiskPressure(signals, scores, evidenceMap, envLabel, appFilter);
         processNetworkFailure(signals, scores, evidenceMap);
         processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
@@ -126,6 +127,39 @@ public class RootCauseIntelligenceService {
         }
     }
 
+    private void processDiskPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter) {
+        double score = 0;
+        List<String> logs = new ArrayList<>();
+        
+        if (checkField(signals, "disk_full")) {
+            score += 6.0;
+            logs.add("\"No space left on device\" detected in logs");
+        }
+        if (checkField(signals, "disk_usage_high")) {
+            score += 3.0;
+            logs.add("disk usage >= 85% detected in logs");
+        }
+        if (checkField(signals, "inode_exhausted")) {
+            score += 4.0;
+            logs.add("\"No inodes available\" detected in logs");
+        }
+
+        try {
+            boolean diskPressure = prometheusClient.getDiskPressureEvents(appFilter, envLabel);
+            if (diskPressure) {
+                score += 5.0;
+                logs.add("Container disk usage exceeded 85% limit in Prometheus");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch Prometheus disk pressure signals: {}", e.getMessage());
+        }
+
+        if (score > 0) {
+            scores.put("DISK_PRESSURE", score + 9.0); // RESOURCE_SATURATION (Priority 2, same as MEMORY_OOM)
+            evidence.put("DISK_PRESSURE", logs);
+        }
+    }
+
     private void processBugCrash(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
         double score = 0;
         List<String> logs = new ArrayList<>();
@@ -199,7 +233,7 @@ public class RootCauseIntelligenceService {
     }
 
     private String getRuleType(String category) {
-        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM") || category.equals("SERVICE_UNREACHABLE")) return "root_cause";
+        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM") || category.equals("DISK_PRESSURE") || category.equals("SERVICE_UNREACHABLE")) return "root_cause";
         if (category.equals("BUG_CRASH")) return "trigger";
         return "impact";
     }

@@ -244,6 +244,9 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 .aggregations("gateway_error_502", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(502))))))
                 .aggregations("service_unavailable_503", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(503))))))
                 .aggregations("conn_refused", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Connection refused"))))))
+                .aggregations("disk_full", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("No space left on device"))))))
+                .aggregations("disk_usage_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("disk_usage_pct").gte(JsonData.of(85)))))))
+                .aggregations("inode_exhausted", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("No inodes available"))))))
             , Void.class);
 
             response.aggregations().forEach((name, agg) -> {

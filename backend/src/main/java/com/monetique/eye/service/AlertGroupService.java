@@ -86,7 +86,8 @@ public class AlertGroupService {
                                  labels.getOrDefault("env", 
                                  labels.getOrDefault("container_label_env",
                                  labels.getOrDefault("container_label_com_monetique_environment", "unknown"))));
-                env = environmentRepository.findByName(envName).orElse(null);
+                env = environmentRepository.findByPrometheusLabel(envName)
+                        .orElseGet(() -> environmentRepository.findByName(envName).orElse(null));
             }
 
             // Fallback: Pick first environment if still not found
