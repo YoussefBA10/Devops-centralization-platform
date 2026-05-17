@@ -84,7 +84,8 @@ public class EnvironmentController {
                     .collect(Collectors.toList());
 
             all = environmentRepository.findAll().stream()
-                    .filter(env -> allowedIds.contains(env.getId().toString()))
+                    .filter(env -> allowedIds.contains(env.getId().toString()) ||
+                                   (env.getCluster() != null && allowedIds.contains(env.getCluster().getId().toString())))
                     .collect(Collectors.toList());
         }
 

@@ -57,7 +57,13 @@ public class TicketController {
                 tickets = ticketRepository.findAll();
             } else {
                 List<String> allowedClusterIdsStr = permissionService.getAllowedClusterIds(auth.getName());
-                List<Long> envIds = allowedClusterIdsStr.stream().map(Long::valueOf).collect(java.util.stream.Collectors.toList());
+                List<Environment> allowedEnvs = environmentRepository.findAll().stream()
+                        .filter(env -> allowedClusterIdsStr.contains(env.getId().toString()) ||
+                                       (env.getCluster() != null && allowedClusterIdsStr.contains(env.getCluster().getId().toString())))
+                        .collect(java.util.stream.Collectors.toList());
+                
+                List<Long> envIds = allowedEnvs.stream().map(Environment::getId).collect(java.util.stream.Collectors.toList());
+                
                 if (envIds.isEmpty()) {
                     tickets = java.util.Collections.emptyList();
                 } else {
