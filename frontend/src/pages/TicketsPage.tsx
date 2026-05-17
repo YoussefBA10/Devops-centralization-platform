@@ -15,12 +15,14 @@ import {
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useEnvironment } from '../context/EnvironmentContext';
+import { useCluster } from '../context/ClusterContext';
 import type { Ticket, Application, TopologyData } from '../types/index';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button, Input } from '../components/ui/Input';
 
 const TicketsPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { selectedCluster } = useCluster();
   const { permissions, isAdmin } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(false);
@@ -75,7 +77,7 @@ const TicketsPage: React.FC = () => {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const url = selectedEnvironment 
+      const url = selectedCluster && selectedEnvironment 
         ? `/tickets?environmentId=${selectedEnvironment.id}` 
         : '/tickets?clusters=all';
       const response = await api.get<Ticket[]>(url);
@@ -160,7 +162,7 @@ const TicketsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTickets();
-  }, [selectedEnvironment]);
+  }, [selectedEnvironment, selectedCluster]);
 
   const filteredTickets = tickets
     .filter(t => filter === 'ALL' || t.status === filter)

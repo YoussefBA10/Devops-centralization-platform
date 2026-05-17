@@ -67,9 +67,18 @@ public class ObservabilityTestController {
     @GetMapping("/oom")
     public void triggerOom() {
         log.error("[CRITICAL] Starting memory exhaustion... Container will be OOM killed.");
-        java.util.List<byte[]> list = new java.util.ArrayList<>();
-        while (true) {
-            list.add(new byte[50 * 1024 * 1024]); // 50MB chunks
-        }
+        new Thread(() -> {
+            try {
+                // Brief pause to allow HTTP response connection to flush
+                Thread.sleep(200);
+                java.util.List<byte[]> list = new java.util.ArrayList<>();
+                while (true) {
+                    list.add(new byte[50 * 1024 * 1024]); // 50MB chunks
+                }
+            } catch (Throwable t) {
+                log.error("OOM Exception triggered: {}, terminating JVM with exit code 137", t.getMessage());
+                System.exit(137);
+            }
+        }).start();
     }
 }

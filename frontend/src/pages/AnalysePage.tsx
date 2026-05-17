@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   Cpu, 
   Globe, 
-  Search, 
   RefreshCw,
   TrendingUp,
   TrendingDown,

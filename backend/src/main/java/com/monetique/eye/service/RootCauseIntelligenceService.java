@@ -155,7 +155,9 @@ public class RootCauseIntelligenceService {
         }
 
         if (score > 0) {
-            scores.put("DISK_PRESSURE", score + 9.0); // RESOURCE_SATURATION (Priority 2, same as MEMORY_OOM)
+            boolean hasCriticalLogEvidence = checkField(signals, "disk_full") || checkField(signals, "inode_exhausted");
+            double baseScore = hasCriticalLogEvidence ? 9.0 : 3.0;
+            scores.put("DISK_PRESSURE", score + baseScore);
             evidence.put("DISK_PRESSURE", logs);
         }
     }

@@ -298,6 +298,7 @@ services:
       MONETIQUE_GITOPS_PATH: "./gitops"
     ports:
       - "8880:8880"
+    mem_limit: 512m
     deploy:
       resources:
         limits:

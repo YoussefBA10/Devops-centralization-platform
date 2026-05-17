@@ -170,19 +170,32 @@ public class AlertGroupService {
 
     @Transactional
     public void resolveGroup(String fingerprint) {
-        groupRepository.findByFingerprint(fingerprint).ifPresent(group -> {
-            group.setStatus(AlertGroupStatus.RESOLVED);
-            group.setResolvedAt(LocalDateTime.now());
-
-            if (group.getTicket() != null) {
-                com.monetique.eye.entity.Ticket ticket = group.getTicket();
-                ticket.setStatus(com.monetique.eye.entity.enums.TicketStatus.RESOLVED);
-                ticketRepository.save(ticket);
-                log.info("TICKET RESOLVED: id={}, title='{}'", ticket.getId(), ticket.getTitle());
+        // Attempt A: Find by Prometheus fingerprint in Alert table
+        java.util.Optional<Alert> alertOpt = alertRepository.findByPrometheusFingerprint(fingerprint);
+        if (alertOpt.isPresent()) {
+            AlertGroup group = alertOpt.get().getGroup();
+            if (group != null) {
+                resolveAlertGroup(group);
+                return;
             }
+        }
 
-            groupRepository.save(group);
-        });
+        // Attempt B: Find by Grouping fingerprint in AlertGroup table
+        groupRepository.findByFingerprint(fingerprint).ifPresent(this::resolveAlertGroup);
+    }
+
+    private void resolveAlertGroup(AlertGroup group) {
+        group.setStatus(AlertGroupStatus.RESOLVED);
+        group.setResolvedAt(LocalDateTime.now());
+
+        if (group.getTicket() != null) {
+            com.monetique.eye.entity.Ticket ticket = group.getTicket();
+            ticket.setStatus(com.monetique.eye.entity.enums.TicketStatus.RESOLVED);
+            ticketRepository.save(ticket);
+            log.info("TICKET RESOLVED: id={}, title='{}'", ticket.getId(), ticket.getTitle());
+        }
+
+        groupRepository.save(group);
     }
 
     public List<AlertGroup> getActiveGroups() {
