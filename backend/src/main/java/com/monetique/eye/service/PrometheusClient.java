@@ -255,8 +255,8 @@ public class PrometheusClient {
         String app = appFilter != null ? appFilter : "";
         
         String query = String.format(
-            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}) * 100)[2m:15s]%s)) or " +
-            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}) * 100)[2m:15s]%s))",
+            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} > 0)) * 100)[2m:15s]%s)) or " +
+            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} > 0)) * 100)[2m:15s]%s))",
             app, envFilter, app, envFilter, timeModifier,
             app, envFilter, app, envFilter, timeModifier
         );
@@ -272,8 +272,8 @@ public class PrometheusClient {
 
         // 1. Check container-level filesystem pressure (cAdvisor)
         String containerQuery = String.format(
-            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}) * 100)[2m:15s]%s)) or " +
-            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}) * 100)[2m:15s]%s))",
+            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / (container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} > 0)) * 100)[2m:15s]%s)) or " +
+            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / (container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} > 0)) * 100)[2m:15s]%s))",
             app, envFilter, app, envFilter, timeModifier,
             app, envFilter, app, envFilter, timeModifier
         );
