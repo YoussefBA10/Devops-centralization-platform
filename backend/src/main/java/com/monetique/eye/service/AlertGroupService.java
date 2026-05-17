@@ -33,7 +33,48 @@ public class AlertGroupService {
         String severity = labels.getOrDefault("severity", "warning");
         log.info("=== ALERT INGESTION === status='{}', fingerprint='{}', labels={}", status, fingerprint, labels);
 
-        AlertGroup group = correlationEngine.correlate(labels, severity);
+        // 1. Resolve Environment (Moved up so we can use it in Correlation Engine grouping!)
+        // Strategy: Node DB Lookup > IP DB Lookup > Label 'environment' > Label 'env'
+        com.monetique.eye.entity.Environment env = null;
+
+        // Attempt A: Node Name Lookup
+        String nodeLabel = labels.getOrDefault("nodename", labels.get("node"));
+        if (nodeLabel != null) {
+            env = managedNodeRepository.findByNodeName(nodeLabel)
+                    .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
+                    .orElse(null);
+        }
+
+        // Attempt B: IP Lookup
+        if (env == null) {
+            String instance = labels.get("instance");
+            if (instance != null) {
+                String ip = instance.contains(":") ? instance.substring(0, instance.indexOf(":")) : instance;
+                env = managedNodeRepository.findByIp(ip)
+                        .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
+                        .orElse(null);
+            }
+        }
+
+        // Attempt C: Labels
+        if (env == null) {
+            String envNameLabel = labels.getOrDefault("environment", 
+                             labels.getOrDefault("env", 
+                             labels.getOrDefault("container_label_env",
+                             labels.getOrDefault("container_label_com_monetique_environment", "unknown"))));
+            env = environmentRepository.findByPrometheusLabel(envNameLabel)
+                    .orElseGet(() -> environmentRepository.findByName(envNameLabel).orElse(null));
+        }
+
+        // Fallback: Pick first environment if still not found
+        if (env == null) {
+            log.warn("Environment could not be resolved from node/IP or labels, falling back to first available");
+            env = environmentRepository.findAll().stream().findFirst().orElse(null);
+        }
+
+        String envName = env != null ? env.getName() : "unknown";
+
+        AlertGroup group = correlationEngine.correlate(labels, severity, envName);
         log.info("Correlated to group: id={}, name='{}', hasTicket={}", group.getId(), group.getName(),
                 group.getTicket() != null);
 
@@ -56,45 +97,6 @@ public class AlertGroupService {
 
         if (needsTicket && isFiring) {
             String alertName = labels.getOrDefault("alertname", "unknown");
-
-            // 1. Resolve Environment (Mandatory for Ticket)
-            // Strategy: Node DB Lookup > IP DB Lookup > Label 'environment' > Label 'env'
-            com.monetique.eye.entity.Environment env = null;
-
-            // Attempt A: Node Name Lookup
-            String nodeLabel = labels.getOrDefault("nodename", labels.get("node"));
-            if (nodeLabel != null) {
-                env = managedNodeRepository.findByNodeName(nodeLabel)
-                        .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
-                        .orElse(null);
-            }
-
-            // Attempt B: IP Lookup
-            if (env == null) {
-                String instance = labels.get("instance");
-                if (instance != null) {
-                    String ip = instance.contains(":") ? instance.substring(0, instance.indexOf(":")) : instance;
-                    env = managedNodeRepository.findByIp(ip)
-                            .map(com.monetique.eye.entity.ManagedNode::getEnvironment)
-                            .orElse(null);
-                }
-            }
-
-            // Attempt C: Labels
-            if (env == null) {
-                String envName = labels.getOrDefault("environment", 
-                                 labels.getOrDefault("env", 
-                                 labels.getOrDefault("container_label_env",
-                                 labels.getOrDefault("container_label_com_monetique_environment", "unknown"))));
-                env = environmentRepository.findByPrometheusLabel(envName)
-                        .orElseGet(() -> environmentRepository.findByName(envName).orElse(null));
-            }
-
-            // Fallback: Pick first environment if still not found
-            if (env == null) {
-                log.warn("Environment could not be resolved from node/IP or labels, falling back to first available");
-                env = environmentRepository.findAll().stream().findFirst().orElse(null);
-            }
 
             if (env != null) {
                 // 2. Resolve Application (Optional for Ticket)

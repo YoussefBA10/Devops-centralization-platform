@@ -21,7 +21,7 @@ public class CorrelationEngine {
 
     private final AlertGroupRepository alertGroupRepository;
 
-    public AlertGroup correlate(Map<String, String> labels, String severity) {
+    public AlertGroup correlate(Map<String, String> labels, String severity, String envName) {
         String serviceName = labels.get("service_name");
         if (serviceName == null) {
             serviceName = labels.getOrDefault("application", labels.getOrDefault("job", "unknown"));
@@ -29,15 +29,14 @@ public class CorrelationEngine {
         String alertName = labels.getOrDefault("alertname", "unknown");
 
         // Rule 1: Fingerprinting for deduplication
-        String fingerprint = generateFingerprint(serviceName, alertName, severity);
-        String groupName = alertName + " on " + serviceName;
+        String fingerprint = generateFingerprint(serviceName, alertName, severity, envName);
+        String groupName = alertName + " on " + serviceName + " (" + envName + ")";
         String groupingFingerprint = fingerprint;
 
-        // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App
-        // Down"
+        // Smart Grouping: Combine BackendDown and FrontendDown into "Monetique App Down"
         if (alertName.contains("Down") && (alertName.contains("Backend") || alertName.contains("Frontend"))) {
-            groupName = "Monetique App Down";
-            groupingFingerprint = generateFingerprint("monetique-app", "app-down", severity);
+            groupName = "Monetique App Down (" + envName + ")";
+            groupingFingerprint = generateFingerprint("monetique-app", "app-down", severity, envName);
         }
 
         Optional<AlertGroup> existingGroup = alertGroupRepository.findByFingerprint(groupingFingerprint);
@@ -79,9 +78,9 @@ public class CorrelationEngine {
         return alertGroupRepository.save(group);
     }
 
-    private String generateFingerprint(String service, String alert, String severity) {
+    private String generateFingerprint(String service, String alert, String severity, String envName) {
         try {
-            String raw = service + "|" + alert + "|" + severity;
+            String raw = service + "|" + alert + "|" + severity + "|" + envName;
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(raw.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
