@@ -122,6 +122,16 @@ public class RootCauseIntelligenceService {
                 score += 8.0; // Very high confidence if metric says so
                 logs.add("Container OOM Kill event detected by cAdvisor/cgroups");
             }
+            
+            // 2-Minute Window Curve check
+            Double memoryUsage = prometheusClient.getContainerMemoryUsagePercentAtCrash(appFilter, envLabel, end);
+            if (memoryUsage > 85.0) {
+                score += 7.0;
+                logs.add(String.format("Container memory reached %.1f%% of its limit just before the crash", memoryUsage));
+            } else if (memoryUsage > 75.0) {
+                score += 4.0;
+                logs.add(String.format("Container memory was high (%.1f%%) before the crash", memoryUsage));
+            }
         } catch (Exception e) {
             log.warn("Failed to fetch Prometheus OOM signals: {}", e.getMessage());
         }
@@ -150,10 +160,13 @@ public class RootCauseIntelligenceService {
         }
 
         try {
-            boolean diskPressure = prometheusClient.getDiskPressureEvents(appFilter, envLabel, end);
-            if (diskPressure) {
-                score += 5.0;
-                logs.add("Container disk usage exceeded 85% limit in Prometheus");
+            Double diskUsage = prometheusClient.getDiskUsagePercentAtCrash(appFilter, envLabel, end);
+            if (diskUsage > 95.0) {
+                score += 6.0;
+                logs.add(String.format("Critical disk usage detected: %.1f%% full before crash", diskUsage));
+            } else if (diskUsage > 85.0) {
+                score += 3.0;
+                logs.add(String.format("High disk usage detected: %.1f%% full before crash", diskUsage));
             }
         } catch (Exception e) {
             log.warn("Failed to fetch Prometheus disk pressure signals: {}", e.getMessage());

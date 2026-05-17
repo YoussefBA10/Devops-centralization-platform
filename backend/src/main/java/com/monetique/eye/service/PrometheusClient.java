@@ -247,37 +247,47 @@ public class PrometheusClient {
         return queryList(query);
     }
 
-    public boolean getDiskPressureEvents(String appFilter, String envFilter, java.time.Instant end) {
+    public Double getContainerMemoryUsagePercentAtCrash(String appFilter, String envFilter, java.time.Instant end) {
         if (envFilter == null || envFilter.isEmpty()) {
-            return false;
+            return 0.0;
         }
-        
         String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
+        String app = appFilter != null ? appFilter : "";
+        
+        String query = String.format(
+            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}) * 100)[2m:15s]%s)) or " +
+            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}) * 100)[2m:15s]%s))",
+            app, envFilter, app, envFilter, timeModifier,
+            app, envFilter, app, envFilter, timeModifier
+        );
+        return queryMetric(query);
+    }
+
+    public Double getDiskUsagePercentAtCrash(String appFilter, String envFilter, java.time.Instant end) {
+        if (envFilter == null || envFilter.isEmpty()) {
+            return 0.0;
+        }
+        String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
+        String app = appFilter != null ? appFilter : "";
 
         // 1. Check container-level filesystem pressure (cAdvisor)
         String containerQuery = String.format(
-            "max by (name) ((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}%s / " +
-            "container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}%s) * 100 > 85 or " +
-            "(container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}%s / " +
-            "container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}%s) * 100 > 85)",
-            appFilter != null ? appFilter : "", envFilter, timeModifier,
-            appFilter != null ? appFilter : "", envFilter, timeModifier,
-            appFilter != null ? appFilter : "", envFilter, timeModifier,
-            appFilter != null ? appFilter : "", envFilter, timeModifier
+            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}) * 100)[2m:15s]%s)) or " +
+            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}) * 100)[2m:15s]%s))",
+            app, envFilter, app, envFilter, timeModifier,
+            app, envFilter, app, envFilter, timeModifier
         );
-        List<Map<String, Object>> containerResults = queryList(containerQuery);
-        if (!containerResults.isEmpty()) {
-            return true;
+        Double containerDisk = queryMetric(containerQuery);
+        if (containerDisk > 0.0) {
+            return containerDisk;
         }
 
         // 2. Check node-level filesystem pressure for this environment
         String nodeQuery = String.format(
-            "max by (instance) ((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"}%s / " +
-            "node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"}%s)) * 100 > 85)",
-            envFilter, timeModifier, envFilter, timeModifier
+            "max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s]%s))",
+            envFilter, envFilter, timeModifier
         );
-        List<Map<String, Object>> nodeResults = queryList(nodeQuery);
-        return !nodeResults.isEmpty();
+        return queryMetric(nodeQuery);
     }
 
     private String buildContainerQuery(String baseMetric, String suffix, String envFilter) {
