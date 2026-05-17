@@ -92,6 +92,7 @@ public class LogAnalyticsResponseDTO {
         private String title;
         private String description;
         private String confidence; // high, medium, low
+        private Double probability; // new percentage distribution
         private List<String> evidence;
         private List<String> sources;
     }

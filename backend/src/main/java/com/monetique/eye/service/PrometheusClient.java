@@ -239,28 +239,31 @@ public class PrometheusClient {
         return queryList(query);
     }
 
-    public List<Map<String, Object>> getOomEvents(String envFilter, String appFilter, String nodeFilter) {
+    public List<Map<String, Object>> getOomEvents(String envFilter, String appFilter, String nodeFilter, java.time.Instant end) {
         String nodePart = (nodeFilter != null && !nodeFilter.isEmpty()) ? String.format(", nodename=~\".*%s.*\"", nodeFilter) : "";
-        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s|.*\"%s}[15m]) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s|.*\"%s}[15m]) > 0)",
-                appFilter, envFilter, nodePart, appFilter, envFilter, nodePart);
+        String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
+        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s|.*\"%s}[15m]%s) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s|.*\"%s}[15m]%s) > 0)",
+                appFilter, envFilter, nodePart, timeModifier, appFilter, envFilter, nodePart, timeModifier);
         return queryList(query);
     }
 
-    public boolean getDiskPressureEvents(String appFilter, String envFilter) {
+    public boolean getDiskPressureEvents(String appFilter, String envFilter, java.time.Instant end) {
         if (envFilter == null || envFilter.isEmpty()) {
             return false;
         }
+        
+        String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
 
         // 1. Check container-level filesystem pressure (cAdvisor)
         String containerQuery = String.format(
-            "max by (name) ((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"} / " +
-            "container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}) * 100 > 85 or " +
-            "(container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"} / " +
-            "container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}) * 100 > 85)",
-            appFilter != null ? appFilter : "", envFilter,
-            appFilter != null ? appFilter : "", envFilter,
-            appFilter != null ? appFilter : "", envFilter,
-            appFilter != null ? appFilter : "", envFilter
+            "max by (name) ((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}%s / " +
+            "container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s|.*\"}%s) * 100 > 85 or " +
+            "(container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}%s / " +
+            "container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s|.*\"}%s) * 100 > 85)",
+            appFilter != null ? appFilter : "", envFilter, timeModifier,
+            appFilter != null ? appFilter : "", envFilter, timeModifier,
+            appFilter != null ? appFilter : "", envFilter, timeModifier,
+            appFilter != null ? appFilter : "", envFilter, timeModifier
         );
         List<Map<String, Object>> containerResults = queryList(containerQuery);
         if (!containerResults.isEmpty()) {
@@ -269,9 +272,9 @@ public class PrometheusClient {
 
         // 2. Check node-level filesystem pressure for this environment
         String nodeQuery = String.format(
-            "max by (instance) ((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / " +
-            "node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100 > 85)",
-            envFilter, envFilter
+            "max by (instance) ((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"}%s / " +
+            "node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"}%s)) * 100 > 85)",
+            envFilter, timeModifier, envFilter, timeModifier
         );
         List<Map<String, Object>> nodeResults = queryList(nodeQuery);
         return !nodeResults.isEmpty();

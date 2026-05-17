@@ -31,20 +31,22 @@ public class RootCauseIntelligenceService {
         Map<String, List<String>> evidenceMap = new HashMap<>();
 
         processDbFailure(signals, scores, evidenceMap);
-        processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter, nodeFilter);
-        processDiskPressure(signals, scores, evidenceMap, envLabel, appFilter);
+        processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter, nodeFilter, end);
+        processDiskPressure(signals, scores, evidenceMap, envLabel, appFilter, end);
         processNetworkFailure(signals, scores, evidenceMap);
         processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
         processTrafficSpike(signals, scores, evidenceMap);
 
-        // 3. Final Ranking & Confidence Check
+        // 3. Final Ranking & Probability Calculation
+        double totalScore = scores.values().stream().mapToDouble(Double::doubleValue).sum();
+
         List<RootCauseRule> ranked = scores.entrySet().stream()
-                .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
                 .map(entry -> {
                     String category = entry.getKey();
                     double score = entry.getValue();
-                    String confidence = score > 6.0 ? "high" : (score > 4.0 ? "medium" : "low");
+                    double probability = totalScore > 0 ? (score / totalScore) * 100.0 : 0.0;
+                    String confidence = probability > 60.0 ? "high" : (probability > 30.0 ? "medium" : "low");
                     
                     return RootCauseRule.builder()
                             .id(UUID.randomUUID().toString())
@@ -52,10 +54,12 @@ public class RootCauseIntelligenceService {
                             .title(category.replace("_", " ").toUpperCase())
                             .description(generateDescription(category, evidenceMap.get(category)))
                             .confidence(confidence)
+                            .probability(probability)
                             .evidence(evidenceMap.get(category))
                             .sources(List.of("Elasticsearch", "Logstash-SRE", "Prometheus", "cAdvisor"))
                             .build();
                 })
+                .sorted((a, b) -> Double.compare(b.getProbability(), a.getProbability()))
                 .limit(3)
                 .collect(Collectors.toList());
 
@@ -67,6 +71,7 @@ public class RootCauseIntelligenceService {
                     .title("GENERAL APPLICATION ERRORS")
                     .description("High error frequency detected but no specific resource saturation or bug patterns identified.")
                     .confidence("low")
+                    .probability(100.0)
                     .evidence(List.of("Aggregated status_code >= 500 detected", "Check individual log stream for stack traces"))
                     .sources(List.of("Elasticsearch"))
                     .build());
@@ -96,7 +101,7 @@ public class RootCauseIntelligenceService {
         }
     }
 
-    private void processMemoryPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter, String nodeFilter) {
+    private void processMemoryPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter, String nodeFilter, java.time.Instant end) {
         double score = 0;
         List<String> logs = new ArrayList<>();
         
@@ -112,7 +117,7 @@ public class RootCauseIntelligenceService {
 
         // Metric-based signals (Prometheus/cAdvisor)
         try {
-            List<Map<String, Object>> oomEvents = prometheusClient.getOomEvents(envLabel, appFilter, nodeFilter);
+            List<Map<String, Object>> oomEvents = prometheusClient.getOomEvents(envLabel, appFilter, nodeFilter, end);
             if (!oomEvents.isEmpty()) {
                 score += 8.0; // Very high confidence if metric says so
                 logs.add("Container OOM Kill event detected by cAdvisor/cgroups");
@@ -127,7 +132,7 @@ public class RootCauseIntelligenceService {
         }
     }
 
-    private void processDiskPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter) {
+    private void processDiskPressure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter, java.time.Instant end) {
         double score = 0;
         List<String> logs = new ArrayList<>();
         
@@ -145,7 +150,7 @@ public class RootCauseIntelligenceService {
         }
 
         try {
-            boolean diskPressure = prometheusClient.getDiskPressureEvents(appFilter, envLabel);
+            boolean diskPressure = prometheusClient.getDiskPressureEvents(appFilter, envLabel, end);
             if (diskPressure) {
                 score += 5.0;
                 logs.add("Container disk usage exceeded 85% limit in Prometheus");

@@ -446,6 +446,13 @@ const AnalysePage: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Badge className={getBadgeColor(rule.type)}>{rule.type.replace('_', ' ').toUpperCase()}</Badge>
+                        
+                        {rule.probability !== undefined && (
+                          <Badge variant="secondary" className="text-[10px] font-black bg-primary/10 text-primary border-primary/20">
+                            {Math.round(rule.probability)}% PROBABILITY
+                          </Badge>
+                        )}
+
                         <Badge variant="outline" className={`text-[9px] uppercase ${
                           rule.confidence === 'high' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5' :
                           rule.confidence === 'medium' ? 'border-amber-500 text-amber-500 bg-amber-500/5' :
