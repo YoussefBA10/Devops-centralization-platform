@@ -46,6 +46,11 @@ public class CorrelationEngine {
             group = existingGroup.get();
             group.setLastFiredAt(LocalDateTime.now());
 
+            // Self-heal legacy group names that had parenthesis in them
+            if (!group.getName().equals(groupName) && !group.getName().startsWith("[INFRA]") && !group.getName().startsWith("[SECURITY]")) {
+                group.setName(groupName);
+            }
+
             // If it was resolved, but is now firing again
             if (group.getStatus() != AlertGroupStatus.FIRING) {
                 group.setStatus(AlertGroupStatus.FIRING);
