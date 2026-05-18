@@ -148,9 +148,11 @@ public class PrometheusClient {
 
     public Double getDiskUsagePercent(String envLabel) {
         String query = String.format(
-            "avg(1 - (node_filesystem_avail_bytes{mountpoint=\"/data\", environment=\"%s\"} / " +
-            "node_filesystem_size_bytes{mountpoint=\"/data\", environment=\"%s\"})) * 100", 
-            envLabel, envLabel
+            "avg(1 - (" +
+            "(node_filesystem_avail_bytes{mountpoint=\"/data\", environment=\"%s\"} or ignoring(mountpoint, device, fstype) node_filesystem_avail_bytes{mountpoint=\"/\", environment=\"%s\"}) / " +
+            "(node_filesystem_size_bytes{mountpoint=\"/data\", environment=\"%s\"} or ignoring(mountpoint, device, fstype) node_filesystem_size_bytes{mountpoint=\"/\", environment=\"%s\"})" +
+            ")) * 100", 
+            envLabel, envLabel, envLabel, envLabel
         );
         return queryMetric(query);
     }
