@@ -441,11 +441,17 @@ const AnalysePage: React.FC = () => {
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.1 }}
-                    className="p-4 rounded-xl bg-background border border-border space-y-3 group hover:border-primary/40 transition-all"
+                    className={`p-4 rounded-xl border space-y-3 transition-all ${
+                      i === 0 ? "bg-primary/[0.03] border-primary/30 shadow-[0_0_15px_rgba(0,123,255,0.05)]" : "bg-background border-border opacity-80"
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge className={getBadgeColor(rule.type)}>{rule.type.replace('_', ' ').toUpperCase()}</Badge>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {i === 0 && (
+                          <Badge className="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 uppercase font-black tracking-widest text-[10px]">
+                            Primary Cause
+                          </Badge>
+                        )}
                         
                         {rule.probability !== undefined && (
                           <Badge variant="secondary" className="text-[10px] font-black bg-primary/10 text-primary border-primary/20">
@@ -461,29 +467,34 @@ const AnalysePage: React.FC = () => {
                           {rule.confidence} Confidence
                         </Badge>
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap gap-1">
                         {rule.sources.map((s: string) => (
-                          <Badge key={s} variant="outline" className="text-[8px] uppercase tracking-tighter opacity-50">{s}</Badge>
+                          <span key={s} className="text-[8px] uppercase tracking-tighter opacity-50 px-1.5 py-0.5 border border-border rounded-md">
+                            {s}
+                          </span>
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <h4 className="text-sm font-black text-foreground">{rule.title}</h4>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{rule.description}</p>
+                    
+                    <div className="space-y-3 pt-1">
+                      <h4 className="text-base font-black text-foreground tracking-tight">{rule.title}</h4>
                       
                       {rule.evidence && rule.evidence.length > 0 && (
-                        <div className="mt-3 space-y-1.5 border-t border-border pt-3">
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Evidence</p>
+                        <div className="bg-black/20 rounded-lg p-3 border border-white/5 space-y-2">
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                            <Brain className="w-3 h-3" /> Diagnostics Evidence
+                          </p>
                           {rule.evidence.map((ev: string, ei: number) => (
                             <div key={ei} className="flex items-start gap-2">
-                              <div className="w-1 h-1 rounded-full bg-primary mt-1.5 shrink-0" />
-                              <p className="text-[10px] font-mono text-foreground/80 leading-tight">{ev}</p>
+                              <div className="w-1.5 h-1.5 rounded-sm bg-primary/60 mt-1 shrink-0" />
+                              <p className="text-xs font-mono text-foreground/80 leading-relaxed">{ev}</p>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
-                    <Button variant="outline" size="sm" className="w-full text-[10px] font-black uppercase h-8 gap-2 group-hover:bg-primary/5">
+                    
+                    <Button variant="outline" size="sm" className="w-full text-[10px] font-black uppercase h-8 gap-2 hover:bg-primary hover:text-primary-foreground transition-colors mt-2">
                       Remediation Plan <ExternalLink className="w-3 h-3" />
                     </Button>
                   </motion.div>

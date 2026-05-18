@@ -43,6 +43,9 @@ public class LogAnalyticsService {
         String effectiveServiceName = serviceName;
         String effectiveNodeName = nodeName;
 
+        int hours = parseRange(range);
+        Instant end = Instant.now();
+
         if (ticketId != null) {
             Ticket ticket = ticketRepository.findById(ticketId).orElse(null);
             if (ticket != null) {
@@ -53,7 +56,10 @@ public class LogAnalyticsService {
                 if (ticket.getNode() != null) {
                     effectiveNodeName = ticket.getNode();
                 }
-                log.info("ANALYTICS: Resolved ticket #{} to service={} node={}", ticketId, effectiveServiceName, effectiveNodeName);
+                if (ticket.getCreatedAt() != null) {
+                    end = ticket.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant();
+                }
+                log.info("ANALYTICS: Resolved ticket #{} to service={} node={} time={}", ticketId, effectiveServiceName, effectiveNodeName, end);
             }
         }
 
@@ -61,8 +67,6 @@ public class LogAnalyticsService {
             effectiveNodeName = effectiveNodeName.substring(5);
         }
 
-        int hours = parseRange(range);
-        Instant end = Instant.now();
         Instant start = end.minus(hours, ChronoUnit.HOURS);
 
         Environment env = environmentRepository.findById(environmentId).orElse(null);
