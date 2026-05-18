@@ -110,32 +110,42 @@ public class DeploymentService {
                     new String[] { "bash", gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword },
                     deploymentLog, 300);
 
-            // 3. Execute Ansible Playbook
-            String playbookFile = "deploy-tools.yml"; // Universal OS playbook
-            
-            String playbookPath = gitopsPath + "/ansible/" + playbookFile;
-            String inventoryPath = gitopsPath + "/ansible/inventory.ini";
-
+            // 3. Deploy based on mode
             String envLabel = environment.getSafeName();
             String centralIp = getCentralIp(environment);
-
             String nodeName = targetIp.equals(centralIp) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
 
-            executeProcessSecure(new String[] {
-                    "ansible-playbook",
-                    "-i", inventoryPath,
-                    playbookPath,
-                    "--limit", targetIp,
-                    "-e", "ansible_ssh_pass=" + sshPassword,
-                    "-e", "env_label=" + envLabel,
-                    "-e", "ansible_user=" + sshUser,
-                    "-e", "ssh_user=" + sshUser,
-                    "-e", "target_host=" + targetIp,
-                    "-e", "central_logstash_ip=" + centralIp,
-                    "-e", "nodename=" + nodeName,
-                    "-e", "containerized=" + (containerized ? "true" : "false")
-            }, deploymentLog, 600);
+            if (!containerized) {
+                // ── STANDALONE MODE: Raw SSH deployment (no Python/Ansible needed on remote) ──
+                String standaloneScript = gitopsPath + "/scripts/deploy-standalone.sh";
+                executeProcess(new String[] { "chmod", "+x", standaloneScript }, deploymentLog, 30);
+                executeProcessSecure(new String[] {
+                        "bash", standaloneScript,
+                        sshUser, targetIp,
+                        "/app/gitops/image-cache",
+                        envLabel, nodeName
+                }, deploymentLog, 600);
+            } else {
+                // ── CONTAINERIZED MODE: Ansible playbook (requires Python 3 on remote) ──
+                String playbookPath = gitopsPath + "/ansible/deploy-tools.yml";
+                String inventoryPath = gitopsPath + "/ansible/inventory.ini";
+
+                executeProcessSecure(new String[] {
+                        "ansible-playbook",
+                        "-i", inventoryPath,
+                        playbookPath,
+                        "--limit", targetIp,
+                        "-e", "ansible_ssh_pass=" + sshPassword,
+                        "-e", "env_label=" + envLabel,
+                        "-e", "ansible_user=" + sshUser,
+                        "-e", "ssh_user=" + sshUser,
+                        "-e", "target_host=" + targetIp,
+                        "-e", "central_logstash_ip=" + centralIp,
+                        "-e", "nodename=" + nodeName,
+                        "-e", "containerized=true"
+                }, deploymentLog, 600);
+            }
 
             deploymentLog.setStatus("SUCCESS");
             
