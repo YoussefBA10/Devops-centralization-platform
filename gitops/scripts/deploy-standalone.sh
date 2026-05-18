@@ -132,8 +132,34 @@ echo "✅ Service file created."
 # ─────────────────────────────────────────────
 echo ""
 echo "🔹 Step 8: Starting Node Exporter service..."
-ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "systemctl --user daemon-reload && systemctl --user enable node-exporter && systemctl --user start node-exporter" 2>/dev/null
-echo "✅ Node Exporter service started."
+
+# Get the remote UID for XDG_RUNTIME_DIR
+REMOTE_UID=$(ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "id -u" 2>/dev/null)
+
+# Try systemd user service first (requires lingering + XDG_RUNTIME_DIR)
+SYSTEMD_OK=$(ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "
+    export XDG_RUNTIME_DIR=/run/user/${REMOTE_UID}
+    export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${REMOTE_UID}/bus
+    systemctl --user daemon-reload 2>/dev/null && \
+    systemctl --user enable node-exporter 2>/dev/null && \
+    systemctl --user start node-exporter 2>/dev/null && \
+    echo 'SYSTEMD_OK' || echo 'SYSTEMD_FAIL'
+" 2>/dev/null)
+
+if echo "$SYSTEMD_OK" | grep -q "SYSTEMD_OK"; then
+    echo "✅ Node Exporter started via systemd user service."
+else
+    echo "⚠️  systemd --user not available. Starting with nohup fallback..."
+    ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "
+        # Kill any existing instance
+        pkill -x node_exporter 2>/dev/null || true
+        sleep 1
+        # Start with nohup
+        nohup ~/node-exporter/node_exporter > ~/node-exporter/node_exporter.log 2>&1 &
+        disown
+    " 2>/dev/null
+    echo "✅ Node Exporter started via nohup."
+fi
 
 # ─────────────────────────────────────────────
 # 9. Verify the service is running
@@ -141,7 +167,7 @@ echo "✅ Node Exporter service started."
 echo ""
 echo "🔹 Step 9: Verifying deployment..."
 sleep 2
-VERIFY=$(ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "systemctl --user is-active node-exporter 2>/dev/null || pgrep -x node_exporter > /dev/null 2>&1 && echo 'active' || echo 'inactive'" 2>/dev/null)
+VERIFY=$(ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "pgrep -x node_exporter > /dev/null 2>&1 && echo 'active' || echo 'inactive'" 2>/dev/null)
 
 if echo "$VERIFY" | grep -q "active"; then
     echo "✅ Node Exporter is running and healthy!"
