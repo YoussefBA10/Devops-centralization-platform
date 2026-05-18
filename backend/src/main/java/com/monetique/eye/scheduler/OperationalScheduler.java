@@ -53,7 +53,9 @@ public class OperationalScheduler {
         List<Environment> environments = environmentRepository.findAll();
         for (Environment env : environments) {
             String label = env.getPrometheusLabel();
-            if (label == null || label.isEmpty()) continue;
+            if (label == null || label.isEmpty()) {
+                label = env.getSafeName();
+            }
 
             log.info("Processing environment: {}", env.getName());
 

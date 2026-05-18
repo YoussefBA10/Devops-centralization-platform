@@ -113,6 +113,9 @@ public class EnvironmentController {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         String label = getLabelValue(env.getPrometheusLabel());
+        if (label == null || label.isBlank()) {
+            label = env.getSafeName();
+        }
         long totalNodes = managedNodeRepository.countByEnvironment(env);
 
         return ResponseEntity.ok(Map.of(

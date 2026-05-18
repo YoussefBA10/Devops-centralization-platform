@@ -111,7 +111,11 @@ public class DeploymentService {
                     deploymentLog, 300);
 
             // 3. Deploy based on mode
-            String envLabel = environment.getSafeName();
+            String rawLabel = environment.getPrometheusLabel();
+            String envLabel = (rawLabel != null && rawLabel.contains("=")) ? rawLabel.substring(rawLabel.indexOf('=') + 1) : rawLabel;
+            if (envLabel == null || envLabel.isEmpty()) {
+                envLabel = environment.getSafeName();
+            }
             String centralIp = getCentralIp(environment);
             String nodeName = targetIp.equals(centralIp) ? "central-node"
                     : "node-" + targetIp.replace(".", "-");
@@ -927,7 +931,11 @@ public class DeploymentService {
                 targets = new java.util.ArrayList<>();
             }
 
-            String envLabel = environment.getSafeName();
+            String rawLabel = environment.getPrometheusLabel();
+            String envLabel = (rawLabel != null && rawLabel.contains("=")) ? rawLabel.substring(rawLabel.indexOf('=') + 1) : rawLabel;
+            if (envLabel == null || envLabel.isEmpty()) {
+                envLabel = environment.getSafeName();
+            }
             
             // SANITIZE IP
             String cleanIp = ip;

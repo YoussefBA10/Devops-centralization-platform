@@ -563,7 +563,8 @@ public class InfrastructureService {
         Environment env = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        String envLabel = env.getPrometheusLabel();
+        String rawLabel = env.getPrometheusLabel();
+        final String envLabel = (rawLabel == null || rawLabel.isEmpty()) ? env.getSafeName() : rawLabel;
         List<Map<String, Object>> rawAlerts = prometheusClient.getActiveAlerts();
 
         return rawAlerts.stream()
