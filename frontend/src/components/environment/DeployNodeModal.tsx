@@ -37,9 +37,9 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-background/95 backdrop-blur-xl" onClick={onClose}></div>
-      <Card className="w-full max-w-xl relative z-10 shadow-3xl border-primary/20 bg-card overflow-hidden">
-        <div className="h-2 w-full bg-primary animate-pulse"></div>
-        <CardHeader>
+      <Card className="w-full max-w-xl max-h-[95vh] flex flex-col relative z-10 shadow-3xl border-primary/20 bg-card overflow-hidden">
+        <div className="h-2 w-full bg-primary animate-pulse shrink-0"></div>
+        <CardHeader className="shrink-0">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-primary/10 rounded-lg">
               <Rocket className="w-5 h-5 text-primary" />
@@ -51,7 +51,7 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
             {step === 1 ? 'Step 1: Select target operating system' : 'Step 2: Configure remote connectivity'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-y-auto flex-1 pr-2 custom-scrollbar">
           {step === 1 ? (
             <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
               <div className="grid grid-cols-2 gap-4">
