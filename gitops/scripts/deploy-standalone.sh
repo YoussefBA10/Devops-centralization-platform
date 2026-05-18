@@ -44,11 +44,11 @@ if [ -f "$TARBALL_PATH" ]; then
     echo "✅ Node Exporter tarball already cached at: ${TARBALL_PATH}"
 else
     echo "📦 Downloading Node Exporter v1.7.0..."
-    if command -v wget &> /dev/null; then
-        wget -q --show-progress -O "$TARBALL_PATH" \
+    if command -v curl &> /dev/null; then
+        curl -sL -o "$TARBALL_PATH" \
             "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/${TARBALL_NAME}"
-    elif command -v curl &> /dev/null; then
-        curl -L -o "$TARBALL_PATH" \
+    elif command -v wget &> /dev/null; then
+        wget -q -O "$TARBALL_PATH" \
             "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/${TARBALL_NAME}"
     else
         echo "ERROR: Neither wget nor curl found on controller. Cannot download binary."
