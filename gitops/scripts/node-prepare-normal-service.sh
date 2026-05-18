@@ -30,6 +30,20 @@ fi
 
 echo "📦 Detected OS: $OS"
 
+# 1.5. Ensure Python 3 is installed (Required by Ansible for orchestration)
+if ! command -v python3 &> /dev/null; then
+    echo "🔹 Installing Python 3..."
+    if [ "$OS" == "RedHat" ]; then
+        $PKG_MGR install -y python3
+    else
+        $PKG_MGR update -y
+        $PKG_MGR install -y python3
+    fi
+    echo "✅ Python 3 installed successfully."
+else
+    echo "✅ Python 3 is already installed."
+fi
+
 # 2. Create Monitoring User
 if id "monitoring" &>/dev/null; then
     echo "✅ User 'monitoring' already exists."
