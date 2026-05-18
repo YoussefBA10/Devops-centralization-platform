@@ -110,28 +110,6 @@ public class DeploymentService {
                     new String[] { "bash", gitopsPath + "/scripts/ssh-configure.sh", sshUser, targetIp, sshPassword },
                     deploymentLog, 300);
 
-            // 2.5. Dynamically detect remote Python interpreter over SSH
-            String remotePython = "/usr/bin/python3";
-            try {
-                log.info("Attempting to dynamically detect python path on remote VM {}...", targetIp);
-                ProcessBuilder pb = new ProcessBuilder(
-                    "ssh", "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5",
-                    sshUser + "@" + targetIp, "which python3 || which python || command -v python3 || command -v python"
-                );
-                Process p = pb.start();
-                p.waitFor(5, TimeUnit.SECONDS);
-                if (p.exitValue() == 0) {
-                    BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                    String line = r.readLine();
-                    if (line != null && !line.trim().isEmpty()) {
-                        remotePython = line.trim();
-                        log.info("Successfully detected remote python interpreter at: {}", remotePython);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to detect remote Python over SSH, falling back to /usr/bin/python3: {}", e.getMessage());
-            }
-
             // 3. Execute Ansible Playbook
             String playbookFile = "deploy-tools.yml"; // Universal OS playbook
             
@@ -156,8 +134,7 @@ public class DeploymentService {
                     "-e", "target_host=" + targetIp,
                     "-e", "central_logstash_ip=" + centralIp,
                     "-e", "nodename=" + nodeName,
-                    "-e", "containerized=" + (containerized ? "true" : "false"),
-                    "-e", "ansible_python_interpreter=" + remotePython
+                    "-e", "containerized=" + (containerized ? "true" : "false")
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");

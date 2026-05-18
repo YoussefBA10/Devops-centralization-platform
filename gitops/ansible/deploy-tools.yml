@@ -11,6 +11,7 @@
 - name: Deploy Observability Tools to Agent Node
   hosts: "{{ target_host | default('all') }}"
   any_errors_fatal: yes
+  gather_facts: false
 
   vars:
     filebeat_version: "8.11.1"
@@ -23,11 +24,22 @@
     remote_image_dir: "~/monetique-images"
     # Deployment flag passed from backend
     containerized_flag: "{{ containerized | default(true) | bool }}"
-    ansible_python_interpreter: auto_legacy
 
   pre_tasks:
-    - name: Pre-flight Check - Verify connectivity
-      ping:
+    # Step 1: Detect the Python interpreter using raw SSH (no Python needed on remote)
+    - name: Detect Python interpreter on remote host
+      raw: "which python3 2>/dev/null || which python 2>/dev/null || echo /usr/bin/python"
+      register: detected_python
+      changed_when: false
+
+    # Step 2: Set the discovered interpreter (set_fact runs on controller, no remote Python needed)
+    - name: Set discovered Python interpreter
+      set_fact:
+        ansible_python_interpreter: "{{ detected_python.stdout_lines[0] | trim }}"
+
+    # Step 3: Now gather facts using the correct interpreter
+    - name: Gather facts with detected Python
+      setup:
 
   tasks:
     # =============================================================================
