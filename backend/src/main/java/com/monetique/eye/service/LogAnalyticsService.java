@@ -124,11 +124,11 @@ public class LogAnalyticsService {
                 environmentId, envLabel, appFilter, apps.size(), serviceName);
 
         return LogAnalyticsResponseDTO.builder()
-                .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName))
+                .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName, end))
                 .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, appFilter, appNodeName, apps, start, end))
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
-                .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName))
+                .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName, end))
                 .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, effectiveNodeName, start, end))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
                 .availableServices(availableServices)
@@ -140,65 +140,62 @@ public class LogAnalyticsService {
     }
 
     private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, String appNodeName, 
-                                                String containerEnvLabel, String appFilter, String containerNodeName) {
+                                                String containerEnvLabel, String appFilter, String containerNodeName, Instant end) {
         List<MetricCard> cards = new ArrayList<>();
+        String timeMod = " @ " + end.getEpochSecond();
 
         // 1. Error Rate
-        String errRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
-                appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String errRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m]%s)) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]%s)) * 100", 
+                appEnvLabel, springFilter, nodeFilter(appNodeName), timeMod, appEnvLabel, springFilter, nodeFilter(appNodeName), timeMod);
         Double errRate = prometheusClient.queryMetric(errRateQuery);
         cards.add(MetricCard.builder()
                 .label("Error rate")
                 .value(String.format("%.2f%%", errRate))
-                .delta("") // Removed hardcoded delta
+                .delta("")
                 .status(errRate > 5 ? "danger" : errRate > 1 ? "warning" : "neutral")
                 .source("prometheus")
                 .build());
 
         // 2. Request Rate
-        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]%s))", appEnvLabel, springFilter, nodeFilter(appNodeName), timeMod);
         Double reqRate = prometheusClient.queryMetric(reqRateQuery);
         cards.add(MetricCard.builder()
                 .label("Request rate")
                 .value(String.format("%.1f req/s", reqRate))
-                .delta("") // Removed hardcoded delta
+                .delta("")
                 .status("neutral")
                 .source("prometheus")
                 .build());
 
         // 3. DB Pool Usage
-        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}%s) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}%s) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), timeMod, appEnvLabel, springFilter, nodeFilter(appNodeName), timeMod);
         Double dbPool = prometheusClient.queryMetric(dbPoolQuery);
         cards.add(MetricCard.builder()
                 .label("DB pool usage")
                 .value(String.format("%.1f%%", dbPool))
-                .delta("") // Removed hardcoded delta
+                .delta("")
                 .status(dbPool > 90 ? "danger" : dbPool > 70 ? "warning" : "neutral")
                 .source("prometheus")
                 .build());
 
         // 4. Memory Usage (Dynamic Limit)
-        String limitQuery = String.format(Locale.US, "sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName));
-        Double memLimit = prometheusClient.queryMetric(limitQuery);
-        if (memLimit == null || memLimit <= 0) memLimit = 4294967296.0; // Fallback to 4GB if not set
-
-        String memQuery = String.format(Locale.US, "sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), memLimit);
+        String memQuery = String.format(Locale.US, "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s]%s)) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), containerEnvLabel, appFilter, nodeFilter(containerNodeName), timeMod);
         Double memUsage = prometheusClient.queryMetric(memQuery);
         cards.add(MetricCard.builder()
                 .label("Backend memory")
                 .value(String.format("%.1f%%", memUsage))
-                .delta("") // Removed hardcoded delta
+                .delta("")
                 .status(memUsage > 85 ? "danger" : memUsage > 70 ? "warning" : "neutral")
                 .source("cadvisor")
                 .build());
 
         // 5. Blackbox Probe
-        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, nodeFilter(appNodeName));
+        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}%s) * 100 or vector(100)", appEnvLabel, nodeFilter(appNodeName), timeMod);
         Double probeSuccess = prometheusClient.queryMetric(probeQuery);
         cards.add(MetricCard.builder()
                 .label("Blackbox probe")
                 .value(String.format("%.1f%%", probeSuccess))
-                .delta("") // Removed hardcoded delta
+                .delta("")
                 .status(probeSuccess < 95 ? "danger" : "neutral")
                 .source("blackbox")
                 .build());
@@ -547,24 +544,27 @@ public class LogAnalyticsService {
         }
     }
 
-    private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, String nodeName) {
+    private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, String nodeName, Instant end) {
         List<ResourcePressure> pressure = new ArrayList<>();
         
         for (Application app : apps) {
             String serviceName = app.getServiceNameKeyword();
             if (serviceName == null) continue;
             
-            Double mem = prometheusClient.queryMetric(String.format(Locale.US, "sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / 4294967296 * 100", envLabel, serviceName, nodeFilter(nodeName)));
-            Double cpu = prometheusClient.queryMetric(String.format(Locale.US, "sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[5m])) * 100", envLabel, serviceName, nodeFilter(nodeName)));
+            Double mem = prometheusClient.getContainerMemoryUsagePercentAtCrash(serviceName, envLabel, end);
+            Double disk = prometheusClient.getDiskUsagePercentAtCrash(serviceName, envLabel, end);
+            Double cpu = prometheusClient.queryMetric(String.format(Locale.US, "sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[5m] @ %d)) * 100", envLabel, serviceName, nodeFilter(nodeName), end.getEpochSecond()));
             
             String callout = null;
-            if (mem > 85) callout = "Memory pressure detected";
-            if (cpu > 80) callout = "CPU throttling likely";
+            if (disk > 90) callout = "Disk pressure critical";
+            else if (mem > 85) callout = "Memory pressure detected";
+            else if (cpu > 80) callout = "CPU throttling likely";
             
             pressure.add(ResourcePressure.builder()
                     .containerName(app.getName())
                     .memoryUsage(mem > 0 ? mem : 0.0)
                     .cpuUsage(cpu > 0 ? cpu : 0.0)
+                    .diskUsage(disk > 0 ? disk : 0.0)
                     .callout(callout)
                     .build());
         }

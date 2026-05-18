@@ -513,23 +513,49 @@ const AnalysePage: React.FC = () => {
             </CardHeader>
             <CardContent className="p-4 space-y-6">
               {data?.resourcePressure.map((container, i) => (
-                <div key={i} className="space-y-3">
+                <div key={i} className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase tracking-widest">{container.containerName}</span>
-                    <span className="text-[10px] font-mono font-bold text-muted-foreground">MEM: {container.memoryUsage.toFixed(1)}%</span>
+                    {container.callout && (
+                      <Badge variant="destructive" className="text-[9px] uppercase h-5 font-bold shadow-[0_0_10px_rgba(220,38,38,0.3)]">
+                        {container.callout}
+                      </Badge>
+                    )}
                   </div>
-                  <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-1000 ${container.memoryUsage > 85 ? 'bg-destructive' : container.memoryUsage > 70 ? 'bg-amber-500' : 'bg-primary'}`}
-                      style={{ width: `${container.memoryUsage}%` }}
-                    />
-                  </div>
-                  {container.callout && (
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <Info className="w-3 h-3 text-amber-500" />
-                      <p className="text-[10px] text-amber-500 font-bold italic">{container.callout}</p>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px] font-mono text-muted-foreground uppercase">
+                        <span>CPU</span>
+                        <span>{container.cpuUsage.toFixed(1)}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-secondary/50 rounded-full overflow-hidden">
+                        <div className={`h-full transition-all duration-1000 ${container.cpuUsage > 80 ? 'bg-destructive' : 'bg-primary'}`} style={{ width: `${Math.min(100, container.cpuUsage)}%` }} />
+                      </div>
                     </div>
-                  )}
+                    
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[10px] font-mono text-muted-foreground uppercase">
+                        <span>MEM</span>
+                        <span>{container.memoryUsage.toFixed(1)}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-secondary/50 rounded-full overflow-hidden">
+                        <div className={`h-full transition-all duration-1000 ${container.memoryUsage > 85 ? 'bg-destructive' : 'bg-primary'}`} style={{ width: `${Math.min(100, container.memoryUsage)}%` }} />
+                      </div>
+                    </div>
+
+                    {container.diskUsage !== undefined && container.diskUsage > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-[10px] font-mono text-muted-foreground uppercase">
+                          <span>DISK</span>
+                          <span>{container.diskUsage.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-secondary/50 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all duration-1000 ${container.diskUsage > 85 ? 'bg-destructive' : 'bg-primary'}`} style={{ width: `${Math.min(100, container.diskUsage)}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </CardContent>
