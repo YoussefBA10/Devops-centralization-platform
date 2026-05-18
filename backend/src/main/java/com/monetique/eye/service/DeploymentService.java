@@ -134,7 +134,8 @@ public class DeploymentService {
                     "-e", "target_host=" + targetIp,
                     "-e", "central_logstash_ip=" + centralIp,
                     "-e", "nodename=" + nodeName,
-                    "-e", "containerized=" + (containerized ? "true" : "false")
+                    "-e", "containerized=" + (containerized ? "true" : "false"),
+                    "-e", "ansible_python_interpreter=auto_legacy"
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
