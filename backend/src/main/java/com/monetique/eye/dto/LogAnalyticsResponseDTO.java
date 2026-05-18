@@ -79,6 +79,7 @@ public class LogAnalyticsResponseDTO {
         private String containerName;
         private double memoryUsage; // percentage
         private double cpuUsage;    // percentage or value
+        private Double diskUsage;   // percentage
         private String callout;     // optional warning text
     }
 
