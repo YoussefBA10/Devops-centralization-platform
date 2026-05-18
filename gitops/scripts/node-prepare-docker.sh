@@ -30,8 +30,22 @@ fi
 
 echo "📦 Detected OS: $OS"
 
-# 1.5. Ensure Python 3 is installed (Required by Ansible for orchestration)
-if ! command -v python3 &> /dev/null; then
+# 1.5. Ensure a compatible Python interpreter is installed (Required by Ansible)
+HAS_COMPATIBLE_PYTHON=false
+
+if command -v python3 &> /dev/null; then
+    echo "✅ Found python3 interpreter."
+    HAS_COMPATIBLE_PYTHON=true
+elif command -v python &> /dev/null; then
+    PY_VERSION=$(python -V 2>&1 | awk '{print $2}')
+    echo "🔹 Found 'python' command with version: $PY_VERSION"
+    if [[ "$PY_VERSION" =~ ^2\.[67] ]] || [[ "$PY_VERSION" =~ ^3\. ]]; then
+        echo "✅ Pre-installed 'python' ($PY_VERSION) is compatible with Ansible."
+        HAS_COMPATIBLE_PYTHON=true
+    fi
+fi
+
+if [ "$HAS_COMPATIBLE_PYTHON" = false ]; then
     echo "🔹 Installing Python 3..."
     if [ "$OS" == "RedHat" ]; then
         $PKG_MGR install -y python3
@@ -40,8 +54,6 @@ if ! command -v python3 &> /dev/null; then
         $PKG_MGR install -y python3
     fi
     echo "✅ Python 3 installed successfully."
-else
-    echo "✅ Python 3 is already installed."
 fi
 
 # 2. Install Docker if not present

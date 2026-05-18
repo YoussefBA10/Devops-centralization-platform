@@ -23,6 +23,7 @@
     remote_image_dir: "~/monetique-images"
     # Deployment flag passed from backend
     containerized_flag: "{{ containerized | default(true) | bool }}"
+    ansible_python_interpreter: auto_legacy
 
   pre_tasks:
     - name: Pre-flight Check - Verify connectivity
