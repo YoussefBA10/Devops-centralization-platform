@@ -211,12 +211,12 @@ const EnvironmentsPage: React.FC = () => {
     }
   };
 
-  const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string, osFamily: string) => {
+  const handleDeployAgent = async (targetIp: string, sshUser: string, sshPassword: string, osFamily: string, containerized: boolean) => {
     if (!selectedEnv) return;
     setDeploymentLoading(true);
     setDeploymentError(null);
     try {
-      await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword, osFamily });
+      await api.post(`/environments/${selectedEnv.id}/deploy-agent`, { targetIp, sshUser, sshPassword, osFamily, containerized });
       
       // Notify the specific card to start its internal polling
       setActiveDeployments(prev => ({ ...prev, [selectedEnv.id]: targetIp }));
@@ -228,6 +228,7 @@ const EnvironmentsPage: React.FC = () => {
       setDeploymentLoading(false);
     }
   };
+
 
   const filteredEnvs = environments.filter(env => 
     env.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

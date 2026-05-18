@@ -328,14 +328,15 @@ public class EnvironmentController {
     @PostMapping("/{id}/deploy-agent")
     @RequiresPermission("ENV_DEPLOYMENT_CREATE")
     public ResponseEntity<Map<String, Object>> deployAgent(@PathVariable Long id,
-            @RequestBody Map<String, String> request) {
+            @RequestBody Map<String, Object> request) {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        String targetIp = request.get("targetIp");
-        String sshUser = request.get("sshUser");
-        String sshPassword = request.get("sshPassword");
-        String osFamily = request.getOrDefault("osFamily", "ubuntu");
+        String targetIp = request.containsKey("targetIp") ? (String) request.get("targetIp") : null;
+        String sshUser = request.containsKey("sshUser") ? (String) request.get("sshUser") : null;
+        String sshPassword = request.containsKey("sshPassword") ? (String) request.get("sshPassword") : null;
+        String osFamily = request.containsKey("osFamily") ? (String) request.get("osFamily") : "ubuntu";
+        boolean containerized = !request.containsKey("containerized") || Boolean.parseBoolean(request.get("containerized").toString());
 
         if (targetIp == null || sshUser == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "targetIp and sshUser are required"));
@@ -350,13 +351,14 @@ public class EnvironmentController {
         }
 
         CompletableFuture<DeploymentLog> futureLog = deploymentService.deployAgentAsync(env, targetIp, sshUser,
-                sshPassword, osFamily);
+                sshPassword, osFamily, containerized);
 
         activityLogService.logActivity("Node Deployment Started: " + targetIp, "infrastructure", env.getName());
         return ResponseEntity.ok(Map.of(
                 "message", "Agent deployment triggered for " + targetIp,
                 "status", "IN_PROGRESS"));
     }
+
 
     @DeleteMapping("/{id}/nodes/{ip}")
     @RequiresPermission("ENV_DEPLOYMENT_DELETE")

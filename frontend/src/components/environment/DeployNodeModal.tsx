@@ -5,7 +5,7 @@ import { Button, Input } from '../ui/Input';
 
 interface DeployNodeModalProps {
   envName: string;
-  onDeploy: (ip: string, user: string, pass: string, osFamily: string) => void;
+  onDeploy: (ip: string, user: string, pass: string, osFamily: string, containerized: boolean) => void;
   onClose: () => void;
   loading: boolean;
   error: string | null;
@@ -17,6 +17,7 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
   const [targetIp, setTargetIp] = useState('');
   const [sshUser, setSshUser] = useState('root');
   const [sshPassword, setSshPassword] = useState('');
+  const [containerized, setContainerized] = useState(true);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -29,8 +30,9 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
     }
     
     if (!osFamily) return;
-    onDeploy(targetIp, sshUser, sshPassword, osFamily);
+    onDeploy(targetIp, sshUser, sshPassword, osFamily, containerized);
   };
+
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
@@ -143,6 +145,34 @@ const DeployNodeModal: React.FC<DeployNodeModalProps> = ({ envName, onDeploy, on
                     />
                   </div>
                 </div>
+
+              <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  Node Observability Mode
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setContainerized(true)}
+                    className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col justify-between h-32 ${
+                      containerized ? 'border-primary bg-primary/5 text-white' : 'border-white/5 bg-black/20 text-muted-foreground hover:border-white/10'
+                    }`}
+                  >
+                    <span className="font-bold text-sm block mb-1">Containerized</span>
+                    <span className="text-[10px] opacity-70 leading-relaxed block">Deploys cAdvisor & Node Exporter inside Docker containers. Requires Docker daemon access.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setContainerized(false)}
+                    className={`p-4 rounded-2xl border-2 transition-all text-left flex flex-col justify-between h-32 ${
+                      !containerized ? 'border-primary bg-primary/5 text-white' : 'border-white/5 bg-black/20 text-muted-foreground hover:border-white/10'
+                    }`}
+                  >
+                    <span className="font-bold text-sm block mb-1">Standalone Service</span>
+                    <span className="text-[10px] opacity-70 leading-relaxed block">Installs Node Exporter alone as a standard systemd user service. Ideal for non-root environments.</span>
+                  </button>
+                </div>
+              </div>
               
               <div className="flex flex-col gap-3">
                 <div className="px-4 py-2 rounded-lg bg-blue-500/5 border border-blue-500/10 flex items-center gap-3">

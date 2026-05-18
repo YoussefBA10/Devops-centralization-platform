@@ -81,7 +81,13 @@ public class DeploymentService {
     @Async
     public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser,
             String sshPassword, String osFamily) {
-        log.info("Starting agent deployment for environment: {} at IP: {}", environment.getName(), targetIp);
+        return deployAgentAsync(environment, targetIp, sshUser, sshPassword, osFamily, true);
+    }
+
+    @Async
+    public CompletableFuture<DeploymentLog> deployAgentAsync(Environment environment, String targetIp, String sshUser,
+            String sshPassword, String osFamily, boolean containerized) {
+        log.info("Starting agent deployment for environment: {} at IP: {} (containerized: {})", environment.getName(), targetIp, containerized);
 
         DeploymentLog deploymentLog = DeploymentLog.builder()
                 .environment(environment)
@@ -127,7 +133,8 @@ public class DeploymentService {
                     "-e", "ssh_user=" + sshUser,
                     "-e", "target_host=" + targetIp,
                     "-e", "central_logstash_ip=" + centralIp,
-                    "-e", "nodename=" + nodeName
+                    "-e", "nodename=" + nodeName,
+                    "-e", "containerized=" + (containerized ? "true" : "false")
             }, deploymentLog, 600);
 
             deploymentLog.setStatus("SUCCESS");
@@ -175,6 +182,7 @@ public class DeploymentService {
             managedNode.setNodeName(nodeName);
             managedNode.setCadvisorPort(detectedCadvisorPort);
             managedNode.setNodeExporterPort(detectedNodeExporterPort);
+            managedNode.setContainerized(containerized);
             managedNode = managedNodeRepository.save(managedNode);
 
             // Register in Prometheus with the persisted node ID
@@ -959,8 +967,20 @@ public class DeploymentService {
 
             // Check for duplicates and update or add
             updateOrAdd(targets, nodeExporter);
-            updateOrAdd(targets, cadvisor);
-            updateOrAdd(targets, filebeat);
+            
+            boolean isContainerized = node == null || node.getContainerized() == null || node.getContainerized();
+            if (isContainerized) {
+                updateOrAdd(targets, cadvisor);
+                updateOrAdd(targets, filebeat);
+            } else {
+                // Standalone mode: remove cadvisor and filebeat targets for this node/IP
+                targets.removeIf(item -> {
+                    String target = ((java.util.List<String>) item.get("targets")).get(0);
+                    String job = ((java.util.Map<String, String>) item.get("labels")).get("job");
+                    return target.startsWith(finalIp + ":") && (job.equals("cadvisor") || job.equals("filebeat"));
+                });
+            }
+
 
             mapper.writeValue(configFile, targets);
             log.info("Updated Prometheus targets in {}", configFile.getAbsolutePath());

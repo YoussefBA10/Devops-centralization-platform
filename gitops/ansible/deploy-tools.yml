@@ -1,15 +1,12 @@
 ---
 # =============================================================================
-# Deploy Observability Tools to Agent Node (Air-Gapped Compatible)
+# Deploy Observability Tools to Agent Node (Air-Gapped & Non-Root Compatible)
 # =============================================================================
-# This playbook deploys cAdvisor, Node Exporter, and Filebeat to remote agent
-# nodes that may have NO internet access. It uses a "Controller-to-Remote"
-# image transfer pattern:
-#   1. Export Docker images as .tar on the controller (delegate_to: localhost)
-#   2. Copy .tar files to the remote node via SSH
-#   3. Load images into Docker on the remote node
-#   4. Run the containers
-# The remote user only needs docker group membership (no sudo required).
+# This playbook supports two deployment modes based on 'containerized' parameter:
+#   1. Containerized Mode (default): Deploys cAdvisor, Node Exporter, and Filebeat
+#      inside Docker containers. Requires Docker group access.
+#   2. Standalone Mode: Installs Node Exporter alone as a standard systemd user
+#      service. Does NOT require Docker or root/sudo privileges on the remote node.
 # =============================================================================
 - name: Deploy Observability Tools to Agent Node
   hosts: "{{ target_host | default('all') }}"
@@ -24,15 +21,19 @@
     image_cache_dir: "/app/gitops/image-cache"
     # Remote-side staging dir (in user's home, avoids /tmp permission issues)
     remote_image_dir: "~/monetique-images"
+    # Deployment flag passed from backend
+    containerized_flag: "{{ containerized | default(true) | bool }}"
 
   pre_tasks:
     - name: Pre-flight Check - Verify connectivity
       ping:
 
   tasks:
-    # =========================
-    #  Prepare Images on Controller (delegated)
-    # =========================
+    # =============================================================================
+    #  A. CONTAINERIZED MODE TASKS (Docker-based)
+    # =============================================================================
+    
+    # 1. Prepare Docker Images on Controller (delegated)
     - name: Ensure image cache directory exists on controller
       file:
         path: "{{ image_cache_dir }}"
@@ -40,6 +41,7 @@
         mode: '0755'
       delegate_to: localhost
       run_once: true
+      when: containerized_flag
 
     - name: Check if cAdvisor tarball is cached
       stat:
@@ -47,12 +49,15 @@
       register: cadvisor_tar_check
       delegate_to: localhost
       run_once: true
+      when: containerized_flag
 
     - name: Export cAdvisor image on controller
       shell: "docker save -o {{ image_cache_dir }}/cadvisor.tar gcr.io/cadvisor/cadvisor:latest"
       delegate_to: localhost
       run_once: true
-      when: not cadvisor_tar_check.stat.exists
+      when: 
+        - containerized_flag
+        - not cadvisor_tar_check.stat.exists
 
     - name: Check if Node Exporter tarball is cached
       stat:
@@ -60,12 +65,15 @@
       register: node_exporter_tar_check
       delegate_to: localhost
       run_once: true
+      when: containerized_flag
 
     - name: Export Node Exporter image on controller
       shell: "docker save -o {{ image_cache_dir }}/node-exporter.tar prom/node-exporter:latest"
       delegate_to: localhost
       run_once: true
-      when: not node_exporter_tar_check.stat.exists
+      when: 
+        - containerized_flag
+        - not node_exporter_tar_check.stat.exists
 
     - name: Check if Filebeat tarball is cached
       stat:
@@ -73,12 +81,15 @@
       register: filebeat_cache_check
       delegate_to: localhost
       run_once: true
+      when: containerized_flag
 
     - name: Export Filebeat image on controller
       shell: "docker save -o {{ image_cache_dir }}/filebeat.tar docker.elastic.co/beats/filebeat:{{ filebeat_version }}"
       delegate_to: localhost
       run_once: true
-      when: not filebeat_cache_check.stat.exists
+      when: 
+        - containerized_flag
+        - not filebeat_cache_check.stat.exists
 
     - name: Ensure tarballs are readable
       file:
@@ -90,44 +101,49 @@
         - filebeat.tar
       delegate_to: localhost
       run_once: true
+      when: containerized_flag
 
-    # =========================
-    #  Prepare Remote Staging Dir
-    # =========================
+    # 2. Remote preparation and execution
     - name: Ensure remote image directory exists
       shell: "mkdir -p ~/monetique-images"
       args:
         executable: /bin/bash
       changed_when: false
+      when: containerized_flag
 
-    # =========================
-    #  cAdvisor
-    # =========================
+    # cAdvisor Tasks
     - name: Detect existing cAdvisor container
       shell: |
         docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' cadvisor || echo ""
       register: existing_cadvisor_port
       changed_when: false
       ignore_errors: yes
+      when: containerized_flag
 
     - name: Set cAdvisor Port Fact
       set_fact:
         final_cadvisor_port: "{{ existing_cadvisor_port.stdout | default('8085') }}"
+      when: containerized_flag
 
     - name: Output Final cAdvisor Port for Backend
       debug:
         msg: "FINAL_CADVISOR_PORT={{ final_cadvisor_port }}"
+      when: containerized_flag
 
     - name: Transfer cAdvisor image to remote
       copy:
         src: "{{ image_cache_dir }}/cadvisor.tar"
         dest: "{{ remote_image_dir }}/cadvisor.tar"
         mode: '0644'
-      when: existing_cadvisor_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_cadvisor_port.stdout | default('') == ""
 
     - name: Load cAdvisor image into Docker
       shell: "docker load -i ~/monetique-images/cadvisor.tar"
-      when: existing_cadvisor_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_cadvisor_port.stdout | default('') == ""
 
     - name: Run cAdvisor (Only if not already running)
       shell: |
@@ -143,42 +159,51 @@
         gcr.io/cadvisor/cadvisor:latest
       args:
         executable: /bin/bash
-      when: existing_cadvisor_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_cadvisor_port.stdout | default('') == ""
 
     - name: Cleanup cAdvisor tarball from remote
       file:
         path: "{{ remote_image_dir }}/cadvisor.tar"
         state: absent
-      when: existing_cadvisor_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_cadvisor_port.stdout | default('') == ""
 
-    # =========================
-    #  Node Exporter
-    # =========================
+    # Node Exporter Tasks (Containerized)
     - name: Detect existing Node Exporter container
       shell: |
         docker inspect -f '{% raw %}{{range $p, $conf := .NetworkSettings.Ports}}{{(index $conf 0).HostPort}}{{end}}{% endraw %}' node-exporter || echo ""
       register: existing_node_exporter_port
       changed_when: false
       ignore_errors: yes
+      when: containerized_flag
 
     - name: Set Node Exporter Port Fact
       set_fact:
         final_node_exporter_port: "{{ existing_node_exporter_port.stdout | default('9100') }}"
+      when: containerized_flag
 
-    - name: Output Final Node Exporter Port for Backend
+    - name: Output Final Node Exporter Port for Backend (Containerized)
       debug:
         msg: "FINAL_NODE_EXPORTER_PORT={{ final_node_exporter_port }}"
+      when: containerized_flag
 
     - name: Transfer Node Exporter image to remote
       copy:
         src: "{{ image_cache_dir }}/node-exporter.tar"
         dest: "{{ remote_image_dir }}/node-exporter.tar"
         mode: '0644'
-      when: existing_node_exporter_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_node_exporter_port.stdout | default('') == ""
 
     - name: Load Node Exporter image into Docker
       shell: "docker load -i ~/monetique-images/node-exporter.tar"
-      when: existing_node_exporter_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_node_exporter_port.stdout | default('') == ""
 
     - name: Run Node Exporter (Only if not already running)
       shell: |
@@ -191,46 +216,49 @@
         --path.rootfs=/host
       args:
         executable: /bin/bash
-      when: existing_node_exporter_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_node_exporter_port.stdout | default('') == ""
 
     - name: Cleanup Node Exporter tarball from remote
       file:
         path: "{{ remote_image_dir }}/node-exporter.tar"
         state: absent
-      when: existing_node_exporter_port.stdout | default('') == ""
+      when: 
+        - containerized_flag
+        - existing_node_exporter_port.stdout | default('') == ""
 
-    - name: Debug Central Logstash IP
-      debug:
-        msg: "Attempting to connect to central Logstash at {{ central_logstash_ip }}:5045"
-
-
-
-    # =========================
-    #  Filebeat
-    # =========================
+    # Filebeat Tasks (Containerized)
     - name: Check if Filebeat container is already running
       shell: "docker inspect -f '{% raw %}{{.State.Status}}{% endraw %}' filebeat 2>/dev/null || echo 'none'"
       register: filebeat_status_check
       changed_when: false
       ignore_errors: yes
+      when: containerized_flag
 
     - name: Transfer Filebeat image to remote
       copy:
         src: "{{ image_cache_dir }}/filebeat.tar"
         dest: "{{ remote_image_dir }}/filebeat.tar"
         mode: '0644'
-      when: filebeat_status_check.stdout != 'running'
+      when: 
+        - containerized_flag
+        - filebeat_status_check.stdout | default('') != 'running'
 
     - name: Load Filebeat image into Docker
       shell: "docker load -i ~/monetique-images/filebeat.tar"
-      when: filebeat_status_check.stdout != 'running'
+      when: 
+        - containerized_flag
+        - filebeat_status_check.stdout | default('') != 'running'
 
     - name: Transfer Filebeat config for remote node
       template:
         src: "../vmpipe/filebeat/remote_filebeat.yml"
         dest: "/home/{{ ansible_user }}/filebeat.yml"
         mode: '0644'
-      when: filebeat_status_check.stdout != 'running'
+      when: 
+        - containerized_flag
+        - filebeat_status_check.stdout | default('') != 'running'
 
     - name: Run Filebeat
       shell: |
@@ -245,17 +273,94 @@
         docker.elastic.co/beats/filebeat:{{ filebeat_version }} filebeat -e -strict.perms=false
       args:
         executable: /bin/bash
-      when: filebeat_status_check.stdout != 'running'
+      when: 
+        - containerized_flag
+        - filebeat_status_check.stdout | default('') != 'running'
 
     - name: Cleanup Filebeat tarball from remote
       file:
         path: "{{ remote_image_dir }}/filebeat.tar"
         state: absent
-      when: filebeat_status_check.stdout != 'running'
+      when: 
+        - containerized_flag
+        - filebeat_status_check.stdout | default('') != 'running'
 
-    # =========================
-    #  Final Cleanup
-    # =========================
     - name: Remove remote image directory if empty
       shell: "rmdir ~/monetique-images 2>/dev/null || true"
       changed_when: false
+      when: containerized_flag
+
+
+    # =============================================================================
+    #  B. STANDALONE NODE EXPORTER MODE TASKS (Non-Docker, systemd user service)
+    # =============================================================================
+
+    # 1. Download/Cache binary on controller
+    - name: Check if Node Exporter binary is cached on controller
+      stat:
+        path: "{{ image_cache_dir }}/node_exporter-1.7.0.linux-amd64.tar.gz"
+      register: node_exporter_bin_check
+      delegate_to: localhost
+      run_once: true
+      when: not containerized_flag
+
+    - name: Download Node Exporter binary on controller (Air-gap Preparation)
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.7.0/node_exporter-1.7.0.linux-amd64.tar.gz"
+        dest: "{{ image_cache_dir }}/node_exporter-1.7.0.linux-amd64.tar.gz"
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+      when: 
+        - not containerized_flag
+        - not node_exporter_bin_check.stat.exists
+
+    # 2. Extract and configure Node Exporter on remote (No root/sudo required!)
+    - name: Create directories on remote node
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "~/node-exporter"
+        - "~/.config/systemd/user"
+      when: not containerized_flag
+
+    - name: Extract Node Exporter binary to remote node
+      unarchive:
+        src: "{{ image_cache_dir }}/node_exporter-1.7.0.linux-amd64.tar.gz"
+        dest: "~/node-exporter"
+        remote_src: no
+        extra_opts: [--strip-components=1]
+      when: not containerized_flag
+
+    - name: Write Node Exporter systemd user service file
+      copy:
+        dest: "~/.config/systemd/user/node-exporter.service"
+        content: |
+          [Unit]
+          Description=Node Exporter Standalone Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/home/{{ ansible_user }}/node-exporter/node_exporter --collector.systemd
+
+          [Install]
+          WantedBy=default.target
+        mode: '0644'
+      when: not containerized_flag
+
+    - name: Reload user systemd daemon and enable/start Node Exporter
+      systemd:
+        name: node-exporter
+        scope: user
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      when: not containerized_flag
+
+    - name: Output Final Node Exporter Port for Backend (Standalone)
+      debug:
+        msg: "FINAL_NODE_EXPORTER_PORT=9100"
+      when: not containerized_flag

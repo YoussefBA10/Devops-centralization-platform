@@ -68,7 +68,7 @@ const ServiceDetailsDrawer: React.FC<Props> = ({ service, onClose }) => {
                  {service.status}
                </span>
                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border bg-secondary/50 text-muted-foreground border-white/10">
-                 Docker Container
+                 {service.containerId === 'systemd' ? 'Systemd Service' : 'Docker Container'}
                </span>
             </div>
           </div>

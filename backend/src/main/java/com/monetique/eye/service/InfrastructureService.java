@@ -449,7 +449,7 @@ public class InfrastructureService {
             }
         }
 
-        return builders.values().stream().map(b -> {
+        List<ServiceResourceDTO> services = builders.values().stream().map(b -> {
             ServiceResourceDTO dto = b.build();
             // Resource Threshold Logic (Only upgrade status, never downgrade CRITICAL/Stopped states)
             if (!"CRITICAL".equals(dto.getStatus())) {
@@ -458,6 +458,65 @@ public class InfrastructureService {
             }
             return dto;
         }).collect(Collectors.toList());
+
+        // Dynamic Systemd Service Discovery
+        try {
+            List<Map<String, Object>> systemdActiveData = prometheusClient.queryList(
+                    String.format("node_systemd_unit_state{environment=~\"%s\", name=~\"prometheus.service|node-exporter.service|node_exporter.service|docker.service|ssh.service|nginx.service|filebeat.service|mysql.service|postgresql.service|cron.service\", state=\"active\"} == 1", envFilter));
+
+            List<Map<String, Object>> systemdFailedData = prometheusClient.queryList(
+                    String.format("node_systemd_unit_state{environment=~\"%s\", name=~\"prometheus.service|node-exporter.service|node_exporter.service|docker.service|ssh.service|nginx.service|filebeat.service|mysql.service|postgresql.service|cron.service\", state=\"failed\"} == 1", envFilter));
+
+            java.util.Set<String> processedKeys = new java.util.HashSet<>();
+
+            // Parse failed units first to prioritize CRITICAL statuses
+            for (Map<String, Object> m : systemdFailedData) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                if (metric == null) continue;
+                String serviceNameRaw = metric.get("name");
+                String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
+                String inst = metric.get("instance");
+                if (inst == null) continue;
+                String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                String key = serviceName + "@" + displayNode;
+
+                services.add(ServiceResourceDTO.builder()
+                        .serviceName(serviceName)
+                        .nodeName(displayNode)
+                        .containerId("systemd")
+                        .status("CRITICAL")
+                        .healthReason("Systemd service in FAILED state")
+                        .build());
+                processedKeys.add(key);
+            }
+
+            // Parse active units next
+            for (Map<String, Object> m : systemdActiveData) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                if (metric == null) continue;
+                String serviceNameRaw = metric.get("name");
+                String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
+                String inst = metric.get("instance");
+                if (inst == null) continue;
+                String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                String key = serviceName + "@" + displayNode;
+
+                if (!processedKeys.contains(key)) {
+                    services.add(ServiceResourceDTO.builder()
+                            .serviceName(serviceName)
+                            .nodeName(displayNode)
+                            .containerId("systemd")
+                            .status("HEALTHY")
+                            .build());
+                    processedKeys.add(key);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to discover systemd services: {}", ex.getMessage());
+        }
+
+        return services;
+
     }
 
     private String buildEnvFilter(Environment env) {

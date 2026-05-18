@@ -47,6 +47,11 @@ public class ManagedNode {
 
     private String appName;
 
+    @Column(name = "containerized")
+    @Builder.Default
+    private Boolean containerized = true;
+
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "environment_id", nullable = false)
     @ToString.Exclude

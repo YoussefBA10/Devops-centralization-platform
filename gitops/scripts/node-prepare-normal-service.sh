@@ -1,20 +1,20 @@
 #!/bin/bash
 
 # =================================================================
-# Monetique-Eye V2.0.0 Node Preparation Script
+# Monetique-Eye V2.0.0 Standalone Node Preparation Script
 # -----------------------------------------------------------------
 # This script must be run as ROOT on any new server before
-# adding it to the Monetique-Eye platform.
+# adding it to the Monetique-Eye platform as a standalone node.
 #
 # It performs:
 # 1. User creation (monitoring)
-# 2. Docker installation & group assignment
-# 3. Directory structure & permissions setup
+# 2. Enabling systemd lingering
+# 3. Setting up systemd user directories
 # =================================================================
 
 set -e
 
-echo "🚀 Starting Monetique-Eye Node Preparation..."
+echo "🚀 Starting Standalone Node Preparation..."
 
 # 1. Detect OS
 if [ -f /etc/redhat-release ]; then
@@ -24,36 +24,13 @@ elif [ -f /etc/lsb-release ] || [ -f /etc/debian_version ]; then
     OS="Debian"
     PKG_MGR="apt"
 else
-    echo "❌ Unsupported OS. Please install Docker and create the monitoring user manually."
+    echo "❌ Unsupported OS. Please create the monitoring user manually."
     exit 1
 fi
 
 echo "📦 Detected OS: $OS"
 
-# 2. Install Docker if not present
-if ! command -v docker &> /dev/null; then
-    echo "🔹 Installing Docker..."
-    if [ "$OS" == "RedHat" ]; then
-        $PKG_MGR install -y yum-utils
-        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-        $PKG_MGR install -y docker-ce docker-ce-cli containerd.io
-    else
-        $PKG_MGR update -y
-        $PKG_MGR install -y docker.io
-    fi
-    systemctl enable --now docker
-    echo "✅ Docker installed successfully."
-else
-    echo "✅ Docker is already installed."
-fi
-
-# 3. Install Git
-if ! command -v git &> /dev/null; then
-    echo "🔹 Installing Git..."
-    $PKG_MGR install -y git
-fi
-
-# 4. Create Monitoring User
+# 2. Create Monitoring User
 if id "monitoring" &>/dev/null; then
     echo "✅ User 'monitoring' already exists."
 else
@@ -63,12 +40,17 @@ else
     passwd monitoring
 fi
 
-# 5. Add to Docker group
-echo "🔹 Assigning 'monitoring' to docker group..."
-usermod -aG docker monitoring
+# 3. Enable systemd lingering
+echo "🔹 Enabling systemd lingering for monitoring user..."
+loginctl enable-linger monitoring || true
 
+# 4. Setup systemd user config directory
+echo "🔹 Creating user systemd directories..."
+mkdir -p /home/monitoring/.config/systemd/user
+chown -R monitoring:monitoring /home/monitoring/.config/systemd
+chmod -R 755 /home/monitoring/.config/systemd
 
-# 6. Setup Directory Structure
+# 4.5. Setup Directory Structure
 echo "🔹 Configuring /data/monetique permissions..."
 if [ -d "/opt/monetique" ]; then
     echo "⚠️ Found legacy /opt/monetique directory. Please migrate data manually if needed."
@@ -77,12 +59,13 @@ mkdir -p /data/monetique/apps
 chown -R monitoring:monitoring /data/monetique
 chmod -R 755 /data/monetique
 
-# 7. Final Check
+# 5. Final Check
 echo "---------------------------------------------------"
-echo "✅ Node Preparation Complete!"
+echo "✅ Standalone Node Preparation Complete!"
 echo "---------------------------------------------------"
 echo "Next steps:"
 echo "1. Log into Monetique-Eye Dashboard."
 echo "2. Add this node using the IP: $(hostname -I | awk '{print $1}')"
-echo "3. Use the 'monitoring' user credentials."
+echo "3. Choose 'Standalone Service' in the deployment modal."
+echo "4. Use the 'monitoring' user credentials."
 echo "---------------------------------------------------"
