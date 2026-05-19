@@ -237,9 +237,10 @@ else
         pkill -f '[p]rocess-exporter' 2>/dev/null || true
         sleep 1
         # Start with nohup
-        nohup ~/node-exporter/node_exporter --collector.systemd > ~/node-exporter/node_exporter.log 2>&1 &
-        nohup ~/process-exporter/process-exporter --config.path=\$HOME/process-exporter/process-exporter.yml > ~/process-exporter/process-exporter.log 2>&1 &
-        disown
+        nohup ~/node-exporter/node_exporter --collector.systemd < /dev/null > ~/node-exporter/node_exporter.log 2>&1 &
+        nohup ~/process-exporter/process-exporter --config.path=\$HOME/process-exporter/process-exporter.yml < /dev/null > ~/process-exporter/process-exporter.log 2>&1 &
+        disown || true
+        sleep 1
     " 2>/dev/null
     echo "✅ Exporters started via nohup."
 fi
