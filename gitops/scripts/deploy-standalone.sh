@@ -233,8 +233,8 @@ else
     echo "⚠️  systemd --user not available. Starting with nohup fallback..."
     ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "
         # Kill any existing instance
-        pkill -x node_exporter 2>/dev/null || true
-        pkill -x process-exporter 2>/dev/null || true
+        pkill -f node_exporter 2>/dev/null || true
+        pkill -f process-exporter 2>/dev/null || true
         sleep 1
         # Start with nohup
         nohup ~/node-exporter/node_exporter --collector.systemd > ~/node-exporter/node_exporter.log 2>&1 &
