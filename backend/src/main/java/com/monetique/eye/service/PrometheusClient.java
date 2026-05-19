@@ -217,28 +217,28 @@ public class PrometheusClient {
     }
 
     public List<Map<String, Object>> getContainerStartTimes(String envFilter) {
-        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"cadvisor|node-exporter|node_exporter\", name!~\"cadvisor|node-exporter|node_exporter\"";
         String query = String.format("last_over_time(container_start_time_seconds{%s, environment=~\"%s\"}[10m]) or last_over_time(container_start_time_seconds{%s, container_label_env=~\"%s\"}[10m])",
                 infraExclusion, envFilter, infraExclusion, envFilter);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerRestartCounts(String envFilter) {
-        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"cadvisor|node-exporter|node_exporter\", name!~\"cadvisor|node-exporter|node_exporter\"";
         String query = String.format("changes(container_start_time_seconds{%s, environment=~\"%s\"}[24h]) or changes(container_start_time_seconds{%s, container_label_env=~\"%s\"}[24h])",
                 infraExclusion, envFilter, infraExclusion, envFilter);
         return queryList(query);
     }
 
     public List<Map<String, Object>> getContainerLastSeen(String envFilter) {
-        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"cadvisor|node-exporter|node_exporter\", name!~\"cadvisor|node-exporter|node_exporter\"";
         String query = String.format("last_over_time(container_last_seen{%s, environment=~\"%s\"}[10m]) or last_over_time(container_last_seen{%s, container_label_env=~\"%s\"}[10m])",
                 infraExclusion, envFilter, infraExclusion, envFilter);
         return queryList(query);
     }
 
     private String buildContainerQuery(String baseMetric, String suffix, String envFilter) {
-        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"prometheus|grafana\", name!~\"prometheus|grafana\"";
+        String infraExclusion = "image!=\"\", name!=\"\", container_label_com_docker_compose_service!~\"cadvisor|node-exporter|node_exporter\", name!~\"cadvisor|node-exporter|node_exporter\"";
         return String.format("%1$s{%2$s, environment=~\"%3$s\"}%4$s or %1$s{%2$s, container_label_env=~\"%3$s\"}%4$s", 
                 baseMetric, infraExclusion, envFilter, suffix);
     }

@@ -370,6 +370,8 @@ public class InfrastructureService {
         }
         final long prometheusNow = clusterMaxTs > 0 ? clusterMaxTs : (System.currentTimeMillis() / 1000);
 
+        log.info("getEnvironmentServiceResources - env: {}, lastSeenData size: {}, cpuData size: {}, memData size: {}", env.getName(), lastSeenData.size(), cpuData.size(), memData.size());
+
         // 1. Initialize builders from Liveness Data (Inventory Source of Truth)
         for (Map<String, Object> m : lastSeenData) {
             Map<String, String> metric = (Map<String, String>) m.get("metric");
@@ -392,6 +394,8 @@ public class InfrastructureService {
                 reason = String.format("Container stopped (Stale by %ds)", delta);
             }
 
+            log.info("Builder initialized key: {}, displayNode: {}", key, displayNode);
+
             builders.put(key, ServiceResourceDTO.builder()
                     .serviceName(serviceName)
                     .nodeName(displayNode)
@@ -408,6 +412,8 @@ public class InfrastructureService {
             double cpuAbs = Double.parseDouble(m.get("value").toString());
             double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
             double cpuPercent = (cpuAbs / hostTotal) * 100.0;
+            
+            log.info("cpuData processing key: {}, exists in builders: {}, value: {}", key, builders.containsKey(key), cpuAbs);
             
             builders.computeIfPresent(key, (k, b) -> b.cpuUsageCores(cpuAbs).cpuUsagePercent(cpuPercent));
         }
@@ -499,6 +505,7 @@ public class InfrastructureService {
                 String serviceNameRaw = metric.get("name");
                 String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
                 if (systemdNoise.contains(serviceName)) continue;
+                if (!isAllowedSystemdService(serviceName)) continue;
                 String inst = metric.get("instance");
                 if (inst == null) continue;
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
@@ -523,6 +530,7 @@ public class InfrastructureService {
                 String serviceNameRaw = metric.get("name");
                 String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
                 if (systemdNoise.contains(serviceName)) continue;
+                if (!isAllowedSystemdService(serviceName)) continue;
                 String inst = metric.get("instance");
                 if (inst == null) continue;
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
@@ -550,8 +558,7 @@ public class InfrastructureService {
 
             // Infrastructure jobs to skip (monitoring infra, not user services)
             java.util.Set<String> infraJobs = java.util.Set.of(
-                    "node-exporter", "node_exporter", "cadvisor", "prometheus", "grafana",
-                    "alertmanager", "pushgateway", "blackbox-exporter"
+                    "node-exporter", "node_exporter", "cadvisor", "pushgateway", "blackbox-exporter"
             );
 
             // Batch-fetch process-level resource metrics for non-container services
@@ -717,6 +724,22 @@ public class InfrastructureService {
     private String metricToKey(Map<String, Object> m) {
         Map<String, String> metric = (Map<String, String>) m.get("metric");
         return resolveServiceName(metric) + "@" + metric.get("instance");
+    }
+
+    private boolean isAllowedSystemdService(String serviceName) {
+        if (serviceName == null) return false;
+        String lower = serviceName.toLowerCase();
+        java.util.List<String> keywords = java.util.List.of(
+                "prometheus", "loki", "frontend", "backend", "smgs", "alertmanager",
+                "grafana", "elasticsearch", "logstash", "kibana", "nginx", "filebeat",
+                "mysql", "postgres", "redis", "mongodb", "rabbitmq", "activemq", "eye", "app"
+        );
+        for (String kw : keywords) {
+            if (lower.contains(kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public List<IncidentDTO> getEnvironmentIncidents(Long environmentId) {
