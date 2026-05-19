@@ -151,3 +151,20 @@ scrape_configs:
         target_label: __param_module
       - target_label: __address__
         replacement: blackbox-exporter:9115
+
+  # 13. Process Exporter (Process resource metrics)
+  - job_name: 'process-exporter'
+    metrics_path: '/metrics'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/file_sd/*.yml'
+          - '/etc/prometheus/file_sd/*.json'
+        refresh_interval: 15s
+    relabel_configs:
+      - source_labels: [job]
+        regex: 'process-exporter'
+        action: keep
+      - source_labels: [instance]
+        regex: '([^:]+):.*'
+        target_label: instance
+        replacement: '${1}'

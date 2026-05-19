@@ -518,6 +518,78 @@ public class InfrastructureService {
             }
         }
 
+        // ==================================================================
+        // Enrich Standalone Systemd Services from Process Exporter Metrics
+        // ==================================================================
+        try {
+            List<Map<String, Object>> peCpu = prometheusClient.queryList(
+                    String.format("rate(namedprocess_namegroup_cpu_seconds_total{environment=~\"%s\"}[5m])", envFilter));
+            List<Map<String, Object>> peMem = prometheusClient.queryList(
+                    String.format("namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\"}", envFilter));
+            List<Map<String, Object>> peRead = prometheusClient.queryList(
+                    String.format("rate(namedprocess_namegroup_read_bytes_total{environment=~\"%s\"}[5m])", envFilter));
+            List<Map<String, Object>> peWrite = prometheusClient.queryList(
+                    String.format("rate(namedprocess_namegroup_write_bytes_total{environment=~\"%s\"}[5m])", envFilter));
+
+            for (Map<String, Object> m : peCpu) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                if (metric == null) continue;
+                String group = metric.get("groupname");
+                String inst = metric.get("instance");
+                if (group != null && inst != null) {
+                    String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
+                    double cpuVal = Double.parseDouble(m.get("value").toString());
+                    double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
+                    double cpuPercent = (cpuVal / hostTotal) * 100.0;
+                    builders.computeIfPresent(key, (k, b) -> b.cpuUsageCores(cpuVal).cpuUsagePercent(cpuPercent));
+                }
+            }
+
+            for (Map<String, Object> m : peMem) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                if (metric == null) continue;
+                String group = metric.get("groupname");
+                String inst = metric.get("instance");
+                if (group != null && inst != null) {
+                    String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
+                    long memVal = (long) Double.parseDouble(m.get("value").toString());
+                    double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
+                    double memPercent = ((double) memVal / hostTotal) * 100.0;
+                    builders.computeIfPresent(key, (k, b) -> b.memoryUsageBytes(memVal).memoryUsagePercent(memPercent));
+                }
+            }
+
+            for (Map<String, Object> m : peRead) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                if (metric == null) continue;
+                String group = metric.get("groupname");
+                String inst = metric.get("instance");
+                if (group != null && inst != null) {
+                    String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
+                    double val = Double.parseDouble(m.get("value").toString());
+                    builders.computeIfPresent(key, (k, b) -> b.diskReadBytesPerSec(val));
+                }
+            }
+
+            for (Map<String, Object> m : peWrite) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                if (metric == null) continue;
+                String group = metric.get("groupname");
+                String inst = metric.get("instance");
+                if (group != null && inst != null) {
+                    String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
+                    double val = Double.parseDouble(m.get("value").toString());
+                    builders.computeIfPresent(key, (k, b) -> b.diskWriteBytesPerSec(val));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to process process-exporter metrics: {}", e.getMessage());
+        }
+
         List<ServiceResourceDTO> services = builders.values().stream().map(b -> {
             ServiceResourceDTO dto = b.build();
             // Resource Threshold Logic (Only upgrade status, never downgrade CRITICAL/Stopped states)

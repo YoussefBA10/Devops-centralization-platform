@@ -1003,7 +1003,18 @@ public class DeploymentService {
             if (isContainerized) {
                 updateOrAdd(targets, cadvisor);
                 updateOrAdd(targets, filebeat);
+                targets.removeIf(item -> {
+                    String target = ((java.util.List<String>) item.get("targets")).get(0);
+                    String job = ((java.util.Map<String, String>) item.get("labels")).get("job");
+                    return target.startsWith(finalIp + ":") && job.equals("process-exporter");
+                });
             } else {
+                String processExporterTarget = finalIp + ":9256";
+                java.util.Map<String, Object> processExporter = new java.util.HashMap<>();
+                processExporter.put("targets", java.util.List.of(processExporterTarget));
+                processExporter.put("labels", java.util.Map.of("job", "process-exporter", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId)));
+                updateOrAdd(targets, processExporter);
+
                 // Standalone mode: remove cadvisor and filebeat targets for this node/IP
                 targets.removeIf(item -> {
                     String target = ((java.util.List<String>) item.get("targets")).get(0);
