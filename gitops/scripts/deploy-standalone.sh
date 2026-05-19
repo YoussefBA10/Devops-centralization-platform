@@ -231,17 +231,15 @@ if echo "$SYSTEMD_OK" | grep -q "SYSTEMD_OK"; then
     echo "✅ Node Exporter and Process Exporter started via systemd user service."
 else
     echo "⚠️  systemd --user not available. Starting with nohup fallback..."
-    ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "
-        # Kill any existing instance using bracket trick to avoid killing the SSH shell itself
-        pkill -f '[n]ode_exporter' 2>/dev/null || true
-        pkill -f '[p]rocess-exporter' 2>/dev/null || true
-        sleep 1
-        # Start with nohup
-        nohup ~/node-exporter/node_exporter --collector.systemd < /dev/null > ~/node-exporter/node_exporter.log 2>&1 &
-        nohup ~/process-exporter/process-exporter --config.path=\$HOME/process-exporter/process-exporter.yml < /dev/null > ~/process-exporter/process-exporter.log 2>&1 &
-        disown || true
-        sleep 1
-    "
+    ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "cat > ~/start-exporters.sh << 'SCRIPTEOF'
+#!/bin/bash
+pkill -f '[n]ode_exporter' 2>/dev/null || true
+pkill -f '[p]rocess-exporter' 2>/dev/null || true
+sleep 1
+nohup ~/node-exporter/node_exporter --collector.systemd > ~/node-exporter/node_exporter.log 2>&1 &
+nohup ~/process-exporter/process-exporter --config.path=\$HOME/process-exporter/process-exporter.yml > ~/process-exporter/process-exporter.log 2>&1 &
+SCRIPTEOF" 2>/dev/null
+    ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "chmod +x ~/start-exporters.sh && nohup ~/start-exporters.sh < /dev/null > /dev/null 2>&1 &" 2>/dev/null
     echo "✅ Exporters started via nohup."
 fi
 
