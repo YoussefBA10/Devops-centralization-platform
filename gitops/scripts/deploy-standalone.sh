@@ -129,7 +129,7 @@ ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "tar -xzf ~/process_exporter.tar.gz -C 
 echo "✅ Binaries extracted."
 
 # Write process-exporter configuration
-if [ "${ENV_LABEL,,}" = "SMGS" ]; then
+if [ "$ENV_LABEL" = "SMGS" ] || [ "$ENV_LABEL" = "smgs" ]; then
     echo "📝 Applying custom process-exporter configuration for SMGS environment..."
     ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "cat > ~/process-exporter/process-exporter.yml << 'CONFIGEOF'
 process_names:
