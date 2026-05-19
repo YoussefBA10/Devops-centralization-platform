@@ -522,10 +522,10 @@ public class InfrastructureService {
             ServiceResourceDTO dto = b.build();
             // Resource Threshold Logic (Only upgrade status, never downgrade CRITICAL/Stopped states)
             if (!"CRITICAL".equals(dto.getStatus())) {
-                if (dto.getCpuUsagePercent() != null && dto.getCpuUsagePercent() > 80) dto.setStatus("CRITICAL");
-                else if (dto.getMemoryUsagePercent() != null && dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
-                else if (dto.getCpuUsagePercent() != null && dto.getCpuUsagePercent() > 60) dto.setStatus("WARNING");
-                else if (dto.getMemoryUsagePercent() != null && dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
+                if (dto.getCpuUsagePercent() > 80) dto.setStatus("CRITICAL");
+                else if (dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
+                else if (dto.getCpuUsagePercent() > 60) dto.setStatus("WARNING");
+                else if (dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
             }
             return dto;
         }).collect(Collectors.toList());
