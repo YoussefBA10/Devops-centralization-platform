@@ -523,13 +523,13 @@ public class InfrastructureService {
         // ==================================================================
         try {
             List<Map<String, Object>> peCpu = prometheusClient.queryList(
-                    String.format("rate(namedprocess_namegroup_cpu_seconds_total{environment=~\"%s\"}[5m])", envFilter));
+                    String.format("sum by (groupname, instance) (rate(namedprocess_namegroup_cpu_seconds_total{environment=~\"%s\"}[5m]))", envFilter));
             List<Map<String, Object>> peMem = prometheusClient.queryList(
-                    String.format("namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\"}", envFilter));
+                    String.format("sum by (groupname, instance) (namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\"})", envFilter));
             List<Map<String, Object>> peRead = prometheusClient.queryList(
-                    String.format("rate(namedprocess_namegroup_read_bytes_total{environment=~\"%s\"}[5m])", envFilter));
+                    String.format("sum by (groupname, instance) (rate(namedprocess_namegroup_read_bytes_total{environment=~\"%s\"}[5m]))", envFilter));
             List<Map<String, Object>> peWrite = prometheusClient.queryList(
-                    String.format("rate(namedprocess_namegroup_write_bytes_total{environment=~\"%s\"}[5m])", envFilter));
+                    String.format("sum by (groupname, instance) (rate(namedprocess_namegroup_write_bytes_total{environment=~\"%s\"}[5m]))", envFilter));
 
             for (Map<String, Object> m : peCpu) {
                 Map<String, String> metric = (Map<String, String>) m.get("metric");
@@ -538,11 +538,11 @@ public class InfrastructureService {
                 String inst = metric.get("instance");
                 if (group != null && inst != null) {
                     String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
                     double cpuVal = Double.parseDouble(m.get("value").toString());
                     double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
                     double cpuPercent = (cpuVal / hostTotal) * 100.0;
-                    builders.computeIfPresent(key, (k, b) -> b.cpuUsageCores(cpuVal).cpuUsagePercent(cpuPercent));
+                    
+                    enrichServiceWithProcessMetrics(builders, group, displayNode, b -> b.cpuUsageCores(cpuVal).cpuUsagePercent(cpuPercent));
                 }
             }
 
@@ -553,11 +553,11 @@ public class InfrastructureService {
                 String inst = metric.get("instance");
                 if (group != null && inst != null) {
                     String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
                     long memVal = (long) Double.parseDouble(m.get("value").toString());
                     double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
                     double memPercent = ((double) memVal / hostTotal) * 100.0;
-                    builders.computeIfPresent(key, (k, b) -> b.memoryUsageBytes(memVal).memoryUsagePercent(memPercent));
+                    
+                    enrichServiceWithProcessMetrics(builders, group, displayNode, b -> b.memoryUsageBytes(memVal).memoryUsagePercent(memPercent));
                 }
             }
 
@@ -568,9 +568,9 @@ public class InfrastructureService {
                 String inst = metric.get("instance");
                 if (group != null && inst != null) {
                     String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
                     double val = Double.parseDouble(m.get("value").toString());
-                    builders.computeIfPresent(key, (k, b) -> b.diskReadBytesPerSec(val));
+                    
+                    enrichServiceWithProcessMetrics(builders, group, displayNode, b -> b.diskReadBytesPerSec(val));
                 }
             }
 
@@ -581,9 +581,9 @@ public class InfrastructureService {
                 String inst = metric.get("instance");
                 if (group != null && inst != null) {
                     String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-                    String key = group.toLowerCase() + "@" + displayNode.toLowerCase();
                     double val = Double.parseDouble(m.get("value").toString());
-                    builders.computeIfPresent(key, (k, b) -> b.diskWriteBytesPerSec(val));
+                    
+                    enrichServiceWithProcessMetrics(builders, group, displayNode, b -> b.diskWriteBytesPerSec(val));
                 }
             }
         } catch (Exception e) {
@@ -858,5 +858,38 @@ public class InfrastructureService {
                             .build();
                 })
                 .collect(Collectors.toList());
+    }
+
+    private void enrichServiceWithProcessMetrics(
+            Map<String, ServiceResourceDTO.ServiceResourceDTOBuilder> builders,
+            String group,
+            String displayNode,
+            java.util.function.Consumer<ServiceResourceDTO.ServiceResourceDTOBuilder> enricher) {
+        
+        String cleanGroup = group.toLowerCase();
+        String cleanNode = displayNode.toLowerCase();
+        
+        // Exact match
+        String exactKey = cleanGroup + "@" + cleanNode;
+        if (builders.containsKey(exactKey)) {
+            enricher.accept(builders.get(exactKey));
+            return;
+        }
+        
+        // Dynamic prefix/suffix match (e.g. kannel-bearerbox vs bearerbox)
+        for (Map.Entry<String, ServiceResourceDTO.ServiceResourceDTOBuilder> entry : builders.entrySet()) {
+            String key = entry.getKey();
+            String[] parts = key.split("@");
+            if (parts.length == 2 && parts[1].equalsIgnoreCase(cleanNode)) {
+                String serviceName = parts[0];
+                boolean isMatch = serviceName.endsWith("-" + cleanGroup)
+                        || serviceName.endsWith("_" + cleanGroup)
+                        || cleanGroup.endsWith("-" + serviceName)
+                        || cleanGroup.endsWith("_" + serviceName);
+                if (isMatch) {
+                    enricher.accept(entry.getValue());
+                }
+            }
+        }
     }
 }
