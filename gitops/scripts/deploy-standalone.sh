@@ -118,7 +118,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%h/node-exporter/node_exporter
+ExecStart=%h/node-exporter/node_exporter --collector.systemd
 Restart=on-failure
 RestartSec=5
 
@@ -155,7 +155,7 @@ else
         pkill -x node_exporter 2>/dev/null || true
         sleep 1
         # Start with nohup
-        nohup ~/node-exporter/node_exporter > ~/node-exporter/node_exporter.log 2>&1 &
+        nohup ~/node-exporter/node_exporter --collector.systemd > ~/node-exporter/node_exporter.log 2>&1 &
         disown
     " 2>/dev/null
     echo "✅ Node Exporter started via nohup."
