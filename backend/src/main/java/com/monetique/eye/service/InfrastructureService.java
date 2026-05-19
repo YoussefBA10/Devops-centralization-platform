@@ -459,13 +459,35 @@ public class InfrastructureService {
             return dto;
         }).collect(Collectors.toList());
 
-        // Dynamic Systemd Service Discovery
+        // ==================================================================
+        // Collect existing service keys for cross-source deduplication
+        // ==================================================================
+        java.util.Set<String> existingServiceKeys = services.stream()
+                .map(s -> s.getServiceName().toLowerCase() + "@" + s.getNodeName().toLowerCase())
+                .collect(Collectors.toCollection(java.util.HashSet::new));
+
+        // ==================================================================
+        // Dynamic Systemd Service Discovery (Broad — no hardcoded name list)
+        // ==================================================================
         try {
             List<Map<String, Object>> systemdActiveData = prometheusClient.queryList(
-                    String.format("node_systemd_unit_state{environment=~\"%s\", name=~\"prometheus.service|node-exporter.service|node_exporter.service|docker.service|ssh.service|nginx.service|filebeat.service|mysql.service|postgresql.service|cron.service\", state=\"active\"} == 1", envFilter));
+                    String.format("node_systemd_unit_state{environment=~\"%s\", name=~\".*\\\\.service\", state=\"active\"} == 1", envFilter));
 
             List<Map<String, Object>> systemdFailedData = prometheusClient.queryList(
-                    String.format("node_systemd_unit_state{environment=~\"%s\", name=~\"prometheus.service|node-exporter.service|node_exporter.service|docker.service|ssh.service|nginx.service|filebeat.service|mysql.service|postgresql.service|cron.service\", state=\"failed\"} == 1", envFilter));
+                    String.format("node_systemd_unit_state{environment=~\"%s\", name=~\".*\\\\.service\", state=\"failed\"} == 1", envFilter));
+
+            // System-level noise to exclude
+            java.util.Set<String> systemdNoise = java.util.Set.of(
+                    "systemd-journald", "systemd-logind", "systemd-udevd", "systemd-resolved",
+                    "systemd-timesyncd", "systemd-networkd", "systemd-tmpfiles-setup",
+                    "systemd-remount-fs", "systemd-sysctl", "systemd-modules-load",
+                    "systemd-random-seed", "systemd-update-utmp", "dbus", "dbus-broker",
+                    "getty@tty1", "serial-getty@ttyS0", "user@0", "user-runtime-dir@0",
+                    "ifup@eth0", "networking", "rsyslog", "kmod-static-nodes",
+                    "lvm2-monitor", "multipathd", "polkit", "accounts-daemon",
+                    "ModemManager", "udisks2", "packagekit", "console-setup",
+                    "keyboard-setup", "apparmor", "blk-availability", "setvtrgb"
+            );
 
             java.util.Set<String> processedKeys = new java.util.HashSet<>();
 
@@ -475,10 +497,12 @@ public class InfrastructureService {
                 if (metric == null) continue;
                 String serviceNameRaw = metric.get("name");
                 String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
+                if (systemdNoise.contains(serviceName)) continue;
                 String inst = metric.get("instance");
                 if (inst == null) continue;
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-                String key = serviceName + "@" + displayNode;
+                String key = serviceName.toLowerCase() + "@" + displayNode.toLowerCase();
+                if (existingServiceKeys.contains(key)) continue;
 
                 services.add(ServiceResourceDTO.builder()
                         .serviceName(serviceName)
@@ -488,6 +512,7 @@ public class InfrastructureService {
                         .healthReason("Systemd service in FAILED state")
                         .build());
                 processedKeys.add(key);
+                existingServiceKeys.add(key);
             }
 
             // Parse active units next
@@ -496,23 +521,102 @@ public class InfrastructureService {
                 if (metric == null) continue;
                 String serviceNameRaw = metric.get("name");
                 String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
+                if (systemdNoise.contains(serviceName)) continue;
                 String inst = metric.get("instance");
                 if (inst == null) continue;
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
-                String key = serviceName + "@" + displayNode;
+                String key = serviceName.toLowerCase() + "@" + displayNode.toLowerCase();
+                if (existingServiceKeys.contains(key) || processedKeys.contains(key)) continue;
 
-                if (!processedKeys.contains(key)) {
-                    services.add(ServiceResourceDTO.builder()
-                            .serviceName(serviceName)
-                            .nodeName(displayNode)
-                            .containerId("systemd")
-                            .status("HEALTHY")
-                            .build());
-                    processedKeys.add(key);
-                }
+                services.add(ServiceResourceDTO.builder()
+                        .serviceName(serviceName)
+                        .nodeName(displayNode)
+                        .containerId("systemd")
+                        .status("HEALTHY")
+                        .build());
+                processedKeys.add(key);
+                existingServiceKeys.add(key);
             }
         } catch (Exception ex) {
             log.warn("Failed to discover systemd services: {}", ex.getMessage());
+        }
+
+        // ==================================================================
+        // Prometheus Target Discovery (catch-all for any monitored service)
+        // ==================================================================
+        try {
+            List<Map<String, Object>> targets = prometheusClient.getPrometheusTargets(envFilter);
+
+            // Infrastructure jobs to skip (monitoring infra, not user services)
+            java.util.Set<String> infraJobs = java.util.Set.of(
+                    "node-exporter", "node_exporter", "cadvisor", "prometheus", "grafana",
+                    "alertmanager", "pushgateway", "blackbox-exporter"
+            );
+
+            // Batch-fetch process-level resource metrics for non-container services
+            Map<String, Double> processCpuMap = new java.util.HashMap<>();
+            Map<String, Long> processMemMap = new java.util.HashMap<>();
+            try {
+                for (Map<String, Object> m : prometheusClient.getProcessCpuUsage(envFilter)) {
+                    Map<String, String> metric = (Map<String, String>) m.get("metric");
+                    String pKey = metric.getOrDefault("job", "") + "@" + metric.getOrDefault("instance", "");
+                    Object val = m.get("value");
+                    if (val != null) processCpuMap.put(pKey, Double.parseDouble(val.toString()));
+                }
+                for (Map<String, Object> m : prometheusClient.getProcessMemoryUsage(envFilter)) {
+                    Map<String, String> metric = (Map<String, String>) m.get("metric");
+                    String pKey = metric.getOrDefault("job", "") + "@" + metric.getOrDefault("instance", "");
+                    Object val = m.get("value");
+                    if (val != null) processMemMap.put(pKey, (long) Double.parseDouble(val.toString()));
+                }
+            } catch (Exception e) {
+                log.debug("Process-level metrics not available: {}", e.getMessage());
+            }
+
+            for (Map<String, Object> target : targets) {
+                Map<String, String> metric = (Map<String, String>) target.get("metric");
+                if (metric == null) continue;
+
+                String job = metric.get("job");
+                if (job == null || infraJobs.contains(job.toLowerCase())) continue;
+
+                String inst = metric.get("instance");
+                if (inst == null) continue;
+
+                String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+                String key = job.toLowerCase() + "@" + displayNode.toLowerCase();
+                if (existingServiceKeys.contains(key)) continue;
+
+                boolean isUp = target.get("value") != null && "1".equals(target.get("value").toString());
+
+                // Enrich with process-level metrics if available
+                String processKey = job + "@" + inst;
+                double cpuCores = processCpuMap.getOrDefault(processKey, 0.0);
+                long memBytes = processMemMap.getOrDefault(processKey, 0L);
+                double hostTotalCpu = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
+                double cpuPercent = hostTotalCpu > 0 ? (cpuCores / hostTotalCpu) * 100.0 : 0.0;
+                double hostTotalMem = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
+                double memPercent = hostTotalMem > 0 ? ((double) memBytes / hostTotalMem) * 100.0 : 0.0;
+
+                String status = isUp ? "HEALTHY" : "CRITICAL";
+                if (isUp && (cpuPercent > 80 || memPercent > 80)) status = "CRITICAL";
+                else if (isUp && (cpuPercent > 60 || memPercent > 60)) status = "WARNING";
+
+                services.add(ServiceResourceDTO.builder()
+                        .serviceName(job)
+                        .nodeName(displayNode)
+                        .containerId("process")
+                        .status(status)
+                        .healthReason(isUp ? null : "Service endpoint unreachable")
+                        .cpuUsageCores(cpuCores)
+                        .cpuUsagePercent(cpuPercent)
+                        .memoryUsageBytes(memBytes)
+                        .memoryUsagePercent(memPercent)
+                        .build());
+                existingServiceKeys.add(key);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to discover Prometheus targets: {}", ex.getMessage());
         }
 
         return services;

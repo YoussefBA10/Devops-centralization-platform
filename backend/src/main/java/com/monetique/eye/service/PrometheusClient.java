@@ -253,6 +253,21 @@ public class PrometheusClient {
         return queryList(query);
     }
 
+    public List<Map<String, Object>> getPrometheusTargets(String envFilter) {
+        String query = String.format("up{environment=~\"%s\"}", envFilter);
+        return queryList(query);
+    }
+
+    public List<Map<String, Object>> getProcessCpuUsage(String envFilter) {
+        String query = String.format("rate(process_cpu_seconds_total{environment=~\"%s\"}[5m])", envFilter);
+        return queryList(query);
+    }
+
+    public List<Map<String, Object>> getProcessMemoryUsage(String envFilter) {
+        String query = String.format("process_resident_memory_bytes{environment=~\"%s\"}", envFilter);
+        return queryList(query);
+    }
+
     public List<Map<String, Object>> getActiveAlerts() {
         try {
             Map result = webClient.get()
