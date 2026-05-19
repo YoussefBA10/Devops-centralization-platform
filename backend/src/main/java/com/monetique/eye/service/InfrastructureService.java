@@ -580,8 +580,6 @@ public class InfrastructureService {
 
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
                 String key = job.toLowerCase() + "@" + displayNode.toLowerCase();
-                if (existingServiceKeys.contains(key)) continue;
-
                 boolean isUp = target.get("value") != null && "1".equals(target.get("value").toString());
 
                 // Enrich with process-level metrics if available
@@ -592,6 +590,28 @@ public class InfrastructureService {
                 double cpuPercent = hostTotalCpu > 0 ? (cpuCores / hostTotalCpu) * 100.0 : 0.0;
                 double hostTotalMem = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
                 double memPercent = hostTotalMem > 0 ? ((double) memBytes / hostTotalMem) * 100.0 : 0.0;
+
+                if (existingServiceKeys.contains(key)) {
+                    for (ServiceResourceDTO s : services) {
+                        String sKey = s.getServiceName().toLowerCase() + "@" + s.getNodeName().toLowerCase();
+                        if (sKey.equals(key)) {
+                            if (cpuCores > 0) {
+                                s.setCpuUsageCores(cpuCores);
+                                s.setCpuUsagePercent(cpuPercent);
+                            }
+                            if (memBytes > 0) {
+                                s.setMemoryUsageBytes(memBytes);
+                                s.setMemoryUsagePercent(memPercent);
+                            }
+                            if (!"CRITICAL".equals(s.getStatus())) {
+                                if (cpuPercent > 80 || memPercent > 80) s.setStatus("CRITICAL");
+                                else if (cpuPercent > 60 || memPercent > 60) s.setStatus("WARNING");
+                            }
+                            break;
+                        }
+                    }
+                    continue;
+                }
 
                 String status = isUp ? "HEALTHY" : "CRITICAL";
                 if (isUp && (cpuPercent > 80 || memPercent > 80)) status = "CRITICAL";
