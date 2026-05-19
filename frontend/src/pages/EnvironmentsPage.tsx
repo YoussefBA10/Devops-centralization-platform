@@ -96,8 +96,8 @@ const EnvironmentsPage: React.FC = () => {
         data: { sshUser: undeployUser, sshPassword: undeployPassword } 
       });
       setUndeploySuccess(true);
-      // Wait 15 seconds to show success message as requested
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      // Show success message briefly since it's instantaneous
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
       // Optimistically remove from list and reset
       setNodes(prev => prev.filter(n => n.ip !== undeployIp));
@@ -106,10 +106,10 @@ const EnvironmentsPage: React.FC = () => {
       setUndeployPassword('');
       setUndeploySuccess(false);
     } catch (e: any) {
-      console.error('Failed to undeploy', e);
-      setUndeployErrorMessage(e.response?.data?.message || 'Failed to initialize undeployment.');
-      // Show error for 15 seconds too
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      console.error('Failed to delete node', e);
+      setUndeployErrorMessage(e.response?.data?.message || 'Failed to delete node.');
+      // Show error briefly too
+      await new Promise(resolve => setTimeout(resolve, 1500));
       setUndeployErrorMessage(null);
     } finally {
       setUndeployLoading(false);
@@ -661,17 +661,17 @@ const EnvironmentsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Undeploy Confirmation Modal */}
+      {/* Delete Node Confirmation Modal */}
       {undeployIp && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-md bg-black/90 border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
             <CardHeader className="border-b border-white/5 pb-6">
               <CardTitle className="text-xl flex items-center gap-3 text-destructive">
                 <AlertCircle className="w-5 h-5" />
-                Undeploy Node
+                Delete Node
               </CardTitle>
               <CardDescription className="mt-2 text-muted-foreground leading-relaxed">
-                You are about to sever observability for <span className="font-mono text-white bg-white/10 px-1 rounded">{undeployIp}</span>. This will stop the agents and remove the backend's SSH access key.
+                You are about to delete <span className="font-mono text-white bg-white/10 px-1 rounded">{undeployIp}</span> from the database. Observability configurations will be cleaned up, but the remote agent itself will not be modified.
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6">
@@ -681,17 +681,16 @@ const EnvironmentsPage: React.FC = () => {
                     <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
                       <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                     </div>
-                    <h4 className="text-lg font-bold text-white">Undeployment Successful</h4>
-                    <p className="text-sm text-muted-foreground">The agent cleanup process has been completed successfully. This modal will close in 15 seconds.</p>
+                    <h4 className="text-lg font-bold text-white">Deletion Successful</h4>
+                    <p className="text-sm text-muted-foreground">The node has been deleted from the database successfully.</p>
                   </div>
                 ) : undeployErrorMessage ? (
                   <div className="p-8 bg-destructive/10 border border-destructive/20 rounded-2xl text-center space-y-3 animate-in fade-in zoom-in-95 duration-300">
                     <div className="w-12 h-12 bg-destructive/20 rounded-full flex items-center justify-center mx-auto mb-2">
                        <AlertCircle className="w-6 h-6 text-destructive" />
                     </div>
-                    <h4 className="text-lg font-bold text-white">Undeployment Failed</h4>
+                    <h4 className="text-lg font-bold text-white">Deletion Failed</h4>
                     <p className="text-sm text-muted-foreground">{undeployErrorMessage}</p>
-                    <p className="text-[10px] text-muted-foreground pt-4">Closing in 15 seconds...</p>
                   </div>
                 ) : (
                   <>
@@ -702,7 +701,7 @@ const EnvironmentsPage: React.FC = () => {
                         onClick={handleUndeploy} 
                         loading={undeployLoading}
                       >
-                        Confirm Undeploy
+                        Confirm Delete
                       </Button>
                     </div>
                   </>

@@ -371,22 +371,12 @@ public class EnvironmentController {
         Environment env = environmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
-        // Fetch credentials from ManagedNode
-        Optional<com.monetique.eye.entity.ManagedNode> nodeOpt = managedNodeRepository.findByEnvironmentAndIp(env, ip);
+        deploymentService.deleteNodeFromDbOnly(env, ip);
 
-        if (nodeOpt.isPresent()) {
-            com.monetique.eye.entity.ManagedNode node = nodeOpt.get();
-            deploymentService.undeployAgentAsync(env, ip, node.getSshUser(), node.getSshPassword());
-        } else {
-            // If credentials are missing, we can still attempt to clean up Prometheus and
-            // Inventory records
-            deploymentService.undeployAgentAsync(env, ip, null, null);
-        }
-
-        activityLogService.logActivity("Node Undeployment Started: " + ip, "infrastructure", env.getName());
+        activityLogService.logActivity("Node Deleted (DB only): " + ip, "infrastructure", env.getName());
         return ResponseEntity.ok(Map.of(
-                "message", "Agent undeployment triggered for " + ip,
-                "status", "IN_PROGRESS"));
+                "message", "Node deleted from database successfully",
+                "status", "SUCCESS"));
     }
 
     @GetMapping("/deployments/status")

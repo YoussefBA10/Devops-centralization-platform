@@ -31,6 +31,7 @@ public class InfrastructureService {
     private final ApplicationRepository applicationRepository;
     private final LogAggregationWindowRepository aggregationRepository;
     private final com.monetique.eye.repository.ClusterRepository clusterRepository;
+    private final com.monetique.eye.repository.ManagedNodeRepository managedNodeRepository;
 
     private final AtomicReference<Double> lastStabilityScore = new AtomicReference<>(99.6);
 
@@ -617,6 +618,61 @@ public class InfrastructureService {
             }
         } catch (Exception ex) {
             log.warn("Failed to discover Prometheus targets: {}", ex.getMessage());
+        }
+
+        // ==================================================================
+        // Managed Node Fallback (host-level entries for nodes with no services)
+        // ==================================================================
+        try {
+            List<com.monetique.eye.entity.ManagedNode> managedNodes = managedNodeRepository.findByEnvironment(env);
+            
+            // Collect node display names that already have services
+            java.util.Set<String> coveredNodes = services.stream()
+                    .map(s -> s.getNodeName().toLowerCase())
+                    .collect(Collectors.toSet());
+            
+            for (com.monetique.eye.entity.ManagedNode node : managedNodes) {
+                String nodeIp = node.getIp();
+                String displayNode = nodeNameMap.getOrDefault(nodeIp, 
+                        node.getNodeName() != null ? node.getNodeName() : nodeIp);
+                
+                if (coveredNodes.contains(displayNode.toLowerCase()) || coveredNodes.contains(nodeIp.toLowerCase())) {
+                    continue;
+                }
+                
+                // Query host-level metrics for this node
+                String nodeInstance = nodeIp + ":" + (node.getNodeExporterPort() != null ? node.getNodeExporterPort() : 9100);
+                Double hostCpu = prometheusClient.getCpuUsageForInstance(nodeInstance);
+                Double hostMem = prometheusClient.getMemoryUsagePercentForInstance(nodeInstance);
+                boolean isReachable = hostCpu != null && hostCpu > 0;
+                
+                // Check if node-exporter is up
+                if (!isReachable) {
+                    Double upVal = prometheusClient.queryMetric(
+                            String.format("up{instance=~\"%s.*\", job=\"node-exporter\"}", nodeIp));
+                    isReachable = upVal != null && upVal > 0;
+                }
+                
+                double cpuVal = hostCpu != null ? hostCpu : 0.0;
+                double memVal = hostMem != null ? hostMem : 0.0;
+                
+                String status = isReachable ? "HEALTHY" : "CRITICAL";
+                if (isReachable && (cpuVal > 90 || memVal > 90)) status = "CRITICAL";
+                else if (isReachable && (cpuVal > 80 || memVal > 85)) status = "WARNING";
+                
+                services.add(ServiceResourceDTO.builder()
+                        .serviceName("Host: " + displayNode)
+                        .nodeName(displayNode)
+                        .containerId("host")
+                        .status(status)
+                        .healthReason(isReachable ? null : "Node unreachable — no metrics received")
+                        .cpuUsageCores(cpuVal / 100.0) // approximate
+                        .cpuUsagePercent(cpuVal)
+                        .memoryUsagePercent(memVal)
+                        .build());
+            }
+        } catch (Exception ex) {
+            log.warn("Failed managed node fallback discovery: {}", ex.getMessage());
         }
 
         return services;

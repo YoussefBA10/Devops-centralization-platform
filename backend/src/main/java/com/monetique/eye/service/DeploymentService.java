@@ -279,6 +279,19 @@ public class DeploymentService {
         return CompletableFuture.completedFuture(null);
     }
 
+    @Transactional
+    public void deleteNodeFromDbOnly(Environment environment, String targetIp) {
+        log.info("Deleting node {} from DB and configuration files only (no remote execution)", targetIp);
+        try {
+            deregisterNodeFromPrometheus(targetIp);
+            removeFromInventory(targetIp);
+            managedNodeRepository.findByEnvironmentAndIp(environment, targetIp)
+                .ifPresent(managedNodeRepository::delete);
+        } catch (Exception e) {
+            log.error("Failed to delete node {} from database: {}", targetIp, e.getMessage());
+        }
+    }
+
     @Async
     public void deployApplication(Environment environment, String targetIp, String sshUser, String appName) {
         log.info("Starting application deployment for environment: {} at IP: {}, App: {}", environment.getName(),
