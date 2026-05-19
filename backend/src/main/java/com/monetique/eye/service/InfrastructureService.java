@@ -370,8 +370,6 @@ public class InfrastructureService {
         }
         final long prometheusNow = clusterMaxTs > 0 ? clusterMaxTs : (System.currentTimeMillis() / 1000);
 
-        log.info("getEnvironmentServiceResources - env: {}, lastSeenData size: {}, cpuData size: {}, memData size: {}", env.getName(), lastSeenData.size(), cpuData.size(), memData.size());
-
         // 1. Initialize builders from Liveness Data (Inventory Source of Truth)
         for (Map<String, Object> m : lastSeenData) {
             Map<String, String> metric = (Map<String, String>) m.get("metric");
@@ -379,10 +377,9 @@ public class InfrastructureService {
             if ("unknown-service".equals(serviceName)) continue;
 
             String inst = metric.get("instance");
-            String key = serviceName + "@" + inst;
-            long lastSeen = (long) Double.parseDouble(m.get("value").toString());
-            
             String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
+            String key = serviceName.toLowerCase() + "@" + displayNode.toLowerCase();
+            long lastSeen = (long) Double.parseDouble(m.get("value").toString());
             
             String initialStatus = "HEALTHY";
             String reason = null;
@@ -394,84 +391,12 @@ public class InfrastructureService {
                 reason = String.format("Container stopped (Stale by %ds)", delta);
             }
 
-            log.info("Builder initialized key: {}, displayNode: {}", key, displayNode);
-
             builders.put(key, ServiceResourceDTO.builder()
                     .serviceName(serviceName)
                     .nodeName(displayNode)
                     .status(initialStatus)
                     .healthReason(reason));
         }
-
-        // 2. Populate Resource Metrics (CPU, MEM, etc.)
-        for (Map<String, Object> m : cpuData) {
-            String key = metricToKey(m);
-            Map<String, String> metric = (Map<String, String>) m.get("metric");
-            String inst = metric.get("instance");
-            
-            double cpuAbs = Double.parseDouble(m.get("value").toString());
-            double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
-            double cpuPercent = (cpuAbs / hostTotal) * 100.0;
-            
-            log.info("cpuData processing key: {}, exists in builders: {}, value: {}", key, builders.containsKey(key), cpuAbs);
-            
-            builders.computeIfPresent(key, (k, b) -> b.cpuUsageCores(cpuAbs).cpuUsagePercent(cpuPercent));
-        }
-
-        for (Map<String, Object> m : memData) {
-            String key = metricToKey(m);
-            Map<String, String> metric = (Map<String, String>) m.get("metric");
-            String inst = metric.get("instance");
-            
-            long memAbs = (long) Double.parseDouble(m.get("value").toString());
-            double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
-            double memPercent = ((double) memAbs / hostTotal) * 100.0;
-
-            builders.computeIfPresent(key, (k, b) -> b.memoryUsageBytes(memAbs).memoryUsagePercent(memPercent));
-        }
-
-        for (Map<String, Object> m : ioReadData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.diskReadBytesPerSec(Double.parseDouble(m.get("value").toString())));
-        for (Map<String, Object> m : ioWriteData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.diskWriteBytesPerSec(Double.parseDouble(m.get("value").toString())));
-        for (Map<String, Object> m : netRxData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.networkRxBytesPerSec(Double.parseDouble(m.get("value").toString())));
-        for (Map<String, Object> m : netTxData) builders.computeIfPresent(metricToKey(m), (k, b) -> b.networkTxBytesPerSec(Double.parseDouble(m.get("value").toString())));
-
-        for (Map<String, Object> m : startTimeData) {
-            String key = metricToKey(m);
-            Object val = m.get("value");
-            if (val != null) {
-                Map<String, String> metric = (Map<String, String>) m.get("metric");
-                String inst = metric.get("instance");
-                long nodeNow = instanceNowMap.getOrDefault(inst, prometheusNow);
-                long startTime = (long) Double.parseDouble(val.toString());
-                builders.computeIfPresent(key, (k, b) -> b.uptimeSeconds(nodeNow - startTime));
-            }
-        }
-
-        for (Map<String, Object> m : restartData) {
-            String key = metricToKey(m);
-            Object val = m.get("value");
-            if (val != null) {
-                int restarts = (int) Double.parseDouble(val.toString());
-                builders.computeIfPresent(key, (k, b) -> b.restartCount(restarts));
-            }
-        }
-
-        List<ServiceResourceDTO> services = builders.values().stream().map(b -> {
-            ServiceResourceDTO dto = b.build();
-            // Resource Threshold Logic (Only upgrade status, never downgrade CRITICAL/Stopped states)
-            if (!"CRITICAL".equals(dto.getStatus())) {
-                if (dto.getCpuUsagePercent() > 80 || dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
-                else if (dto.getCpuUsagePercent() > 60 || dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
-            }
-            return dto;
-        }).collect(Collectors.toList());
-
-        // ==================================================================
-        // Collect existing service keys for cross-source deduplication
-        // ==================================================================
-        java.util.Set<String> existingServiceKeys = services.stream()
-                .map(s -> s.getServiceName().toLowerCase() + "@" + s.getNodeName().toLowerCase())
-                .collect(Collectors.toCollection(java.util.HashSet::new));
 
         // ==================================================================
         // Dynamic Systemd Service Discovery (Broad — no hardcoded name list)
@@ -483,7 +408,6 @@ public class InfrastructureService {
             List<Map<String, Object>> systemdFailedData = prometheusClient.queryList(
                     String.format("node_systemd_unit_state{environment=~\"%s\", name=~\".*\\\\.service\", state=\"failed\"} == 1", envFilter));
 
-            // System-level noise to exclude
             java.util.Set<String> systemdNoise = java.util.Set.of(
                     "systemd-journald", "systemd-logind", "systemd-udevd", "systemd-resolved",
                     "systemd-timesyncd", "systemd-networkd", "systemd-tmpfiles-setup",
@@ -496,8 +420,6 @@ public class InfrastructureService {
                     "keyboard-setup", "apparmor", "blk-availability", "setvtrgb"
             );
 
-            java.util.Set<String> processedKeys = new java.util.HashSet<>();
-
             // Parse failed units first to prioritize CRITICAL statuses
             for (Map<String, Object> m : systemdFailedData) {
                 Map<String, String> metric = (Map<String, String>) m.get("metric");
@@ -505,22 +427,20 @@ public class InfrastructureService {
                 String serviceNameRaw = metric.get("name");
                 String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
                 if (systemdNoise.contains(serviceName)) continue;
-                if (!isAllowedSystemdService(serviceName)) continue;
+
                 String inst = metric.get("instance");
                 if (inst == null) continue;
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
                 String key = serviceName.toLowerCase() + "@" + displayNode.toLowerCase();
-                if (existingServiceKeys.contains(key)) continue;
 
-                services.add(ServiceResourceDTO.builder()
-                        .serviceName(serviceName)
-                        .nodeName(displayNode)
-                        .containerId("systemd")
-                        .status("CRITICAL")
-                        .healthReason("Systemd service in FAILED state")
-                        .build());
-                processedKeys.add(key);
-                existingServiceKeys.add(key);
+                if (!builders.containsKey(key)) {
+                    builders.put(key, ServiceResourceDTO.builder()
+                            .serviceName(serviceName)
+                            .nodeName(displayNode)
+                            .containerId("systemd")
+                            .status("CRITICAL")
+                            .healthReason("Systemd service in FAILED state"));
+                }
             }
 
             // Parse active units next
@@ -530,25 +450,92 @@ public class InfrastructureService {
                 String serviceNameRaw = metric.get("name");
                 String serviceName = serviceNameRaw != null ? serviceNameRaw.replace(".service", "") : "unknown";
                 if (systemdNoise.contains(serviceName)) continue;
-                if (!isAllowedSystemdService(serviceName)) continue;
+
                 String inst = metric.get("instance");
                 if (inst == null) continue;
                 String displayNode = nodeNameMap.getOrDefault(inst.split(":")[0], inst.split(":")[0]);
                 String key = serviceName.toLowerCase() + "@" + displayNode.toLowerCase();
-                if (existingServiceKeys.contains(key) || processedKeys.contains(key)) continue;
-
-                services.add(ServiceResourceDTO.builder()
-                        .serviceName(serviceName)
-                        .nodeName(displayNode)
-                        .containerId("systemd")
-                        .status("HEALTHY")
-                        .build());
-                processedKeys.add(key);
-                existingServiceKeys.add(key);
+                if (!builders.containsKey(key)) {
+                    builders.put(key, ServiceResourceDTO.builder()
+                            .serviceName(serviceName)
+                            .nodeName(displayNode)
+                            .containerId("systemd")
+                            .status("HEALTHY"));
+                }
             }
         } catch (Exception ex) {
             log.warn("Failed to discover systemd services: {}", ex.getMessage());
         }
+
+        // 2. Populate Resource Metrics (CPU, MEM, etc.)
+        for (Map<String, Object> m : cpuData) {
+            String key = metricToKey(m, nodeNameMap);
+            Map<String, String> metric = (Map<String, String>) m.get("metric");
+            String inst = metric.get("instance");
+            
+            double cpuAbs = Double.parseDouble(m.get("value").toString());
+            double hostTotal = hostCpuMap.getOrDefault(inst.split(":")[0], 1.0);
+            double cpuPercent = (cpuAbs / hostTotal) * 100.0;
+            
+            builders.computeIfPresent(key, (k, b) -> b.cpuUsageCores(cpuAbs).cpuUsagePercent(cpuPercent));
+        }
+
+        for (Map<String, Object> m : memData) {
+            String key = metricToKey(m, nodeNameMap);
+            Map<String, String> metric = (Map<String, String>) m.get("metric");
+            String inst = metric.get("instance");
+            
+            long memAbs = (long) Double.parseDouble(m.get("value").toString());
+            double hostTotal = hostMemMap.getOrDefault(inst.split(":")[0], 1024.0 * 1024.0 * 1024.0);
+            double memPercent = ((double) memAbs / hostTotal) * 100.0;
+
+            builders.computeIfPresent(key, (k, b) -> b.memoryUsageBytes(memAbs).memoryUsagePercent(memPercent));
+        }
+
+        for (Map<String, Object> m : ioReadData) builders.computeIfPresent(metricToKey(m, nodeNameMap), (k, b) -> b.diskReadBytesPerSec(Double.parseDouble(m.get("value").toString())));
+        for (Map<String, Object> m : ioWriteData) builders.computeIfPresent(metricToKey(m, nodeNameMap), (k, b) -> b.diskWriteBytesPerSec(Double.parseDouble(m.get("value").toString())));
+        for (Map<String, Object> m : netRxData) builders.computeIfPresent(metricToKey(m, nodeNameMap), (k, b) -> b.networkRxBytesPerSec(Double.parseDouble(m.get("value").toString())));
+        for (Map<String, Object> m : netTxData) builders.computeIfPresent(metricToKey(m, nodeNameMap), (k, b) -> b.networkTxBytesPerSec(Double.parseDouble(m.get("value").toString())));
+
+        for (Map<String, Object> m : startTimeData) {
+            String key = metricToKey(m, nodeNameMap);
+            Object val = m.get("value");
+            if (val != null) {
+                Map<String, String> metric = (Map<String, String>) m.get("metric");
+                String inst = metric.get("instance");
+                long nodeNow = instanceNowMap.getOrDefault(inst, prometheusNow);
+                long startTime = (long) Double.parseDouble(val.toString());
+                builders.computeIfPresent(key, (k, b) -> b.uptimeSeconds(nodeNow - startTime));
+            }
+        }
+
+        for (Map<String, Object> m : restartData) {
+            String key = metricToKey(m, nodeNameMap);
+            Object val = m.get("value");
+            if (val != null) {
+                int restarts = (int) Double.parseDouble(val.toString());
+                builders.computeIfPresent(key, (k, b) -> b.restartCount(restarts));
+            }
+        }
+
+        List<ServiceResourceDTO> services = builders.values().stream().map(b -> {
+            ServiceResourceDTO dto = b.build();
+            // Resource Threshold Logic (Only upgrade status, never downgrade CRITICAL/Stopped states)
+            if (!"CRITICAL".equals(dto.getStatus())) {
+                if (dto.getCpuUsagePercent() != null && dto.getCpuUsagePercent() > 80) dto.setStatus("CRITICAL");
+                else if (dto.getMemoryUsagePercent() != null && dto.getMemoryUsagePercent() > 80) dto.setStatus("CRITICAL");
+                else if (dto.getCpuUsagePercent() != null && dto.getCpuUsagePercent() > 60) dto.setStatus("WARNING");
+                else if (dto.getMemoryUsagePercent() != null && dto.getMemoryUsagePercent() > 60) dto.setStatus("WARNING");
+            }
+            return dto;
+        }).collect(Collectors.toList());
+
+        // ==================================================================
+        // Collect existing service keys for cross-source deduplication
+        // ==================================================================
+        java.util.Set<String> existingServiceKeys = services.stream()
+                .map(s -> s.getServiceName().toLowerCase() + "@" + s.getNodeName().toLowerCase())
+                .collect(Collectors.toCollection(java.util.HashSet::new));
 
         // ==================================================================
         // Prometheus Target Discovery (catch-all for any monitored service)
@@ -714,32 +701,29 @@ public class InfrastructureService {
         String service = metric.get("container_label_com_docker_compose_service");
         if (service == null || service.isEmpty()) {
             service = metric.get("name");
-            if (service != null && service.startsWith("/")) {
-                service = service.substring(1);
+            if (service != null) {
+                if (service.startsWith("/")) {
+                    service = service.substring(1);
+                }
+                if (service.startsWith("system.slice/")) {
+                    service = service.substring("system.slice/".length());
+                }
+                if (service.endsWith(".service")) {
+                    service = service.substring(0, service.length() - ".service".length());
+                }
             }
         }
         return (service != null && !service.isEmpty()) ? service : "unknown-service";
     }
 
-    private String metricToKey(Map<String, Object> m) {
+    private String metricToKey(Map<String, Object> m, Map<String, String> nodeNameMap) {
         Map<String, String> metric = (Map<String, String>) m.get("metric");
-        return resolveServiceName(metric) + "@" + metric.get("instance");
-    }
-
-    private boolean isAllowedSystemdService(String serviceName) {
-        if (serviceName == null) return false;
-        String lower = serviceName.toLowerCase();
-        java.util.List<String> keywords = java.util.List.of(
-                "prometheus", "loki", "frontend", "backend", "smgs", "alertmanager",
-                "grafana", "elasticsearch", "logstash", "kibana", "nginx", "filebeat",
-                "mysql", "postgres", "redis", "mongodb", "rabbitmq", "activemq", "eye", "app"
-        );
-        for (String kw : keywords) {
-            if (lower.contains(kw)) {
-                return true;
-            }
-        }
-        return false;
+        if (metric == null) return "unknown@unknown";
+        String service = resolveServiceName(metric).toLowerCase();
+        String inst = metric.get("instance");
+        String host = inst != null ? inst.split(":")[0] : "unknown";
+        String displayNode = nodeNameMap.getOrDefault(host, host).toLowerCase();
+        return service + "@" + displayNode;
     }
 
     public List<IncidentDTO> getEnvironmentIncidents(Long environmentId) {
