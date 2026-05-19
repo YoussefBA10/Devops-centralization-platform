@@ -241,7 +241,7 @@ else
         nohup ~/process-exporter/process-exporter --config.path=\$HOME/process-exporter/process-exporter.yml < /dev/null > ~/process-exporter/process-exporter.log 2>&1 &
         disown || true
         sleep 1
-    " 2>/dev/null
+    "
     echo "✅ Exporters started via nohup."
 fi
 
