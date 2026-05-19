@@ -876,7 +876,7 @@ public class InfrastructureService {
             return;
         }
         
-        // Dynamic prefix/suffix match (e.g. kannel-bearerbox vs bearerbox)
+        // Dynamic prefix/suffix/abbreviation match (e.g. kannel-bearerbox vs bearerbox, vgauthd vs VGAuthService)
         for (Map.Entry<String, ServiceResourceDTO.ServiceResourceDTOBuilder> entry : builders.entrySet()) {
             String key = entry.getKey();
             String[] parts = key.split("@");
@@ -885,7 +885,8 @@ public class InfrastructureService {
                 boolean isMatch = serviceName.endsWith("-" + cleanGroup)
                         || serviceName.endsWith("_" + cleanGroup)
                         || cleanGroup.endsWith("-" + serviceName)
-                        || cleanGroup.endsWith("_" + serviceName);
+                        || cleanGroup.endsWith("_" + serviceName)
+                        || (serviceName.length() >= 5 && cleanGroup.length() >= 5 && serviceName.substring(0, 5).equalsIgnoreCase(cleanGroup.substring(0, 5)));
                 if (isMatch) {
                     enricher.accept(entry.getValue());
                 }

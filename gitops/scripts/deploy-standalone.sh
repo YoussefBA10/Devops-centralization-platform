@@ -129,12 +129,41 @@ ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "tar -xzf ~/process_exporter.tar.gz -C 
 echo "✅ Binaries extracted."
 
 # Write process-exporter configuration
-ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "cat > ~/process-exporter/process-exporter.yml << 'CONFIGEOF'
+if [ "${ENV_LABEL,,}" = "SMGS" ]; then
+    echo "📝 Applying custom process-exporter configuration for SMGS environment..."
+    ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "cat > ~/process-exporter/process-exporter.yml << 'CONFIGEOF'
+process_names:
+  - name: \"cassandra\"
+    cmdline:
+      - '.*cassandra.*'
+  - name: \"tomcat\"
+    cmdline:
+      - '.*tomcat.*'
+  - name: \"jboss\"
+    cmdline:
+      - '.*jboss.*'
+  - name: \"smsbox\"
+    cmdline:
+      - '.*smsbox.*'
+  - name: \"bearerbox\"
+    cmdline:
+      - '.*bearerbox.*'
+  - name: \"{{.Matches.JarName}}\"
+    cmdline:
+      - '(?P<JarName>[^/ \t]+)\.jar'
+  - name: \"{{.Comm}}\"
+    cmdline:
+      - '.+'
+CONFIGEOF" 2>/dev/null
+else
+    echo "📝 Applying default process-exporter configuration..."
+    ssh $SSH_OPTS "${SSH_USER}@${TARGET_IP}" "cat > ~/process-exporter/process-exporter.yml << 'CONFIGEOF'
 process_names:
   - name: \"{{.Comm}}\"
     cmdline:
       - '.+'
 CONFIGEOF" 2>/dev/null
+fi
 echo "✅ Process Exporter config created."
 
 # ─────────────────────────────────────────────
