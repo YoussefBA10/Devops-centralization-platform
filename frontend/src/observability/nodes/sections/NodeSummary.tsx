@@ -49,7 +49,7 @@ export const NodeSummary: React.FC<NodeSummaryProps> = ({ selectedNode, triggerR
           prometheus.queryInstantByKey('MEMORY_USED_PCT', { node: selectedNode }),
           prometheus.queryInstantByKey('DISK_USED_PCT', { node: selectedNode, mount: '/' }),
           prometheus.queryInstantByKey('LOAD_AVERAGE', { node: selectedNode }),
-          prometheus.queryInstantByKey('HTTP_LATENCY', { node: selectedNode }),
+          prometheus.queryInstantByKey('HTTP_LATENCY', { node: selectedNode, node_ip: cleanIp }),
           prometheus.queryInstantByKey('NODE_UNAME', { node: selectedNode }),
           prometheus.queryInstantByKey('NODE_ACTIVE_ALERTS', { node_ip: cleanIp })
         ]);

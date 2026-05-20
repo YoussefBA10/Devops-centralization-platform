@@ -11,11 +11,7 @@ interface BlackboxReachabilityProps {
   triggerRefresh: number;
 }
 
-interface PortProbe {
-  port: string;
-  success: boolean;
-  durationMs: number;
-}
+
 
 export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
   selectedNode,
@@ -26,8 +22,6 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
   const [httpTimeline, setHttpTimeline] = useState<any[]>([]);
   const [httpLatency, setHttpLatency] = useState<any[]>([]);
 
-  // ... (Lines in between will be handled by multi_replace_file_content, let me use multi_replace instead)
-  const [portProbes, setPortProbes] = useState<PortProbe[]>([]);
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedNode) return;
@@ -37,35 +31,6 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
       const cleanIp = getCleanNodeIp(selectedNode);
 
       try {
-        // 2. Fetch TCP Port Probes (Instant query)
-        const [portSuccessRes, portDurationRes] = await Promise.all([
-          prometheus.queryInstantByKey('BLACKBOX_TCP_SUCCESS', { node: selectedNode, node_ip: cleanIp }),
-          prometheus.queryInstantByKey('BLACKBOX_TCP_DURATION', { node: selectedNode, node_ip: cleanIp })
-        ]);
-
-        const durationMap: Record<string, number> = {};
-        portDurationRes.forEach(r => {
-          const inst = r.metric.instance || '';
-          const port = inst.split(':')[1] || '';
-          if (port) {
-            durationMap[port] = parseFloat(r.value[1]) * 1000;
-          }
-        });
-
-        const probes: PortProbe[] = [];
-        portSuccessRes.forEach(r => {
-          const inst = r.metric.instance || '';
-          const port = inst.split(':')[1] || '';
-          if (port) {
-            probes.push({
-              port,
-              success: parseFloat(r.value[1]) === 1,
-              durationMs: durationMap[port] || 0
-            });
-          }
-        });
-        setPortProbes(probes.sort((a, b) => parseInt(a.port) - parseInt(b.port)));
-
         // 3. Fetch HTTP Timeline and Latency over range
         const [timelineRes, latencyRes] = await Promise.all([
           prometheus.queryRangeByKey('BLACKBOX_HTTP_SUCCESS', start, end, undefined, { node: selectedNode, node_ip: cleanIp }),
@@ -162,52 +127,7 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
         </Card>
       </div>
 
-      {/* 4. TCP Port Probes Table */}
-      <Card className="bg-[#1a1d27] border-white/5 shadow-2xl overflow-hidden">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">TCP Local Service Port Probes</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {portProbes.length === 0 ? (
-            <div className="p-6 text-xs text-muted-foreground text-center">
-              No blackbox TCP port probes configured for node IP {getCleanNodeIp(selectedNode)}.
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse text-xs font-medium">
-              <thead>
-                <tr className="border-b border-white/5 bg-white/[0.02] text-[#a1a1aa] text-[9px] uppercase tracking-widest">
-                  <th className="p-4 font-black">Port</th>
-                  <th className="p-4 font-black">Probe Status</th>
-                  <th className="p-4 font-black text-right">Response Time (Latency)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {portProbes.map(probe => (
-                  <tr key={probe.port} className="border-b border-white/5 hover:bg-white/[0.01]">
-                    <td className="p-4 font-mono font-bold text-white">
-                      :{probe.port}
-                    </td>
-                    <td className="p-4">
-                      {probe.success ? (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
-                          ONLINE / LISTENING
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-full">
-                          DOWN / CLOSED
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right font-mono text-[#a1a1aa] font-bold">
-                      {probe.durationMs.toFixed(2)} ms
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+
     </div>
   );
 };
