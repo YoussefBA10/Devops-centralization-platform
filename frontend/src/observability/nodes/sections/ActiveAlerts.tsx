@@ -31,7 +31,7 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
 
       try {
         const [
-          icmpRes,
+          httpRes,
           cpuRes,
           memRes,
           diskRes,
@@ -40,7 +40,7 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
           conntrackRes,
           blockedRes
         ] = await Promise.all([
-          prometheus.queryInstantByKey('NODE_STATUS', { node_ip: cleanIp }),
+          prometheus.queryInstantByKey('BLACKBOX_HTTP_SUCCESS', { node: selectedNode, node_ip: cleanIp }),
           prometheus.queryInstantByKey('CPU_USAGE', { node: selectedNode }),
           prometheus.queryInstantByKey('MEMORY_USED_PCT', { node: selectedNode }),
           prometheus.queryInstantByKey('DISK_USED_PCT', { node: selectedNode, mount: '/' }),
@@ -51,15 +51,15 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
         ]);
 
         // 1. Host Down
-        if (icmpRes && icmpRes.length > 0) {
-          const icmpVal = parseFloat(icmpRes[0].value[1]);
-          if (icmpVal === 0) {
+        if (httpRes && httpRes.length > 0) {
+          const httpVal = parseFloat(httpRes[0].value[1]);
+          if (httpVal === 0) {
             activeAlerts.push({
-              name: 'Host Down / ICMP Failure',
+              name: 'Host Down / HTTP Probe Failure',
               severity: 'CRITICAL',
               value: 'Down',
               threshold: 'Offline',
-              description: `Node ${cleanIp} is unresponsive to ICMP ping probes.`
+              description: `Node ${cleanIp} is unresponsive to HTTP probes.`
             });
           }
         }

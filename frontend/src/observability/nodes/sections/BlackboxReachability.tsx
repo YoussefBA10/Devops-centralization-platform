@@ -23,8 +23,10 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
   triggerRefresh
 }) => {
   const [loading, setLoading] = useState(true);
-  const [icmpTimeline, setIcmpTimeline] = useState<any[]>([]);
-  const [icmpLatency, setIcmpLatency] = useState<any[]>([]);
+  const [httpTimeline, setHttpTimeline] = useState<any[]>([]);
+  const [httpLatency, setHttpLatency] = useState<any[]>([]);
+
+  // ... (Lines in between will be handled by multi_replace_file_content, let me use multi_replace instead)
   const [portProbes, setPortProbes] = useState<PortProbe[]>([]);
   useEffect(() => {
     const fetchData = async () => {
@@ -64,10 +66,10 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
         });
         setPortProbes(probes.sort((a, b) => parseInt(a.port) - parseInt(b.port)));
 
-        // 3. Fetch ICMP Timeline and Latency over range
+        // 3. Fetch HTTP Timeline and Latency over range
         const [timelineRes, latencyRes] = await Promise.all([
-          prometheus.queryRangeByKey('BLACKBOX_ICMP_SUCCESS', start, end, undefined, { node: selectedNode, node_ip: cleanIp }),
-          prometheus.queryRangeByKey('BLACKBOX_ICMP_DURATION', start, end, undefined, { node: selectedNode, node_ip: cleanIp })
+          prometheus.queryRangeByKey('BLACKBOX_HTTP_SUCCESS', start, end, undefined, { node: selectedNode, node_ip: cleanIp }),
+          prometheus.queryRangeByKey('BLACKBOX_HTTP_DURATION', start, end, undefined, { node: selectedNode, node_ip: cleanIp })
         ]);
 
         const latencyMs: prometheus.MetricResult[] = latencyRes.map(series => ({
@@ -75,8 +77,8 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
           values: series.values.map(([ts, val]) => [ts, ((parseFloat(val) || 0) * 1000).toString()])
         }));
 
-        setIcmpTimeline(prometheus.formatSeries(timelineRes));
-        setIcmpLatency(prometheus.formatSeries(latencyMs));
+        setHttpTimeline(prometheus.formatSeries(timelineRes));
+        setHttpLatency(prometheus.formatSeries(latencyMs));
 
       } catch (error) {
         console.error('Failed to load blackbox reachability metrics:', error);
@@ -126,7 +128,7 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
           </CardHeader>
           <CardContent className="h-60">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={icmpTimeline}>
+              <LineChart data={httpTimeline}>
                 <CartesianGrid stroke={chartTheme.grid.stroke} strokeDasharray={chartTheme.grid.strokeDasharray} />
                 <XAxis dataKey="timestamp" tickFormatter={formatTime} stroke="#4b5563" fontSize={10} />
                 <YAxis stroke="#4b5563" fontSize={10} domain={[0, 1.2]} tickFormatter={v => v === 1 ? 'UP' : v === 0 ? 'DOWN' : ''} />
@@ -144,7 +146,7 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
           </CardHeader>
           <CardContent className="h-60">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={icmpLatency}>
+              <LineChart data={httpLatency}>
                 <CartesianGrid stroke={chartTheme.grid.stroke} strokeDasharray={chartTheme.grid.strokeDasharray} />
                 <XAxis dataKey="timestamp" tickFormatter={formatTime} stroke="#4b5563" fontSize={10} />
                 <YAxis stroke="#4b5563" fontSize={10} />
