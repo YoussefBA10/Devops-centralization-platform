@@ -62,12 +62,12 @@ public class ActivityLogController {
         writer.println("sep=,");
         writer.println("Timestamp,Category,Activity,Environment,User");
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(java.time.ZoneId.of("UTC"));
 
         for (ActivityLog log : logs) {
             String user = log.getExecutedBy() != null ? log.getExecutedBy().getUsername() : "System";
             writer.printf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"%n",
-                    log.getTimestamp().format(formatter),
+                    formatter.format(log.getTimestamp()),
                     log.getType(),
                     log.getTitle().replace("\"", "\"\""),
                     log.getEnv().replace("\"", "\"\""),
@@ -90,11 +90,11 @@ public class ActivityLogController {
             }
 
             if (from != null && !from.isBlank()) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), LocalDateTime.parse(from)));
+                predicates.add(cb.greaterThanOrEqualTo(root.get("timestamp"), LocalDateTime.parse(from).toInstant(java.time.ZoneOffset.UTC)));
             }
 
             if (to != null && !to.isBlank()) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), LocalDateTime.parse(to)));
+                predicates.add(cb.lessThanOrEqualTo(root.get("timestamp"), LocalDateTime.parse(to).toInstant(java.time.ZoneOffset.UTC)));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

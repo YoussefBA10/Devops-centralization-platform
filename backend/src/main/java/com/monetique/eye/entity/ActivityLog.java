@@ -3,7 +3,7 @@ package com.monetique.eye.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "activity_logs")
@@ -20,7 +20,7 @@ public class ActivityLog {
     private String type; // incident, system, deployment, infrastructure
     private String env;  // Environment name or "Global"
     
-    private LocalDateTime timestamp;
+    private Instant timestamp;
 
     @ManyToOne
     private User executedBy;
@@ -28,7 +28,7 @@ public class ActivityLog {
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
-            timestamp = LocalDateTime.now();
+            timestamp = Instant.now();
         }
     }
 }

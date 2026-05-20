@@ -29,4 +29,10 @@ public class PrometheusProxyController {
             @RequestParam String step) {
         return prometheusClient.proxyQueryRange(query, start, end, step);
     }
+
+    @GetMapping("/rules")
+    public Map<String, Object> getRules() {
+        return prometheusClient.proxyRules();
+    }
 }
+

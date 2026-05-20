@@ -10,7 +10,8 @@ import {
   Info,
   ChevronRight,
   Activity,
-  ShieldAlert
+  ShieldAlert,
+  Server
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -260,38 +261,55 @@ const OperationalIntelligence: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="w-full flex flex-col md:flex-row gap-4"
+            className="w-full grid grid-cols-1 md:grid-cols-3 gap-6"
           >
-            <Card className="flex-1 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-transparent border-indigo-500/20 hover:border-indigo-500/40 transition-all cursor-pointer group" onClick={() => navigate('/observability/apps')}>
-              <CardHeader className="flex flex-row items-center justify-between">
+            <Card className="bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-transparent border-indigo-500/20 hover:border-indigo-500/40 transition-all cursor-pointer group" onClick={() => navigate('/observability/apps')}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-indigo-500/20 rounded-xl border border-indigo-500/30">
                     <Activity className="w-6 h-6 text-indigo-400 group-hover:scale-110 transition-transform" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl font-black text-indigo-100 mb-1">Application Observability</CardTitle>
-                    <CardDescription className="text-indigo-200/60 font-medium text-xs">Monitor your deployed applications via Prometheus /metrics — Golden Signals per app.</CardDescription>
+                    <CardTitle className="text-lg font-black text-indigo-100 mb-1">Application Observability</CardTitle>
+                    <CardDescription className="text-indigo-200/60 font-medium text-xs">Monitor application Golden Signals.</CardDescription>
                   </div>
                 </div>
                 <div className="p-2 bg-indigo-500/20 rounded-full group-hover:bg-indigo-500/40 transition-colors">
-                  <ChevronRight className="w-5 h-5 text-indigo-300" />
+                  <ChevronRight className="w-4 h-4 text-indigo-300" />
                 </div>
               </CardHeader>
             </Card>
 
-            <Card className="flex-1 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group" onClick={() => navigate('/network-monitor')}>
-              <CardHeader className="flex flex-row items-center justify-between">
+            <Card className="bg-gradient-to-br from-violet-500/10 via-fuchsia-500/10 to-transparent border-violet-500/20 hover:border-violet-500/40 transition-all cursor-pointer group" onClick={() => navigate('/observability/nodes')}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-violet-500/20 rounded-xl border border-violet-500/30">
+                    <Server className="w-6 h-6 text-violet-400 group-hover:scale-110 transition-transform" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-black text-violet-100 mb-1">Node Monitoring</CardTitle>
+                    <CardDescription className="text-violet-200/60 font-medium text-xs">Infrastructure health & reachability per VM.</CardDescription>
+                  </div>
+                </div>
+                <div className="p-2 bg-violet-500/20 rounded-full group-hover:bg-violet-500/40 transition-colors">
+                  <ChevronRight className="w-4 h-4 text-violet-300" />
+                </div>
+              </CardHeader>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-transparent border-emerald-500/20 hover:border-emerald-500/40 transition-all cursor-pointer group" onClick={() => navigate('/network-monitor')}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-emerald-500/20 rounded-xl border border-emerald-500/30">
                     <Activity className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-transform" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl font-black text-emerald-100 mb-1">Network & Service Monitor</CardTitle>
-                    <CardDescription className="text-emerald-200/60 font-medium text-xs">Inter-VM connectivity, TCP health, bandwidth, and link probing.</CardDescription>
+                    <CardTitle className="text-lg font-black text-emerald-100 mb-1">Network & Service Monitor</CardTitle>
+                    <CardDescription className="text-emerald-200/60 font-medium text-xs">Inter-VM connectivity & bandwidth.</CardDescription>
                   </div>
                 </div>
                 <div className="p-2 bg-emerald-500/20 rounded-full group-hover:bg-emerald-500/40 transition-colors">
-                  <ChevronRight className="w-5 h-5 text-emerald-300" />
+                  <ChevronRight className="w-4 h-4 text-emerald-300" />
                 </div>
               </CardHeader>
             </Card>

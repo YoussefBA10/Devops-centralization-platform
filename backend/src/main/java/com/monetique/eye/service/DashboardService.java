@@ -55,9 +55,8 @@ public class DashboardService {
             }
         }
         
-        // Fetch all activities from the last 24 hours
-        LocalDateTime twentyFourHoursAgo = LocalDateTime.now().minusHours(24);
-        List<ActivityItem> activities = activityLogRepository.findAllByTimestampAfterOrderByTimestampDesc(twentyFourHoursAgo).stream()
+        // Fetch top recent activities regardless of time to prevent empty Pulse Feed
+        List<ActivityItem> activities = activityLogRepository.findTop10ByOrderByTimestampDesc().stream()
                 .map(log -> ActivityItem.builder()
                         .title(log.getTitle())
                         .type(log.getType())

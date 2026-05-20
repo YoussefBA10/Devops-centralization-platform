@@ -285,4 +285,21 @@ public class PrometheusClient {
         }
         return new ArrayList<>();
     }
+
+    public Map<String, Object> proxyRules() {
+        try {
+            return webClient.get()
+                    .uri("/api/v1/rules")
+                    .retrieve()
+                    .bodyToMono(Map.class)
+                    .block();
+        } catch (Exception e) {
+            log.error("Failed to fetch rules from Prometheus", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", "error");
+            error.put("error", e.getMessage());
+            return error;
+        }
+    }
 }
+

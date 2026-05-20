@@ -5,7 +5,7 @@ import com.monetique.eye.repository.ActivityLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +32,7 @@ public class ActivityLogService {
                 .type(type)
                 .env(envName != null ? envName : "Global")
                 .executedBy(user)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
         activityLogRepository.save(log);
     }

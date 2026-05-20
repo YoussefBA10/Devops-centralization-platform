@@ -138,4 +138,12 @@ export const prometheusQuery = (query: string) => api.get('/prometheus/query', {
 export const prometheusQueryRange = (query: string, start: number, end: number, step: string) => 
   api.get('/prometheus/query_range', { params: { query, start, end, step } });
 
+// Node Observability Endpoints (Key-based backend queries)
+export const queryNodeInstant = (key: string, params: Record<string, string> = {}) => 
+  api.get('/prometheus/nodes/query', { params: { key, ...params } });
+export const queryNodeRange = (key: string, start: number, end: number, step: string, params: Record<string, string> = {}) => 
+  api.get('/prometheus/nodes/query_range', { params: { key, start, end, step, ...params } });
+export const getPrometheusRules = () => api.get('/prometheus/rules');
+
 export default api;
+

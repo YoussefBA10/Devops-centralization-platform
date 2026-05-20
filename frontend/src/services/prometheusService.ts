@@ -70,6 +70,53 @@ export const queryInstant = async (query: string): Promise<InstantResult[]> => {
 };
 
 /**
+ * Query Prometheus Instant API by Key via Backend Encapsulated Nodes Endpoint
+ */
+export const queryInstantByKey = async (
+  key: string,
+  params: Record<string, string> = {}
+): Promise<InstantResult[]> => {
+  try {
+    const response = await api.queryNodeInstant(key, params);
+
+    if (response.data.status !== 'success') {
+      throw new Error(response.data.error || 'Key-based Prometheus instant query failed');
+    }
+
+    return response.data.data.result;
+  } catch (error) {
+    console.error(`Prometheus instant query by key failed: ${key}`, error);
+    return [];
+  }
+};
+
+/**
+ * Query Prometheus Range API by Key via Backend Encapsulated Nodes Endpoint
+ */
+export const queryRangeByKey = async (
+  key: string,
+  start: number,
+  end: number,
+  step?: string,
+  params: Record<string, string> = {}
+): Promise<MetricResult[]> => {
+  const calculatedStep = step || getStepForDuration((end - start) * 1000);
+  
+  try {
+    const response = await api.queryNodeRange(key, start, end, calculatedStep, params);
+
+    if (response.data.status !== 'success') {
+      throw new Error(response.data.error || 'Key-based Prometheus range query failed');
+    }
+
+    return response.data.data.result;
+  } catch (error) {
+    console.error(`Prometheus range query by key failed: ${key}`, error);
+    return [];
+  }
+};
+
+/**
  * Format Prometheus results for Recharts
  */
 export const formatSeries = (results: MetricResult[]): any[] => {
@@ -82,3 +129,4 @@ export const formatSeries = (results: MetricResult[]): any[] => {
     value: parseFloat(val) || 0
   }));
 };
+
