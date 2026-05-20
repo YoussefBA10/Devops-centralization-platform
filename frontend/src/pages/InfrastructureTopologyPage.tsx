@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -82,7 +83,7 @@ const ServerNode = ({ data }: { data: TopologyNode }) => {
   const isHealthy = data.status === 'HEALTHY';
   
   return (
-    <div className={`p-5 shadow-2xl rounded-[1.5rem] border-2 transition-all duration-300 w-72 bg-[#0c0c0e]/95 backdrop-blur-xl ${
+    <div className={`p-5 shadow-2xl rounded-[1.5rem] border-2 transition-all duration-300 w-72 bg-[#0c0c0e]/95 backdrop-blur-xl cursor-pointer group ${
       isHealthy 
       ? 'border-emerald-500/20 hover:border-emerald-500/50 hover:shadow-[0_0_40px_rgba(16,185,129,0.15)]' 
       : 'border-destructive/40 hover:border-destructive shadow-[0_0_40px_rgba(239,68,68,0.15)]'
@@ -115,6 +116,11 @@ const ServerNode = ({ data }: { data: TopologyNode }) => {
         </span>
       </div>
 
+      <div className="mt-3 pt-2 border-t border-white/[0.04] flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-[9px] font-black uppercase tracking-widest text-primary/70">
+        <Activity className="w-3 h-3" />
+        Open Node Monitoring →
+      </div>
+
       <Handle type="source" position={Position.Bottom} className="!bg-primary/50" />
     </div>
   );
@@ -131,6 +137,7 @@ const nodeTypes = {
 // -----------------------------------------------------------------------
 const InfrastructureGraphInner: React.FC = () => {
   const { fitView } = useReactFlow();
+  const navigate = useNavigate();
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<any>([]);
   const [loading, setLoading] = useState(true);
@@ -429,6 +436,12 @@ const InfrastructureGraphInner: React.FC = () => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
+          onNodeClick={(_, node) => {
+            if (node.type === 'server' && node.data.ip) {
+              const instance = node.data.ip.includes(':') ? node.data.ip : `${node.data.ip}:9100`;
+              navigate(`/observability/nodes?node=${encodeURIComponent(instance)}`);
+            }
+          }}
           fitView
           fitViewOptions={{ padding: 0.15 }}
           minZoom={0.05}

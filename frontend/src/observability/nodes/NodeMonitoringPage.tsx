@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Server, Cpu, Zap, HardDrive, Network, Activity, ShieldAlert, AlertOctagon } from 'lucide-react';
 import * as prometheus from '../../services/prometheusService';
 import { deriveInterfaces, deriveMounts, deriveDisks } from './queries';
@@ -20,6 +20,8 @@ import Incidents from './sections/Incidents';
 
 export const NodeMonitoringPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const preselectedNode = searchParams.get('node');
 
   // Filter States
   const [nodes, setNodes] = useState<string[]>([]);
@@ -81,25 +83,28 @@ export const NodeMonitoringPage: React.FC = () => {
         if (result && result.length > 0) {
           const fetchedNodes = Array.from(new Set(result.map(r => r.metric.instance))).filter(Boolean);
           setNodes(fetchedNodes);
-          if (fetchedNodes.length > 0) {
-            setSelectedNode(fetchedNodes[0]);
-          }
+          // If a node was passed via URL query param (?node=...), pre-select it;
+          // otherwise fall back to the first node in the list
+          const target = preselectedNode && fetchedNodes.includes(preselectedNode)
+            ? preselectedNode
+            : fetchedNodes[0];
+          if (target) setSelectedNode(target);
         } else {
           // Fallback node if query fails
           setNodes(['127.0.0.1:9100']);
-          setSelectedNode('127.0.0.1:9100');
+          setSelectedNode(preselectedNode || '127.0.0.1:9100');
         }
       } catch (error) {
         console.error('Failed to fetch node list:', error);
         setNodes(['127.0.0.1:9100']);
-        setSelectedNode('127.0.0.1:9100');
+        setSelectedNode(preselectedNode || '127.0.0.1:9100');
       } finally {
         setInitialLoading(false);
       }
     };
 
     fetchNodes();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 2. Fetch derived interfaces, mounts, and disks when selectedNode changes
   useEffect(() => {
