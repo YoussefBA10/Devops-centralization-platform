@@ -23,7 +23,7 @@ public class NodeMonitoringService {
         QUERIES.put("CPU_USAGE", "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"}[5m])) * 100)");
         QUERIES.put("MEMORY_USED_PCT", "(1 - node_memory_MemAvailable_bytes{instance=~\"$node(:.*)?\"} / node_memory_MemTotal_bytes{instance=~\"$node(:.*)?\"}) * 100");
         QUERIES.put("DISK_USED_PCT", "(1 - node_filesystem_avail_bytes{instance=~\"$node(:.*)?\",mountpoint=\"$mount\"} / node_filesystem_size_bytes{instance=~\"$node(:.*)?\",mountpoint=\"$mount\"}) * 100");
-        QUERIES.put("LOAD_AVERAGE", "node_load1{instance=~\"$node(:.*)?\"} / count(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"})");
+        QUERIES.put("LOAD_AVERAGE", "node_load1{instance=~\"$node(:.*)?\"} / on(instance) group_left() count by(instance) (node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"})");
         QUERIES.put("HTTP_LATENCY", "probe_duration_seconds{job=\"blackbox\", instance=~\".*$node_ip.*\"} * 1000");
         QUERIES.put("NODE_UNAME", "node_uname_info{instance=~\"$node(:.*)?\"}");
 
