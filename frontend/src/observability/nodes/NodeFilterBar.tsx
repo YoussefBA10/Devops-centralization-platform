@@ -114,16 +114,17 @@ export const NodeFilterBar: React.FC<NodeFilterBarProps> = ({
         }`}>
           {/* selectors */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-col gap-1 w-full sm:w-44">
+            <div className="flex flex-col gap-1 w-full sm:w-52">
               <label className="text-[9px] font-black uppercase text-[#a1a1aa] tracking-widest">Node</label>
               <Select 
                 value={selectedNode} 
                 onChange={(e) => onChangeNode(e.target.value)}
-                className="w-full bg-black/40 border-white/5 text-xs h-9"
+                className="w-full bg-[#0f1117] border-primary/30 text-xs h-10 font-bold text-white rounded-lg focus:border-primary shadow-lg"
               >
-                {nodes.map(node => (
-                  <option key={node} value={node}>{node}</option>
-                ))}
+                {nodes.map(node => {
+                  const hostname = node.split(':')[0];
+                  return <option key={node} value={node}>{hostname}</option>;
+                })}
               </Select>
             </div>
 

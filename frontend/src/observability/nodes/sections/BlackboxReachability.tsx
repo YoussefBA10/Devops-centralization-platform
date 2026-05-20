@@ -132,10 +132,10 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 1. ICMP Probe Timeline */}
+        {/* 1. HTTP Probe Timeline */}
         <Card className="bg-[#1a1d27] border-white/5 shadow-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">ICMP Probe Reachability Timeline</CardTitle>
+            <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">HTTP Probe Reachability Timeline</CardTitle>
           </CardHeader>
           <CardContent className="h-60">
             <ResponsiveContainer width="100%" height="100%">
@@ -144,16 +144,16 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
                 <XAxis dataKey="timestamp" tickFormatter={formatTime} stroke="#4b5563" fontSize={10} />
                 <YAxis stroke="#4b5563" fontSize={10} domain={[0, 1.2]} tickFormatter={v => v === 1 ? 'UP' : v === 0 ? 'DOWN' : ''} />
                 <Tooltip {...chartTheme.tooltip} labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd HH:mm:ss')} />
-                <Line type="step" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} name="ICMP Success" />
+                <Line type="step" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} name="HTTP Success" />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* 2. ICMP Latency over time */}
+        {/* 2. HTTP Latency over time */}
         <Card className="bg-[#1a1d27] border-white/5 shadow-2xl">
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">ICMP Probe Latency (ms)</CardTitle>
+            <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">HTTP Probe Latency (ms)</CardTitle>
           </CardHeader>
           <CardContent className="h-60">
             <ResponsiveContainer width="100%" height="100%">

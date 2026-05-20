@@ -15,9 +15,7 @@ interface CpuAnalysisProps {
 export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRange, triggerRefresh }) => {
   const [loading, setLoading] = useState(true);
   const [cpuUsageData, setCpuUsageData] = useState<any[]>([]);
-  const [cpuStealData, setCpuStealData] = useState<any[]>([]);
   const [loadAvgData, setLoadAvgData] = useState<any[]>([]);
-  const [cpuPsiData, setCpuPsiData] = useState<any[]>([]);
   const [coresCount, setCoresCount] = useState<number>(4);
 
   useEffect(() => {
@@ -28,41 +26,26 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
       const { start, end } = timeRange;
 
       try {
-        // Fetch cores count first via instant query
-        const coresRes = await prometheus.queryInstantByKey(
-          'CPU_CORES_COUNT',
-          { node: selectedNode }
-        );
+        const coresRes = await prometheus.queryInstantByKey('CPU_CORES_COUNT', { node: selectedNode });
         if (coresRes && coresRes.length > 0) {
           setCoresCount(parseInt(coresRes[0].value[1]) || 4);
         }
 
-        // Run range queries in parallel
-        const [modeUsageRes, stealRes, load1Res, load5Res, load15Res, psiRes] = await Promise.all([
+        const [modeUsageRes, load1Res, load5Res, load15Res] = await Promise.all([
           prometheus.queryRangeByKey('CPU_USAGE_MODES_ALL', start, end, undefined, { node: selectedNode }),
-          prometheus.queryRangeByKey('CPU_STEAL', start, end, undefined, { node: selectedNode }),
           prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '1' }),
           prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '5' }),
-          prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '15' }),
-          prometheus.queryRangeByKey('CPU_PSI', start, end, undefined, { node: selectedNode })
+          prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '15' })
         ]);
 
-        // Format Stacked CPU usage by mode
         setCpuUsageData(combineSeries(modeUsageRes, 'mode'));
 
-        // Format Steal Time
-        setCpuStealData(prometheus.formatSeries(stealRes));
-
-        // Format Load Average 3-lines
         const combinedLoad = combineSeries([
           ...(load1Res.map(s => ({ ...s, metric: { val: 'load1' } }))),
           ...(load5Res.map(s => ({ ...s, metric: { val: 'load5' } }))),
           ...(load15Res.map(s => ({ ...s, metric: { val: 'load15' } })))
         ], 'val');
         setLoadAvgData(combinedLoad);
-
-        // Format CPU PSI data
-        setCpuPsiData(prometheus.formatSeries(psiRes));
 
       } catch (error) {
         console.error('Failed to load CPU analytics:', error);
@@ -75,11 +58,7 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
   }, [selectedNode, timeRange, triggerRefresh]);
 
   const formatTime = (tick: number) => {
-    try {
-      return format(new Date(tick), 'HH:mm');
-    } catch {
-      return '';
-    }
+    try { return format(new Date(tick), 'HH:mm'); } catch { return ''; }
   };
 
   const chartTheme = {
@@ -93,10 +72,8 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {[1, 2, 3, 4].map(i => (
-          <Card key={i} className="bg-[#1a1d27] border-white/5 h-72 animate-pulse">
-            <div />
-          </Card>
+        {[1, 2].map(i => (
+          <Card key={i} className="bg-[#1a1d27] border-white/5 h-72 animate-pulse"><div /></Card>
         ))}
       </div>
     );
@@ -140,26 +117,7 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
         </CardContent>
       </Card>
 
-      {/* 2. CPU Steal Time */}
-      <Card className="bg-[#1a1d27] border-white/5 shadow-2xl">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">CPU Steal Time (%) & Noisy Neighbor detection</CardTitle>
-        </CardHeader>
-        <CardContent className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cpuStealData}>
-              <CartesianGrid stroke={chartTheme.grid.stroke} strokeDasharray={chartTheme.grid.strokeDasharray} />
-              <XAxis dataKey="timestamp" tickFormatter={formatTime} stroke="#4b5563" fontSize={10} />
-              <YAxis stroke="#4b5563" fontSize={10} />
-              <Tooltip {...chartTheme.tooltip} labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd HH:mm:ss')} />
-              <Line type="monotone" dataKey="value" stroke="#a855f7" strokeWidth={2} dot={false} name="Steal Time" />
-              <ThresholdLine y={5} label="Noisy Neighbor Threshold (5%)" type="warning" />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 3. Load Average */}
+      {/* 2. Load Average */}
       <Card className="bg-[#1a1d27] border-white/5 shadow-2xl">
         <CardHeader className="pb-2">
           <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">System Load Average (1m, 5m, 15m)</CardTitle>
@@ -177,30 +135,6 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
               <ThresholdLine y={coresCount} label={`Core Count Limit (${coresCount} Cores)`} type="critical" />
             </LineChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      {/* 4. CPU PSI Pressure */}
-      <Card className="bg-[#1a1d27] border-white/5 shadow-2xl">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">CPU PSI Pressure (% time waiting)</CardTitle>
-        </CardHeader>
-        <CardContent className="h-64">
-          {cpuPsiData.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-              No CPU PSI Pressure data available (requires kernel with PSI enabled)
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cpuPsiData}>
-                <CartesianGrid stroke={chartTheme.grid.stroke} strokeDasharray={chartTheme.grid.strokeDasharray} />
-                <XAxis dataKey="timestamp" tickFormatter={formatTime} stroke="#4b5563" fontSize={10} />
-                <YAxis stroke="#4b5563" fontSize={10} />
-                <Tooltip {...chartTheme.tooltip} labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd HH:mm:ss')} />
-                <Line type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} dot={false} name="Some CPU Waiting" />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
         </CardContent>
       </Card>
     </div>

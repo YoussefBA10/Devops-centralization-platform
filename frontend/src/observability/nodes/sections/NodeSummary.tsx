@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Clock, Cpu, Zap, HardDrive, AlertOctagon, Terminal } from 'lucide-react';
+import { Activity, Clock, Cpu, Zap, HardDrive, Terminal } from 'lucide-react';
 import * as prometheus from '../../../services/prometheusService';
 import { getCleanNodeIp } from '../queries';
 import { StatCard } from '../components/StatCard';
@@ -126,13 +126,6 @@ export const NodeSummary: React.FC<NodeSummaryProps> = ({ selectedNode, triggerR
     fetchData();
   }, [selectedNode, triggerRefresh]);
 
-  const scrollToIncidents = () => {
-    const el = document.getElementById('incidents-section');
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   const getStatusColor = () => {
     if (data.status === 'ONLINE') return 'var(--color-healthy)';
     if (data.status === 'UNREACHABLE') return 'var(--color-critical)';
@@ -140,7 +133,7 @@ export const NodeSummary: React.FC<NodeSummaryProps> = ({ selectedNode, triggerR
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* 1. Status */}
       <StatCard
         title="Node Status"
@@ -203,9 +196,9 @@ export const NodeSummary: React.FC<NodeSummaryProps> = ({ selectedNode, triggerR
         statusColor={data.load > 1.0 ? 'critical' : data.load > 0.7 ? 'warning' : 'healthy'}
       />
 
-      {/* 7. ICMP Latency */}
+      {/* 7. HTTP Latency */}
       <StatCard
-        title="ICMP Latency"
+        title="HTTP Latency"
         value={data.latency}
         icon={<Activity className="w-4 h-4" />}
         color="var(--color-primary)"
@@ -213,7 +206,7 @@ export const NodeSummary: React.FC<NodeSummaryProps> = ({ selectedNode, triggerR
       />
 
       {/* 8. Hostname / OS */}
-      <div className="col-span-1 lg:col-span-1 bg-[#1a1d27] shadow-xl border border-white/5 p-4 rounded-xl flex flex-col justify-center min-w-0">
+      <div className="bg-[#1a1d27] shadow-xl border border-white/5 p-4 rounded-xl flex flex-col justify-center min-w-0">
         <p className="text-[9px] font-black uppercase tracking-widest text-[#a1a1aa] mb-1 truncate">Host / OS</p>
         {loading ? (
           <div className="space-y-1">
@@ -227,19 +220,8 @@ export const NodeSummary: React.FC<NodeSummaryProps> = ({ selectedNode, triggerR
           </div>
         )}
       </div>
-
-      {/* 9. Incidents */}
-      <StatCard
-        title="Active Incidents"
-        value={data.incidentsCount}
-        icon={<AlertOctagon className="w-4 h-4" />}
-        color={data.incidentsCount > 0 ? 'var(--color-critical)' : 'var(--color-healthy)'}
-        loading={loading}
-        onClick={scrollToIncidents}
-        statusColor={data.incidentsCount > 0 ? 'critical' : 'healthy'}
-        description="Click to view incidents"
-      />
     </div>
   );
 };
 export default NodeSummary;
+

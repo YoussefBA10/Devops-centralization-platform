@@ -18,13 +18,13 @@ public class NodeMonitoringService {
 
     static {
         // Section 1: Summary Stats
-        QUERIES.put("NODE_STATUS", "probe_success{job=\"blackbox_icmp\", instance=~\"$node_ip(:.*)?\"}");
+        QUERIES.put("NODE_STATUS", "probe_success{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"}");
         QUERIES.put("UPTIME", "time() - node_boot_time_seconds{instance=~\"$node(:.*)?\"}");
         QUERIES.put("CPU_USAGE", "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"}[5m])) * 100)");
         QUERIES.put("MEMORY_USED_PCT", "(1 - node_memory_MemAvailable_bytes{instance=~\"$node(:.*)?\"} / node_memory_MemTotal_bytes{instance=~\"$node(:.*)?\"}) * 100");
         QUERIES.put("DISK_USED_PCT", "(1 - node_filesystem_avail_bytes{instance=~\"$node(:.*)?\",mountpoint=\"$mount\"} / node_filesystem_size_bytes{instance=~\"$node(:.*)?\",mountpoint=\"$mount\"}) * 100");
         QUERIES.put("LOAD_AVERAGE", "node_load1{instance=~\"$node(:.*)?\"} / count(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"})");
-        QUERIES.put("ICMP_LATENCY", "probe_duration_seconds{job=\"blackbox_icmp\", instance=~\"$node_ip(:.*)?\"}");
+        QUERIES.put("ICMP_LATENCY", "probe_duration_seconds{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"}");
         QUERIES.put("NODE_UNAME", "node_uname_info{instance=~\"$node(:.*)?\"}");
 
         // Section 2: CPU Analysis
@@ -73,8 +73,8 @@ public class NodeMonitoringService {
         QUERIES.put("CONNTRACK_UTIL", "node_nf_conntrack_entries{instance=~\"$node(:.*)?\"} / node_nf_conntrack_entries_limit{instance=~\"$node(:.*)?\"} * 100");
 
         // Section 6: Blackbox Reachability
-        QUERIES.put("BLACKBOX_ICMP_SUCCESS", "probe_success{job=\"blackbox_icmp\", instance=~\"$node_ip(:.*)?\"}");
-        QUERIES.put("BLACKBOX_ICMP_DURATION", "probe_duration_seconds{job=\"blackbox_icmp\", instance=~\"$node_ip(:.*)?\"} * 1000");
+        QUERIES.put("BLACKBOX_ICMP_SUCCESS", "probe_success{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"}");
+        QUERIES.put("BLACKBOX_ICMP_DURATION", "probe_duration_seconds{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"} * 1000");
         QUERIES.put("BLACKBOX_TCP_SUCCESS", "probe_success{job=\"blackbox_tcp\", instance=~\"$node_ip:.*\"}");
         QUERIES.put("BLACKBOX_TCP_DURATION", "probe_duration_seconds{job=\"blackbox_tcp\", instance=~\"$node_ip:.*\"} * 1000");
         QUERIES.put("SSL_CERT_EXPIRY", "(probe_ssl_earliest_cert_expiry{instance=~\"$node_ip(:.*)?\"} - time()) / 86400");

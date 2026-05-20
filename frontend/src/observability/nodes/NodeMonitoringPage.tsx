@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Server, Cpu, Zap, HardDrive, Network, Activity, ShieldAlert, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, Server, Cpu, Zap, HardDrive, Network, Activity, AlertOctagon } from 'lucide-react';
 import * as prometheus from '../../services/prometheusService';
 import { deriveInterfaces, deriveMounts, deriveDisks } from './queries';
 import { NodeFilterBar } from './NodeFilterBar';
@@ -14,9 +14,7 @@ import MemoryAnalysis from './sections/MemoryAnalysis';
 import DiskStorage from './sections/DiskStorage';
 import NetworkHealth from './sections/NetworkHealth';
 import BlackboxReachability from './sections/BlackboxReachability';
-import SystemSignals from './sections/SystemSignals';
 import ActiveAlerts from './sections/ActiveAlerts';
-import Incidents from './sections/Incidents';
 
 export const NodeMonitoringPage: React.FC = () => {
   const navigate = useNavigate();
@@ -58,9 +56,7 @@ export const NodeMonitoringPage: React.FC = () => {
         disk: false,
         network: false,
         blackbox: false,
-        signals: false,
-        alerts: false,
-        incidents: false
+        alerts: false
       };
     } catch {
       return {};
@@ -307,28 +303,6 @@ export const NodeMonitoringPage: React.FC = () => {
             onToggle={() => toggleSection('blackbox')}
           >
             <BlackboxReachability selectedNode={selectedNode} timeRange={timeRange} triggerRefresh={triggerRefresh} />
-          </SectionWrapper>
-
-          {/* Section 7: System Signals */}
-          <SectionWrapper
-            id="signals"
-            title="File Descriptors & HW Temps"
-            icon={<ShieldAlert className="w-4 h-4" />}
-            isCollapsed={collapsedSections.signals}
-            onToggle={() => toggleSection('signals')}
-          >
-            <SystemSignals selectedNode={selectedNode} triggerRefresh={triggerRefresh} />
-          </SectionWrapper>
-
-          {/* Section 9: Incidents */}
-          <SectionWrapper
-            id="incidents"
-            title="Incident Logs & History swimlanes"
-            icon={<AlertOctagon className="w-4 h-4" />}
-            isCollapsed={collapsedSections.incidents}
-            onToggle={() => toggleSection('incidents')}
-          >
-            <Incidents selectedNode={selectedNode} timeRange={timeRange} triggerRefresh={triggerRefresh} />
           </SectionWrapper>
         </div>
       </div>

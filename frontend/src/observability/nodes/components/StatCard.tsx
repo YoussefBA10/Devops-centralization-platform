@@ -43,26 +43,26 @@ export const StatCard: React.FC<StatCardProps> = ({
       } ${className}`}
       onClick={onClick}
     >
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-black uppercase tracking-widest text-[#a1a1aa] truncate max-w-[80%]">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa]">
             {title}
           </div>
-          <div className="p-2 rounded-lg bg-white/5" style={{ color }}>
+          <div className="p-2.5 rounded-xl bg-white/5" style={{ color }}>
             {icon}
           </div>
         </div>
 
         <div className="space-y-1">
           {loading ? (
-            <div className="h-8 w-24 bg-white/5 animate-pulse rounded-lg" />
+            <div className="h-10 w-28 bg-white/5 animate-pulse rounded-lg" />
           ) : (
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-mono font-black text-white tracking-tight">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-mono font-black text-white tracking-tight">
                 {value}
               </span>
               {unit && (
-                <span className="text-sm font-bold text-[#a1a1aa]">
+                <span className="text-base font-bold text-[#a1a1aa]">
                   {unit}
                 </span>
               )}
