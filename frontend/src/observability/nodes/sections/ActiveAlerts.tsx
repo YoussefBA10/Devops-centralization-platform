@@ -38,7 +38,6 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
           inodeRes,
           dropRes,
           conntrackRes,
-          sslRes,
           blockedRes
         ] = await Promise.all([
           prometheus.queryInstantByKey('NODE_STATUS', { node_ip: cleanIp }),
@@ -48,7 +47,6 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
           prometheus.queryInstantByKey('DISK_INODE_USED_PCT', { node: selectedNode, mount: '/' }),
           prometheus.queryInstantByKey('NET_DROP_TOTAL', { node: selectedNode }),
           prometheus.queryInstantByKey('CONNTRACK_UTIL', { node: selectedNode }),
-          prometheus.queryInstantByKey('SSL_CERT_EXPIRY', { node: selectedNode, node_ip: cleanIp }),
           prometheus.queryInstantByKey('PROCESSES_BLOCKED', { node: selectedNode })
         ]);
 
@@ -190,27 +188,7 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
           }
         }
 
-        // 8. SSL Certificate Expiry
-        if (sslRes && sslRes.length > 0) {
-          const sslVal = parseFloat(sslRes[0].value[1]);
-          if (sslVal < 15) {
-            activeAlerts.push({
-              name: 'SSL Certificate Near Expiry',
-              severity: 'CRITICAL',
-              value: `${sslVal.toFixed(0)} days`,
-              threshold: '< 15 days',
-              description: 'Target SSL certificate expires in less than 15 days.'
-            });
-          } else if (sslVal < 30) {
-            activeAlerts.push({
-              name: 'SSL Certificate Expiring Soon',
-              severity: 'WARNING',
-              value: `${sslVal.toFixed(0)} days`,
-              threshold: '< 30 days',
-              description: 'Target SSL certificate expires in less than 30 days.'
-            });
-          }
-        }
+
 
         // 9. Blocked Processes
         if (blockedRes && blockedRes.length > 0) {

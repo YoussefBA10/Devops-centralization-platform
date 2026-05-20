@@ -26,8 +26,6 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
   const [icmpTimeline, setIcmpTimeline] = useState<any[]>([]);
   const [icmpLatency, setIcmpLatency] = useState<any[]>([]);
   const [portProbes, setPortProbes] = useState<PortProbe[]>([]);
-  const [sslExpiryDays, setSslExpiryDays] = useState<number | null>(null);
-
   useEffect(() => {
     const fetchData = async () => {
       if (!selectedNode) return;
@@ -37,17 +35,6 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
       const cleanIp = getCleanNodeIp(selectedNode);
 
       try {
-        // 1. Fetch SSL cert expiry
-        const sslRes = await prometheus.queryInstantByKey(
-          'SSL_CERT_EXPIRY',
-          { node: selectedNode, node_ip: cleanIp }
-        );
-        if (sslRes && sslRes.length > 0) {
-          setSslExpiryDays(parseFloat(sslRes[0].value[1]));
-        } else {
-          setSslExpiryDays(null);
-        }
-
         // 2. Fetch TCP Port Probes (Instant query)
         const [portSuccessRes, portDurationRes] = await Promise.all([
           prometheus.queryInstantByKey('BLACKBOX_TCP_SUCCESS', { node: selectedNode, node_ip: cleanIp }),
@@ -131,7 +118,7 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 1. HTTP Probe Timeline */}
         <Card className="bg-[#1a1d27] border-white/5 shadow-2xl">
           <CardHeader className="pb-2">
@@ -169,44 +156,6 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
                 <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="Latency" />
               </LineChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* 3. SSL Expiry Details Card */}
-        <Card className="bg-[#1a1d27] border-white/5 shadow-2xl flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-black uppercase tracking-widest text-[#a1a1aa]">SSL Certificate Expiry</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col items-center justify-center p-6 space-y-4">
-            {sslExpiryDays !== null ? (
-              <div className="text-center space-y-2">
-                <p className="text-4xl font-mono font-black tracking-tight text-white">
-                  {Math.round(sslExpiryDays)}
-                </p>
-                <p className="text-xs font-bold uppercase tracking-wider text-[#a1a1aa]">
-                  Days Remaining
-                </p>
-                <div className="pt-2">
-                  {sslExpiryDays < 15 ? (
-                    <span className="px-3 py-1 text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-full">
-                      Critical: Near Expiry
-                    </span>
-                  ) : sslExpiryDays < 30 ? (
-                    <span className="px-3 py-1 text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full">
-                      Warning: Expires Soon
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 text-[10px] font-black bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">
-                      Certificate Valid
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground text-center">
-                No active HTTPS / SSL probe targeting this host.
-              </div>
-            )}
           </CardContent>
         </Card>
       </div>
