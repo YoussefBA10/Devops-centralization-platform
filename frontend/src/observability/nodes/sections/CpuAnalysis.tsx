@@ -31,14 +31,14 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
           setCoresCount(parseInt(coresRes[0].value[1]) || 4);
         }
 
-        const [modeUsageRes, load1Res, load5Res, load15Res] = await Promise.all([
-          prometheus.queryRangeByKey('CPU_USAGE_MODES_ALL', start, end, undefined, { node: selectedNode }),
+        const [cpuUsageRes, load1Res, load5Res, load15Res] = await Promise.all([
+          prometheus.queryRangeByKey('CPU_USAGE', start, end, undefined, { node: selectedNode }),
           prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '1' }),
           prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '5' }),
           prometheus.queryRangeByKey('LOAD_AVG_3LINE', start, end, undefined, { node: selectedNode, val: '15' })
         ]);
 
-        setCpuUsageData(combineSeries(modeUsageRes, 'mode'));
+        setCpuUsageData(prometheus.formatSeries(cpuUsageRes));
 
         const combinedLoad = combineSeries([
           ...(load1Res.map(s => ({ ...s, metric: { val: 'load1' } }))),
@@ -107,11 +107,7 @@ export const CpuAnalysis: React.FC<CpuAnalysisProps> = ({ selectedNode, timeRang
               <XAxis dataKey="timestamp" tickFormatter={formatTime} stroke="#4b5563" fontSize={10} />
               <YAxis stroke="#4b5563" fontSize={10} domain={[0, 100]} />
               <Tooltip {...chartTheme.tooltip} labelFormatter={(label) => format(new Date(label), 'yyyy-MM-dd HH:mm:ss')} />
-              <Area type="monotone" dataKey="user" stackId="1" stroke="#3b82f6" fill="url(#userGrad)" strokeWidth={1.5} name="User" />
-              <Area type="monotone" dataKey="system" stackId="1" stroke="#ef4444" fill="url(#sysGrad)" strokeWidth={1.5} name="System" />
-              <Area type="monotone" dataKey="iowait" stackId="1" stroke="#f59e0b" fill="url(#ioGrad)" strokeWidth={1.5} name="I/O Wait" />
-              <Area type="monotone" dataKey="steal" stackId="1" stroke="#a855f7" fillOpacity={0.1} strokeWidth={1.5} name="Steal" />
-              <Area type="monotone" dataKey="softirq" stackId="1" stroke="#10b981" fillOpacity={0.1} strokeWidth={1.5} name="SoftIRQ" />
+              <Area type="monotone" dataKey="value" stroke="#3b82f6" fill="url(#userGrad)" strokeWidth={1.5} name="CPU Usage" />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>

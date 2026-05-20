@@ -116,14 +116,22 @@ export async function deriveInterfaces(instance: string): Promise<string[]> {
 export async function deriveMounts(instance: string): Promise<string[]> {
   try {
     const result = await prometheus.queryInstantByKey('DERIVE_MOUNTS', { node: instance });
-    if (!result || result.length === 0) return ['/'];
+    if (!result || result.length === 0) return ['/', '/data'];
     const mounts = result
       .map(r => r.metric.mountpoint)
-      .filter(Boolean);
-    return mounts.length > 0 ? Array.from(new Set(mounts)) : ['/'];
+      .filter(Boolean)
+      .filter(m => m === '/' || m === '/data');
+    const uniqueMounts = Array.from(new Set(mounts));
+    if (!uniqueMounts.includes('/')) {
+      uniqueMounts.push('/');
+    }
+    if (!uniqueMounts.includes('/data')) {
+      uniqueMounts.push('/data');
+    }
+    return uniqueMounts.sort();
   } catch (error) {
     console.error('Failed to derive mounts:', error);
-    return ['/'];
+    return ['/', '/data'];
   }
 }
 

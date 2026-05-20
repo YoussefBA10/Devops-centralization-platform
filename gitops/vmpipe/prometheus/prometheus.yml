@@ -123,13 +123,15 @@ scrape_configs:
   # 11. Blackbox Exporter (for external probing - optional)
   - job_name: 'blackbox'
     metrics_path: '/probe'
-    params:
-      module: [http_2xx]
-    static_configs:
-      - targets: []   # Add important external URLs here if needed
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/file_sd/blackbox_targets.yml'
+        refresh_interval: 15s
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
+      - source_labels: [probe_module]
+        target_label: __param_module
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__

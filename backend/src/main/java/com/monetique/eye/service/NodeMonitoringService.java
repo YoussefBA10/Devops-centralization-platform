@@ -18,13 +18,13 @@ public class NodeMonitoringService {
 
     static {
         // Section 1: Summary Stats
-        QUERIES.put("NODE_STATUS", "probe_success{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"}");
+        QUERIES.put("NODE_STATUS", "up{job=\"node-exporter\", instance=~\"$node_ip(:.*)?\"}");
         QUERIES.put("UPTIME", "time() - node_boot_time_seconds{instance=~\"$node(:.*)?\"}");
         QUERIES.put("CPU_USAGE", "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"}[5m])) * 100)");
         QUERIES.put("MEMORY_USED_PCT", "(1 - node_memory_MemAvailable_bytes{instance=~\"$node(:.*)?\"} / node_memory_MemTotal_bytes{instance=~\"$node(:.*)?\"}) * 100");
         QUERIES.put("DISK_USED_PCT", "(1 - node_filesystem_avail_bytes{instance=~\"$node(:.*)?\",mountpoint=\"$mount\"} / node_filesystem_size_bytes{instance=~\"$node(:.*)?\",mountpoint=\"$mount\"}) * 100");
         QUERIES.put("LOAD_AVERAGE", "node_load1{instance=~\"$node(:.*)?\"} / count(node_cpu_seconds_total{mode=\"idle\",instance=~\"$node(:.*)?\"})");
-        QUERIES.put("ICMP_LATENCY", "probe_duration_seconds{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"}");
+        QUERIES.put("ICMP_LATENCY", "probe_duration_seconds{probe_module=\"http_2xx\"} * on(nodename) group_left() (node_uname_info{instance=~\"$node(:.*)?\"} * 0 + 1)");
         QUERIES.put("NODE_UNAME", "node_uname_info{instance=~\"$node(:.*)?\"}");
 
         // Section 2: CPU Analysis
