@@ -40,7 +40,7 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
         // 1. Fetch SSL cert expiry
         const sslRes = await prometheus.queryInstantByKey(
           'SSL_CERT_EXPIRY',
-          { node_ip: cleanIp }
+          { node: selectedNode, node_ip: cleanIp }
         );
         if (sslRes && sslRes.length > 0) {
           setSslExpiryDays(parseFloat(sslRes[0].value[1]));
@@ -50,8 +50,8 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
 
         // 2. Fetch TCP Port Probes (Instant query)
         const [portSuccessRes, portDurationRes] = await Promise.all([
-          prometheus.queryInstantByKey('BLACKBOX_TCP_SUCCESS', { node_ip: cleanIp }),
-          prometheus.queryInstantByKey('BLACKBOX_TCP_DURATION', { node_ip: cleanIp })
+          prometheus.queryInstantByKey('BLACKBOX_TCP_SUCCESS', { node: selectedNode, node_ip: cleanIp }),
+          prometheus.queryInstantByKey('BLACKBOX_TCP_DURATION', { node: selectedNode, node_ip: cleanIp })
         ]);
 
         const durationMap: Record<string, number> = {};
@@ -79,8 +79,8 @@ export const BlackboxReachability: React.FC<BlackboxReachabilityProps> = ({
 
         // 3. Fetch ICMP Timeline and Latency over range
         const [timelineRes, latencyRes] = await Promise.all([
-          prometheus.queryRangeByKey('BLACKBOX_ICMP_SUCCESS', start, end, undefined, { node_ip: cleanIp }),
-          prometheus.queryRangeByKey('BLACKBOX_ICMP_DURATION', start, end, undefined, { node_ip: cleanIp })
+          prometheus.queryRangeByKey('BLACKBOX_ICMP_SUCCESS', start, end, undefined, { node: selectedNode, node_ip: cleanIp }),
+          prometheus.queryRangeByKey('BLACKBOX_ICMP_DURATION', start, end, undefined, { node: selectedNode, node_ip: cleanIp })
         ]);
 
         const latencyMs: prometheus.MetricResult[] = latencyRes.map(series => ({

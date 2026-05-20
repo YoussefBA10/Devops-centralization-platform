@@ -73,11 +73,11 @@ public class NodeMonitoringService {
         QUERIES.put("CONNTRACK_UTIL", "node_nf_conntrack_entries{instance=~\"$node(:.*)?\"} / node_nf_conntrack_entries_limit{instance=~\"$node(:.*)?\"} * 100");
 
         // Section 6: Blackbox Reachability
-        QUERIES.put("BLACKBOX_ICMP_SUCCESS", "probe_success{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"}");
-        QUERIES.put("BLACKBOX_ICMP_DURATION", "probe_duration_seconds{probe_module=\"http_2xx\", instance=~\".*$node_ip.*\"} * 1000");
-        QUERIES.put("BLACKBOX_TCP_SUCCESS", "probe_success{job=\"blackbox_tcp\", instance=~\"$node_ip:.*\"}");
-        QUERIES.put("BLACKBOX_TCP_DURATION", "probe_duration_seconds{job=\"blackbox_tcp\", instance=~\"$node_ip:.*\"} * 1000");
-        QUERIES.put("SSL_CERT_EXPIRY", "(probe_ssl_earliest_cert_expiry{instance=~\"$node_ip(:.*)?\"} - time()) / 86400");
+        QUERIES.put("BLACKBOX_ICMP_SUCCESS", "probe_success{probe_module=\"http_2xx\"} * on(nodename) group_left() (node_uname_info{instance=~\"$node(:.*)?\"} * 0 + 1)");
+        QUERIES.put("BLACKBOX_ICMP_DURATION", "probe_duration_seconds{probe_module=\"http_2xx\"} * 1000 * on(nodename) group_left() (node_uname_info{instance=~\"$node(:.*)?\"} * 0 + 1)");
+        QUERIES.put("BLACKBOX_TCP_SUCCESS", "probe_success{job=\"blackbox_tcp\"} * on(nodename) group_left() (node_uname_info{instance=~\"$node(:.*)?\"} * 0 + 1)");
+        QUERIES.put("BLACKBOX_TCP_DURATION", "probe_duration_seconds{job=\"blackbox_tcp\"} * 1000 * on(nodename) group_left() (node_uname_info{instance=~\"$node(:.*)?\"} * 0 + 1)");
+        QUERIES.put("SSL_CERT_EXPIRY", "(probe_ssl_earliest_cert_expiry - time()) / 86400 * on(nodename) group_left() (node_uname_info{instance=~\"$node(:.*)?\"} * 0 + 1)");
 
         // Section 7: System Signals
         QUERIES.put("FILE_FD_USED_PCT", "node_filefd_allocated{instance=~\"$node(:.*)?\"} / node_filefd_maximum{instance=~\"$node(:.*)?\"} * 100");

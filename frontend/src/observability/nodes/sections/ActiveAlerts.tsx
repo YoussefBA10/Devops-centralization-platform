@@ -48,7 +48,7 @@ export const ActiveAlerts: React.FC<ActiveAlertsProps> = ({ selectedNode, trigge
           prometheus.queryInstantByKey('DISK_INODE_USED_PCT', { node: selectedNode, mount: '/' }),
           prometheus.queryInstantByKey('NET_DROP_TOTAL', { node: selectedNode }),
           prometheus.queryInstantByKey('CONNTRACK_UTIL', { node: selectedNode }),
-          prometheus.queryInstantByKey('SSL_CERT_EXPIRY', { node_ip: cleanIp }),
+          prometheus.queryInstantByKey('SSL_CERT_EXPIRY', { node: selectedNode, node_ip: cleanIp }),
           prometheus.queryInstantByKey('PROCESSES_BLOCKED', { node: selectedNode })
         ]);
 
