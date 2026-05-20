@@ -15,19 +15,3 @@
     job: "blackbox"
     probe_module: "http_2xx"
     environment: "central-node"
-- targets:
-  - "http://192.168.126.131:9100/"
-  labels:
-    nodename: "node-192-168-126-131"
-    target_type: "node"
-    job: "blackbox"
-    probe_module: "http_2xx"
-    environment: "test"
-- targets:
-  - "http://192.168.126.135:9100/"
-  labels:
-    nodename: "node-192-168-126-135"
-    target_type: "node"
-    job: "blackbox"
-    probe_module: "http_2xx"
-    environment: "test"
