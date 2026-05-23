@@ -572,40 +572,6 @@ public class LogAnalyticsService {
         return pressure;
     }
 
-    private List<RootCauseRule> calculateRootCauseChain(String envLabel, String appFilter, String nodeName) {
-        List<RootCauseRule> rules = new ArrayList<>();
-        
-        String limitQuery = String.format(Locale.US, "sum(container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) or vector(0)", envLabel, appFilter, nodeFilter(nodeName));
-        Double memLimit = prometheusClient.queryMetric(limitQuery);
-        if (memLimit == null || memLimit <= 0) memLimit = 4294967296.0;
-
-        Double memUsage = prometheusClient.queryMetric(String.format(Locale.US, "sum(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}) / %f * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), memLimit));
-        Double dbPool = prometheusClient.queryMetric(String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)));
-        Double errRate = prometheusClient.queryMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) or vector(0)", envLabel, appFilter, nodeFilter(nodeName)));
-
-        if (memUsage > 85 && dbPool > 90) {
-            rules.add(RootCauseRule.builder()
-                    .id("rc-mem-db")
-                    .type("root_cause")
-                    .title("GC pressure holding connections")
-                    .description("High memory usage (>85%) correlated with DB pool exhaustion. The service is likely spending too much time in GC, causing connection timeouts.")
-                    .sources(List.of("cadvisor", "prometheus"))
-                    .build());
-        }
-        
-        if (errRate > 0 && dbPool > 95) {
-             rules.add(RootCauseRule.builder()
-                    .id("rc-db-exhaust")
-                    .type("cascade")
-                    .title("Database Pool Exhaustion")
-                    .description("HTTP 5xx errors are spiking while DB pool is at 95%+. Root cause is likely slow database queries or connection leaks.")
-                    .sources(List.of("prometheus"))
-                    .build());
-        }
-
-        return rules;
-    }
-
     private List<LogEventDTO> fetchLiveLogs(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
         try {
             org.springframework.data.domain.Page<LogEventDTO> logsPage = elasticsearchLogClient.searchLogs(

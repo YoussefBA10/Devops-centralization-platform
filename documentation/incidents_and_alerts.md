@@ -45,3 +45,15 @@ Beyond raw alerts, the platform implements a structured `Incident` entity in the
 2.  **Firing**: When a threshold is met, Prometheus sends the alert to Alertmanager.
 3.  **Visualization**: The Frontend fetches active alerts from Alertmanager.
 4.  **Incident Creation**: (Operational Flow) Critical alerts can be promoted to Incidents in the backend for deeper analysis and tracking.
+
+## 5. Analyse Dashboard
+A dedicated visualization component providing deep insights into historical incidents, system performance, and predictive analytics.
+
+### Features:
+*   **Historical Trends**: Analyze incident frequency, resolution times, and impact over customizable timeframes.
+*   **Root Cause Analysis**: Leverage AI-powered aggregation of common failure patterns across applications. Capabilities include:
+    *   **Log Correlation**: Automatically collates error logs, traces, and metrics associated with an incident to pinpoint the exact failure origin.
+    *   **Dependency Mapping**: Identifies downstream services, network issues, or database bottlenecks that triggered cascading failures.
+    *   **AI Insights**: Utilizes integrated AI models to interpret complex stack traces and provide actionable, human-readable explanations of failure mechanisms.
+*   **Long-Term Performance Metrics**: Visualization of long-term metric aggregation to identify systemic degradation before it triggers critical alerts.
+*   **Custom Reporting**: Generate and export reports for SLA (Service Level Agreement) tracking, compliance, and team reviews.

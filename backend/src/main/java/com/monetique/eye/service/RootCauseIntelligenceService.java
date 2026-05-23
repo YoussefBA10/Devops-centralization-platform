@@ -46,7 +46,7 @@ public class RootCauseIntelligenceService {
                     String category = entry.getKey();
                     double score = entry.getValue();
                     double probability = totalScore > 0 ? (score / totalScore) * 100.0 : 0.0;
-                    String confidence = probability > 60.0 ? "high" : (probability > 30.0 ? "medium" : "low");
+                    String confidence = score > 6.0 ? "high" : (score > 4.0 ? "medium" : "low");
                     
                     return RootCauseRule.builder()
                             .id(UUID.randomUUID().toString())
@@ -64,7 +64,14 @@ public class RootCauseIntelligenceService {
                 .collect(Collectors.toList());
 
         // 4. Fallback if errors exist but no cause identified
-        if (ranked.isEmpty()) {
+        boolean hasErrors = checkField(signals, "gateway_error_502")
+                || checkField(signals, "service_unavailable_503")
+                || checkField(signals, "server_error_500")
+                || checkField(signals, "oom_error_count")
+                || checkField(signals, "conn_refused")
+                || checkField(signals, "disk_full");
+
+        if (ranked.isEmpty() && hasErrors) {
             ranked.add(RootCauseRule.builder()
                     .id(UUID.randomUUID().toString())
                     .type("trigger")
