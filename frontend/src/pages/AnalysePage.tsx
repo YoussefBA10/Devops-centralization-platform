@@ -9,7 +9,6 @@ import {
   ExternalLink,
   Brain,
   Zap,
-  Info,
   Ticket as TicketIcon
 } from 'lucide-react';
 import api from '../services/api';
@@ -203,15 +202,6 @@ const AnalysePage: React.FC = () => {
     }
   };
 
-  const getBadgeColor = (type: string) => {
-    switch (type) {
-      case 'root_cause': return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'trigger': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-      case 'cascade': return 'bg-destructive/10 text-destructive border-destructive/20';
-      case 'impact': return 'bg-primary/10 text-primary border-primary/20';
-      default: return 'bg-secondary text-muted-foreground';
-    }
-  };
 
   if (!selectedEnvironment) {
     return (

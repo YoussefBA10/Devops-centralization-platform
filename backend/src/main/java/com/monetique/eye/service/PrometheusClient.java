@@ -38,8 +38,12 @@ public class PrometheusClient {
     }
 
     public Double queryMetric(String query) {
+        return queryMetric(query, null);
+    }
+
+    public Double queryMetric(String query, java.time.Instant time) {
         try {
-            Map result = proxyQuery(query);
+            Map result = proxyQuery(query, time);
             if (result != null && "success".equals(result.get("status"))) {
                 Map data = (Map) result.get("data");
                 List results = (List) data.get("result");
@@ -60,9 +64,13 @@ public class PrometheusClient {
     }
 
     public List<Map<String, Object>> queryList(String query) {
+        return queryList(query, null);
+    }
+
+    public List<Map<String, Object>> queryList(String query, java.time.Instant time) {
         List<Map<String, Object>> list = new ArrayList<>();
         try {
-            Map result = proxyQuery(query);
+            Map result = proxyQuery(query, time);
             if (result != null && "success".equals(result.get("status"))) {
                 Map data = (Map) result.get("data");
                 List<Map> results = (List<Map>) data.get("result");
@@ -84,12 +92,20 @@ public class PrometheusClient {
     }
 
     public Map<String, Object> proxyQuery(String query) {
+        return proxyQuery(query, null);
+    }
+
+    public Map<String, Object> proxyQuery(String query, java.time.Instant time) {
         try {
-            URI uri = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
+            UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(prometheusUrl)
                     .path("/api/v1/query")
-                    .queryParam("query", query)
-                    .build()
-                    .toUri();
+                    .queryParam("query", query);
+            
+            if (time != null) {
+                builder.queryParam("time", time.getEpochSecond());
+            }
+
+            URI uri = builder.build().toUri();
 
             log.debug("Proxying instant query to: {}", uri);
             return webClient.get()
@@ -241,53 +257,50 @@ public class PrometheusClient {
 
     public List<Map<String, Object>> getOomEvents(String envFilter, String appFilter, String nodeFilter, java.time.Instant end) {
         String nodePart = (nodeFilter != null && !nodeFilter.isEmpty()) ? String.format(", nodename=~\".*%s.*\"", nodeFilter) : "";
-        String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
-        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s\"%s}[15m]%s) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s\"%s}[15m]%s) > 0)",
-                appFilter, envFilter, nodePart, timeModifier, appFilter, envFilter, nodePart, timeModifier);
-        return queryList(query);
+        String query = String.format("max by (name) (changes(container_oom_events_total{name=~\".*%s.*\", environment=~\"%s\"%s}[15m]) > 0 or changes(container_oom_events_total{name=~\".*%s.*\", container_label_env=~\"%s\"%s}[15m]) > 0)",
+                appFilter, envFilter, nodePart, appFilter, envFilter, nodePart);
+        return queryList(query, end);
     }
 
     public Double getContainerMemoryUsagePercentAtCrash(String appFilter, String envFilter, java.time.Instant end) {
         if (envFilter == null || envFilter.isEmpty()) {
             return 0.0;
         }
-        String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
         String app = appFilter != null ? appFilter : "";
         
         String query = String.format(
-            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"} > 0)) * 100)[2m:15s]%s)) or " +
-            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} > 0)) * 100)[2m:15s]%s))",
-            app, envFilter, app, envFilter, timeModifier,
-            app, envFilter, app, envFilter, timeModifier
+            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"} > 0)) * 100)[2m:15s])) or " +
+            "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} > 0)) * 100)[2m:15s]))",
+            app, envFilter, app, envFilter,
+            app, envFilter, app, envFilter
         );
-        return queryMetric(query);
+        return queryMetric(query, end);
     }
 
     public Double getDiskUsagePercentAtCrash(String appFilter, String envFilter, java.time.Instant end) {
         if (envFilter == null || envFilter.isEmpty()) {
             return 0.0;
         }
-        String timeModifier = (end != null) ? " @ " + end.getEpochSecond() : "";
         String app = appFilter != null ? appFilter : "";
 
         // 1. Check container-level filesystem pressure (cAdvisor)
         String containerQuery = String.format(
-            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"} / (container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"} > 0)) * 100)[2m:15s]%s)) or " +
-            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} / (container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} > 0)) * 100)[2m:15s]%s))",
-            app, envFilter, app, envFilter, timeModifier,
-            app, envFilter, app, envFilter, timeModifier
+            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"} / (container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"} > 0)) * 100)[2m:15s])) or " +
+            "max(max_over_time(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} / (container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"} > 0)) * 100)[2m:15s]))",
+            app, envFilter, app, envFilter,
+            app, envFilter, app, envFilter
         );
-        Double containerDisk = queryMetric(containerQuery);
+        Double containerDisk = queryMetric(containerQuery, end);
         if (containerDisk > 0.0) {
             return containerDisk;
         }
 
         // 2. Check node-level filesystem pressure for this environment
         String nodeQuery = String.format(
-            "max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s]%s))",
-            envFilter, envFilter, timeModifier
+            "max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s]))",
+            envFilter, envFilter
         );
-        return queryMetric(nodeQuery);
+        return queryMetric(nodeQuery, end);
     }
 
     private String buildContainerQuery(String baseMetric, String suffix, String envFilter) {
