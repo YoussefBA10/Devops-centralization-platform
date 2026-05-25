@@ -59,7 +59,7 @@ public class LogAnalyticsService {
                     effectiveServiceName = contextTicket.getApplication().getServiceNameKeyword() != null ? 
                         contextTicket.getApplication().getServiceNameKeyword() : contextTicket.getApplication().getName();
                 }
-                if (contextTicket.getNode() != null) {
+                if ((effectiveNodeName == null || effectiveNodeName.isBlank()) && contextTicket.getNode() != null) {
                     effectiveNodeName = contextTicket.getNode();
                 }
                 if (contextTicket.getCreatedAt() != null) {
@@ -72,6 +72,7 @@ public class LogAnalyticsService {
         String pressureNodeName = (effectiveNodeName != null && !effectiveNodeName.isBlank())
                 ? effectiveNodeName.trim()
                 : (nodeName != null ? nodeName.trim() : null);
+        pressureNodeName = sanitizeNodeContext(pressureNodeName);
 
         Long resolvedEnvironmentId = environmentId;
         if (contextTicket != null && contextTicket.getEnvironment() != null) {
@@ -81,19 +82,16 @@ public class LogAnalyticsService {
         Instant start = end.minus(hours, ChronoUnit.HOURS);
 
         Environment env = environmentRepository.findById(resolvedEnvironmentId).orElse(null);
-        String envLabel = env != null ? env.getPrometheusLabel() : ".*";
+        String envRegex = buildPrometheusEnvRegex(env);
 
         ResolvedNode resolvedNode = resolveNode(pressureNodeName, env);
-        NodeFilterParts nodeFilters = buildNodeFilters(resolvedNode);
+        NodeFilterParts nodeFilters = buildNodeFilters(resolvedNode, env);
 
         List<Application> relatedApps = buildRelatedApps(resolvedEnvironmentId, effectiveServiceName, serviceName);
         List<Application> pressureApps = filterAppsForNode(relatedApps, resolvedNode);
 
-        String containerEnvLabel = envLabel;
-        String appEnvLabel = envLabel;
-
-        // We will build a specific appFilter later based on registered apps
-        containerEnvLabel = envLabel;
+        String containerEnvLabel = envRegex;
+        String appEnvLabel = envRegex;
 
         List<Application> apps = new ArrayList<>();
         if (effectiveServiceName != null && !effectiveServiceName.isBlank()) {
@@ -134,8 +132,8 @@ public class LogAnalyticsService {
                 .sorted()
                 .collect(Collectors.toList());
 
-        log.info("ANALYTICS: environmentId={} resolvedEnvId={} envLabel={} appFilter={} node={} ticket={} window=[{} .. {}]",
-                environmentId, resolvedEnvironmentId, envLabel, appFilter, pressureNodeName, ticketId, start, end);
+        log.info("ANALYTICS: environmentId={} resolvedEnvId={} envRegex={} appFilter={} node={} ticket={} window=[{} .. {}]",
+                environmentId, resolvedEnvironmentId, envRegex, appFilter, pressureNodeName, ticketId, start, end);
 
         return LogAnalyticsResponseDTO.builder()
                 .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, nodeFilters, containerEnvLabel, appFilter, end))
@@ -152,14 +150,75 @@ public class LogAnalyticsService {
 
     private record ResolvedNode(String nodeName, String ip, boolean central) {}
 
-    private record NodeFilterParts(String cadvisor, String hostInstance) {
+    private record NodeFilterParts(String cadvisor, String hostInstance, String nodeId) {
         static NodeFilterParts empty() {
-            return new NodeFilterParts("", "");
+            return new NodeFilterParts("", "", "");
         }
 
         boolean isScoped() {
-            return !cadvisor.isEmpty() || !hostInstance.isEmpty();
+            return !cadvisor.isEmpty() || !hostInstance.isEmpty() || !nodeId.isEmpty();
         }
+
+        String hostScope() {
+            return hostInstance + nodeId;
+        }
+
+        String metricScope() {
+            return cadvisor + hostInstance + nodeId;
+        }
+    }
+
+    /** Ignore Prometheus job names mistaken for node context (e.g. ticket stored "node-exporter"). */
+    private String sanitizeNodeContext(String rawNode) {
+        if (rawNode == null || rawNode.isBlank()) {
+            return null;
+        }
+        String trimmed = rawNode.trim();
+        if (trimmed.equalsIgnoreCase("node-exporter")
+                || trimmed.equalsIgnoreCase("node_exporter")
+                || trimmed.equalsIgnoreCase("cadvisor")
+                || trimmed.equalsIgnoreCase("blackbox")
+                || trimmed.equalsIgnoreCase("filebeat")) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private String normalizePrometheusLabelValue(Environment env) {
+        if (env == null) {
+            return "";
+        }
+        String raw = env.getPrometheusLabel();
+        if (raw != null && raw.contains("=")) {
+            raw = raw.substring(raw.indexOf('=') + 1).replace("\"", "").trim();
+        }
+        if (raw == null || raw.isEmpty()) {
+            raw = env.getSafeName();
+        }
+        return raw;
+    }
+
+    /** Regex alternation for environment label — matches SMGS, smgs, env name, etc. */
+    private String buildPrometheusEnvRegex(Environment env) {
+        if (env == null) {
+            return ".+";
+        }
+        Set<String> variants = new LinkedHashSet<>();
+        String label = normalizePrometheusLabelValue(env);
+        if (!label.isEmpty()) {
+            variants.add(label);
+            variants.add(label.toLowerCase(Locale.ROOT));
+            variants.add(label.toUpperCase(Locale.ROOT));
+        }
+        if (env.getName() != null && !env.getName().isBlank()) {
+            variants.add(env.getName());
+            variants.add(env.getName().toLowerCase(Locale.ROOT));
+            variants.add(env.getName().toUpperCase(Locale.ROOT));
+        }
+        return variants.stream()
+                .filter(v -> v != null && !v.isBlank())
+                .map(this::promRegexAlternation)
+                .collect(Collectors.joining("|"));
     }
 
     private ResolvedNode resolveNode(String rawNode, Environment env) {
@@ -195,7 +254,7 @@ public class LogAnalyticsService {
     /**
      * Builds Prometheus selector fragments — cAdvisor/blackbox use nodename; node_exporter/Spring use instance (IP).
      */
-    private NodeFilterParts buildNodeFilters(ResolvedNode resolved) {
+    private NodeFilterParts buildNodeFilters(ResolvedNode resolved, Environment env) {
         if (resolved == null) {
             return NodeFilterParts.empty();
         }
@@ -208,23 +267,34 @@ public class LogAnalyticsService {
         if (!withoutPrefix.equals(trimmed)) {
             cadvisorPatterns.add(promRegexAlternation(withoutPrefix));
         }
-        if (ip != null && !ip.isBlank()) {
+        if (ip != null && !ip.isBlank() && ip.matches("^[0-9.]+$")) {
             cadvisorPatterns.add(promRegexAlternation(ip));
         }
 
         String cadvisor = ", nodename=~\".*(" + String.join("|", cadvisorPatterns) + ").*\"";
-        String hostInstance = (ip != null && !ip.isBlank())
+        String hostInstance = (ip != null && !ip.isBlank() && ip.matches("^[0-9.]+$"))
                 ? ", instance=~\".*" + promRegexAlternation(ip) + ".*\""
                 : "";
 
-        return new NodeFilterParts(cadvisor, hostInstance);
+        String nodeId = "";
+        if (env != null) {
+            Optional<ManagedNode> mn = managedNodeRepository.findByEnvironmentAndNodeName(env, trimmed);
+            if (mn.isEmpty() && ip != null && ip.matches("^[0-9.]+$")) {
+                mn = managedNodeRepository.findByEnvironmentAndIp(env, ip);
+            }
+            if (mn.isPresent()) {
+                nodeId = ", node_id=\"" + mn.get().getId() + "\"";
+            }
+        }
+
+        return new NodeFilterParts(cadvisor, hostInstance, nodeId);
     }
 
-    private String envSelector(String envLabel) {
-        if (envLabel == null || envLabel.isBlank() || ".*".equals(envLabel)) {
+    private String envSelector(String envRegex) {
+        if (envRegex == null || envRegex.isBlank() || ".*".equals(envRegex) || ".+".equals(envRegex)) {
             return "environment=~\".+\"";
         }
-        return String.format(Locale.US, "environment=~\"%s\"", envLabel.replace("\"", ""));
+        return String.format(Locale.US, "environment=~\"%s\"", envRegex.replace("\"", ""));
     }
 
     private String appHttpRateExpr(String envLabel, String springFilter, NodeFilterParts nf, String extraLabels, String rateWindow) {
@@ -252,19 +322,23 @@ public class LogAnalyticsService {
         if (!nf.isScoped()) {
             return "";
         }
-        return !nf.cadvisor().isEmpty() ? nf.cadvisor() : nf.hostInstance();
-    }
-
-    /** Instance selector for node_exporter metrics (not nodename). */
-    private String nodeHostSelector(NodeFilterParts nf) {
-        return nf.hostInstance() != null ? nf.hostInstance() : "";
-    }
-
-    private String prometheusDiskEnvSelector(String envLabel, String hostInstance) {
-        if (envLabel == null || envLabel.isBlank() || ".*".equals(envLabel)) {
-            return "environment=~\".+\"" + (hostInstance != null ? hostInstance : "");
+        if (!nf.hostScope().isEmpty()) {
+            return nf.hostScope();
         }
-        return String.format(Locale.US, "environment=\"%s\"", envLabel) + (hostInstance != null ? hostInstance : "");
+        return nf.cadvisor();
+    }
+
+    /** Instance / node_id selector for node_exporter metrics (not nodename). */
+    private String nodeHostSelector(NodeFilterParts nf) {
+        return nf != null ? nf.hostScope() : "";
+    }
+
+    private String prometheusDiskEnvSelector(String envRegex, String hostScope) {
+        String host = hostScope != null ? hostScope : "";
+        if (envRegex == null || envRegex.isBlank() || ".+".equals(envRegex)) {
+            return "environment=~\".+\"" + host;
+        }
+        return String.format(Locale.US, "environment=~\"%s\"%s", envRegex.replace("\"", ""), host);
     }
 
     private String appHikariExpr(String envLabel, String springFilter, NodeFilterParts nf, String numeratorLabels) {
@@ -290,10 +364,10 @@ public class LogAnalyticsService {
         if (!nf.isScoped()) {
             return String.format("max(node_memory_MemTotal_bytes{%s})", env);
         }
-        if (!nf.hostInstance().isEmpty()) {
-            return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.hostInstance());
+        if (!nf.hostScope().isEmpty()) {
+            return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.hostScope());
         }
-        return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.cadvisor());
+        return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.cadvisor() + nf.nodeId());
     }
 
     private String promRegexAlternation(String value) {
@@ -435,7 +509,8 @@ public class LogAnalyticsService {
                 .build());
 
         // 5. Blackbox Probe
-        String probeQuery = String.format(Locale.US, "avg(probe_success{%s%s}) * 100 or vector(100)", envSelector(appEnvLabel), cadvisorNode);
+        String probeQuery = String.format(Locale.US, "avg(probe_success{%s%s}) * 100 or vector(100)",
+                envSelector(appEnvLabel), nodeFilters.metricScope());
         Double probeSuccess = prometheusClient.queryMetric(probeQuery, end);
         cards.add(MetricCard.builder()
                 .label("Blackbox probe")
@@ -655,7 +730,8 @@ public class LogAnalyticsService {
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         List<String> labels = generateTimeLabels(start, end, 12);
-        String query = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilters.cadvisor());
+        String query = String.format(Locale.US, "avg(probe_success{%s%s}) * 100",
+                envSelector(envLabel), nodeFilters.metricScope());
         return ChartData.builder()
                 .labels(labels)
                 .datasets(List.of(
@@ -950,7 +1026,7 @@ public class LogAnalyticsService {
         String env = envSelector(envLabel);
         String host = nodeHostSelector(nodeFilters);
         if (host.isEmpty()) {
-            host = nodeFilters.cadvisor();
+            host = nodeFilters.cadvisor() + nodeFilters.nodeId();
         }
 
         Double cpu = prometheusClient.queryMetric(String.format(Locale.US,

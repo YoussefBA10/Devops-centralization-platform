@@ -114,7 +114,7 @@ public class AlertGroupService {
                         .priority("critical".equalsIgnoreCase(severity) ? "CRITICAL" : "HIGH")
                         .application(app)
                         .environment(env)
-                        .node(labels.getOrDefault("nodename", labels.getOrDefault("instance", labels.get("node"))))
+                        .node(resolveAlertNode(labels))
                         .build();
 
                 com.monetique.eye.entity.Ticket savedTicket = ticketRepository.save(ticket);
@@ -202,6 +202,25 @@ public class AlertGroupService {
 
     public List<AlertGroup> getActiveGroups() {
         return groupRepository.findByStatus(AlertGroupStatus.FIRING);
+    }
+
+    /** Prefer nodename; derive node-* from instance IP; never store scrape job names as node. */
+    private String resolveAlertNode(Map<String, String> labels) {
+        String nodename = labels.get("nodename");
+        if (nodename != null && !nodename.isBlank()
+                && !nodename.equalsIgnoreCase("node-exporter")
+                && !nodename.equalsIgnoreCase("cadvisor")) {
+            return nodename;
+        }
+        String instance = labels.get("instance");
+        if (instance != null && !instance.isBlank()) {
+            String host = instance.contains(":") ? instance.substring(0, instance.indexOf(':')) : instance;
+            if (host.matches("^[0-9.]+$")) {
+                return "node-" + host.replace('.', '-');
+            }
+        }
+        String node = labels.get("node");
+        return node != null ? node : nodename;
     }
 
 }
