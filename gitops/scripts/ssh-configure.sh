@@ -74,8 +74,8 @@ if [ -n "$PASSWORD" ] && ! command -v sshpass &> /dev/null; then
     exit 1
 fi
 
-# Copying public key
-info "Copying public key to remote host (using -o StrictHostKeyChecking=no)..."
+ # Copying public key
+info "Copying public key toremote host (using -o StrictHostKeyChecking=no)..."
 
 if [ -n "$PASSWORD" ]; then
     if ! sshpass -p "$PASSWORD" ssh-copy-id -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$USER@$AGENT_IP"; then

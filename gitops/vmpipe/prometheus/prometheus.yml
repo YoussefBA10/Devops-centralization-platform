@@ -19,15 +19,15 @@ rule_files:
 # Scrape configurations
 scrape_configs:
 
-  # 1. Scrape the Monetique-Eye Backend itself (self-monitoring)
+  # 1. Scrape the Monetique-Eye Backend
   - job_name: 'monetique-backend'
     metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['backend:8880']
-        labels:
-          environment: "central-node"
-          nodename: "central-node"
-          app_id: "1"
+    file_sd_configs:
+      - files: ['/etc/prometheus/file_sd/agent_targets.yml']
+    relabel_configs:
+      - source_labels: [job]
+        regex: 'monetique-backend'
+        action: keep
 
   # 2. Central Node (central-node) - Self monitoring
   - job_name: 'central-node'
@@ -120,49 +120,24 @@ scrape_configs:
           environment: "central-node"
           nodename: "central-node"
 
-  # 11. Blackbox Exporter (Dynamic probing of nodes + custom targets)
+  # 11. Blackbox Exporter (Health probing for all nodes)
   - job_name: 'blackbox'
     metrics_path: '/probe'
     params:
       module: [http_2xx]
     file_sd_configs:
       - files:
-          - '/etc/prometheus/file_sd/*.yml'
-          - '/etc/prometheus/file_sd/*.json'
+          - '/etc/prometheus/file_sd/blackbox_targets.yml'
         refresh_interval: 15s
     relabel_configs:
-      # 1. Keep only node-exporter and custom blackbox targets
-      - source_labels: [job]
-        regex: 'node-exporter|blackbox'
-        action: keep
-
-      # 2. Map target URL for node-exporter targets
-      - source_labels: [job, __address__]
-        regex: 'node-exporter;(.*)'
+      - source_labels: [__address__]
         target_label: __param_target
-        replacement: 'http://${1}/'
-
-      # 3. Map target URL for custom blackbox targets
-      - source_labels: [job, __address__]
-        regex: 'blackbox;(.*)'
-        target_label: __param_target
-        replacement: '${1}'
-
-      # 4. Save target URL as the instance label
       - source_labels: [__param_target]
         target_label: instance
-
-      # 5. Point Prometheus to the actual blackbox-exporter service
+      - source_labels: [probe_module]
+        target_label: __param_module
       - target_label: __address__
         replacement: blackbox-exporter:9115
-
-      # 6. Ensure probe_module is set for frontend queries
-      - target_label: probe_module
-        replacement: http_2xx
-
-      # 7. Standardize job name
-      - target_label: job
-        replacement: blackbox
 
   # 12. Network Monitor (Dynamic discovery via Monetique-Eye)
   - job_name: 'network-monitor-dynamic'

@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/clusters")
+@RequestMapping("/api/v1/clusters")
 public class ClusterController {
 
     private final ClusterRepository clusterRepository;

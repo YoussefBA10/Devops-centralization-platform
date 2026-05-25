@@ -10,13 +10,17 @@ templates:
   - '/etc/alertmanager/templates/*.tmpl'
 
 route:
-  group_by: ['alertname', 'severity']
+  group_by: ['alertname', 'severity', 'environment']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
-  receiver: 'email-notifications'
+  receiver: 'monetique-backend'
 
   routes:
+    - match:
+        severity: critical
+      receiver: 'monetique-backend'
+      continue: true
     - match:
         severity: critical
       receiver: 'email-critical'
@@ -27,6 +31,11 @@ route:
       repeat_interval: 4h
 
 receivers:
+  - name: 'monetique-backend'
+    webhook_configs:
+      - url: 'http://backend:8880/api/alerts/ingest'
+        send_resolved: true
+
   - name: 'email-notifications'
     email_configs:
       - to: '__ALERT_RECIPIENT__'

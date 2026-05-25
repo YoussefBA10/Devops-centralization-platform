@@ -17,10 +17,12 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/tickets")
+@RequestMapping("/api/v1/tickets")
 public class TicketController {
 
     private final TicketRepository ticketRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.monetique.eye.repository.AlertGroupRepository alertGroupRepository;
     private final SecurityService securityService;
     private final ActivityLogService activityLogService;
     private final EnvironmentRepository environmentRepository;
@@ -55,7 +57,13 @@ public class TicketController {
                 tickets = ticketRepository.findAll();
             } else {
                 List<String> allowedClusterIdsStr = permissionService.getAllowedClusterIds(auth.getName());
-                List<Long> envIds = allowedClusterIdsStr.stream().map(Long::valueOf).collect(java.util.stream.Collectors.toList());
+                List<Environment> allowedEnvs = environmentRepository.findAll().stream()
+                        .filter(env -> allowedClusterIdsStr.contains(env.getId().toString()) ||
+                                       (env.getCluster() != null && allowedClusterIdsStr.contains(env.getCluster().getId().toString())))
+                        .collect(java.util.stream.Collectors.toList());
+                
+                List<Long> envIds = allowedEnvs.stream().map(Environment::getId).collect(java.util.stream.Collectors.toList());
+                
                 if (envIds.isEmpty()) {
                     tickets = java.util.Collections.emptyList();
                 } else {
@@ -171,6 +179,14 @@ public class TicketController {
             return ResponseEntity.notFound().build();
         }
         String envName = ticket.getEnvironment() != null ? ticket.getEnvironment().getName() : "Global";
+        
+        // Unlink any AlertGroups that might be referencing this ticket
+        List<com.monetique.eye.entity.AlertGroup> groups = alertGroupRepository.findByTicketId(ticket.getId());
+        for (com.monetique.eye.entity.AlertGroup group : groups) {
+            group.setTicket(null);
+            alertGroupRepository.save(group);
+        }
+        
         ticketRepository.delete(ticket);
         activityLogService.logActivity("Ticket Deleted: " + ticket.getTitle(), "incident", envName);
         return ResponseEntity.ok().build();

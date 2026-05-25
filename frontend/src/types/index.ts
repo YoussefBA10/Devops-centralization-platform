@@ -73,6 +73,7 @@ export interface Ticket {
   application?: Application;
   createdAt: string;
   updatedAt: string;
+  resolvedAt?: string;
 }
 
 export interface StabilityRecord {

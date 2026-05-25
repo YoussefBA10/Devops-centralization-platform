@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/setup")
+@RequestMapping("/api/v1/setup")
 public class SetupController {
 
     private final EnvironmentRepository environmentRepository;

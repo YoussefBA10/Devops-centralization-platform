@@ -21,8 +21,10 @@ spring:
   flyway:
     enabled: false
     baseline-on-migrate: true
-    baseline-version: "3"
+    baseline-version: "5"
     repair-on-migrate: true
+    validate-on-migrate: false
+
   
   elasticsearch:
     uris: ${ELASTICSEARCH_URL:http://elasticsearch:9200}
@@ -62,7 +64,7 @@ monetique:
   git:
     executable: ${GIT_EXECUTABLE:git}
   gitops:
-    path: ${MONETIQUE_GITOPS_PATH:../gitops}
+    path: ${MONETIQUE_GITOPS_PATH:./gitops}
 
 monitoring:
   prometheus:

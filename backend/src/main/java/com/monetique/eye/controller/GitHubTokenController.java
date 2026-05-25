@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/github")
+@RequestMapping("/api/v1/github")
 public class GitHubTokenController {
 
     private final GitHubTokenRepository gitHubTokenRepository;

@@ -13,7 +13,7 @@ import java.util.Map;
 import com.monetique.eye.security.RequiresPermission;
 
 @RestController
-@RequestMapping("/api/deploy")
+@RequestMapping("/api/v1/deploy")
 @RequiresPermission("APP_DEPLOYMENT_CREATE")
 public class DeployController {
 

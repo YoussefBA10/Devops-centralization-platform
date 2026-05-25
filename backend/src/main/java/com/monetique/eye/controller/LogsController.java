@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/logs")
+@RequestMapping("/api/v1/logs")
 @RequiresPermission("MONITORING_LOGS")
 public class LogsController {
 
@@ -31,6 +31,8 @@ public class LogsController {
         
         // In reality, 'query' parameter would be passed to ElasticsearchLogService.
         // For the sake of matching the test plan precisely, we just map environmentId to environment name.
-        return esLogService.getRecentLogs(env.getName().toLowerCase(), limit);
+        String searchLabel = (env.getPrometheusLabel() != null && !env.getPrometheusLabel().isBlank()) 
+                             ? env.getPrometheusLabel() : env.getSafeName();
+        return esLogService.getRecentLogs(searchLabel, limit);
     }
 }

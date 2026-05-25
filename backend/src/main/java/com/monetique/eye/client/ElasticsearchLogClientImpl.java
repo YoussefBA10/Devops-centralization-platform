@@ -9,6 +9,7 @@ import co.elastic.clients.elasticsearch.core.DeleteByQueryRequest;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.json.JsonData;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.monetique.eye.dto.LogEventDTO;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -41,50 +42,61 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
 
     @Override
     @CircuitBreaker(name = "elasticsearchClient", fallbackMethod = "fallbackSearch")
-    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String queryStr, String severity, Instant from,
+    public Page<LogEventDTO> searchLogs(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable) {
-        return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, queryStr, severity, from, to, pageable))
+        return CompletableFuture.supplyAsync(() -> executeSearch(displayName, keywordName, nodeName, queryStr, severity, from, to, pageable))
                 .join();
     }
 
-    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+    private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable) {
         try {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
-            // Build a list of possible matching names
-            List<String> namesToMatch = new ArrayList<>();
-            if (displayName != null) {
-                namesToMatch.add(displayName);
-                // Also add a version with underscores instead of hyphens
-                namesToMatch.add(displayName.replace("-", "_"));
-            }
-            if (keywordName != null) {
-                namesToMatch.add(keywordName);
-                namesToMatch.add(keywordName.replace("-", "_"));
+            if (nodeName != null && !nodeName.isBlank() && !nodeName.equals(".*")) {
+                boolQuery.must(m -> m.bool(b -> b
+                    .should(s -> s.term(t -> t.field("agent.hostname.keyword").value(nodeName)))
+                    .should(s -> s.term(t -> t.field("host.name.keyword").value(nodeName)))
+                    .should(s -> s.wildcard(w -> w.field("nodename.keyword").value("*" + nodeName + "*")))
+                    .should(s -> s.wildcard(w -> w.field("node.keyword").value("*" + nodeName + "*")))
+                    .minimumShouldMatch("1")
+                ));
             }
 
-            // Special handling for common mismatches
-            if ("frontend-service".equalsIgnoreCase(displayName) || "angular-nginx-app".equalsIgnoreCase(displayName)) {
-                namesToMatch.add("angular-nginx-app");
-                namesToMatch.add("frontend-service");
-                namesToMatch.add("frontend");
-                namesToMatch.add("nginx");
+            // 1. Environment Filter (Mandatory if provided)
+            if (displayName != null && !displayName.equals(".*")) {
+                boolQuery.filter(f -> f.term(t -> t.field("environment.keyword").value(displayName.toLowerCase())));
             }
 
-            // Filter to match any of the common service identifier fields with any of the names (using wildcard for compose prefixes)
-            boolQuery.must(m -> m.bool(b -> {
-                namesToMatch.forEach(name -> {
-                    // Use wildcard to match names like 'vmpipe_angular-nginx-app_1'
-                    String wildcardName = "*" + name + "*";
-                    b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
-                    b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
-                });
-                return b.minimumShouldMatch("1");
-            }));
+            // 2. Service Filter (Conditional)
+            if (keywordName != null && !keywordName.isBlank() && !keywordName.equals(".*")) {
+                List<String> namesToMatch = new ArrayList<>();
+                if (keywordName.contains("|")) {
+                    for (String part : keywordName.split("\\|")) {
+                        if (!part.isBlank()) {
+                            namesToMatch.add(part.trim());
+                            namesToMatch.add(part.trim().replace("-", "_"));
+                        }
+                    }
+                } else {
+                    namesToMatch.add(keywordName);
+                    namesToMatch.add(keywordName.replace("-", "_"));
+                }
+
+                if (!namesToMatch.isEmpty()) {
+                    boolQuery.must(m -> m.bool(b -> {
+                        namesToMatch.forEach(name -> {
+                            String wildcardName = "*" + name + "*";
+                            b.should(s -> s.wildcard(w -> w.field("service.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("service_name.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
+                        });
+                        return b.minimumShouldMatch("1");
+                    }));
+                }
+            }
 
             if (queryStr != null && !queryStr.isBlank()) {
                 // Ensure wildcards for partial matches if not provided
@@ -117,7 +129,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                     .index(getIndexName())
                     .query(query)
                     .from((int) pageable.getOffset())
-                    .size(pageable.getPageSize() > 200 ? 200 : pageable.getPageSize())
+                    .size(Math.min(pageable.getPageSize(), 10000))
                     .sort(s -> s.field(f -> f.field("@timestamp").order(SortOrder.Desc)))
                     .build();
 
@@ -141,7 +153,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     }
 
     // Fallback for CircuitBreaker
-    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String queryStr, String severity, Instant from,
+    public Page<LogEventDTO> fallbackSearch(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable, Throwable t) {
         log.warn("Elasticsearch circuit breaker tripped for appName: {}. Returning empty list. Reason: {}", displayName,
                 t.getMessage());
@@ -193,6 +205,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 .normalizedSummary(getField(source, "normalizedSummary", "normalized_summary"))
                 .rawMessage(getField(source, "raw_message", "message"))
                 .traceId(source.has("traceId") ? source.get("traceId").asText() : null)
+                .uri(getField(source, "uri", "url_path", "request_path", "http_path"))
                 .build();
     }
 
@@ -203,5 +216,48 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             }
         }
         return null;
+    }
+
+    @Override
+    public java.util.Map<String, Object> fetchSreSignals(String envLabel, String appFilter, java.time.Instant from, java.time.Instant to) {
+        java.util.Map<String, Object> signals = new java.util.HashMap<>();
+        try {
+            SearchResponse<Void> response = esClient.search(s -> s
+                .index(getIndexName())
+                .size(0)
+                .query(q -> q.bool(b -> b
+                    .filter(f -> f.term(t -> t.field("environment.keyword").value(envLabel.toLowerCase())))
+                    .filter(f -> f.regexp(r -> r.field("service.keyword").value(".*(" + appFilter + ").*")))
+                    .filter(f -> f.range(r -> r.field("@timestamp").gte(JsonData.of(from.toString())).lte(JsonData.of(to.toString()))))
+                ))
+                .aggregations("pool_active_max_match", a -> a.filter(f -> f.bool(b -> b
+                    .must(m1 -> m1.exists(e -> e.field("pool_active")))
+                    .must(m2 -> m2.exists(e -> e.field("pool_max")))
+                    .filter(f1 -> f1.script(sc -> sc.script(s1 -> s1.inline(i -> i.source("doc['pool_active'].value == doc['pool_max'].value && doc['pool_active'].value > 0")))))
+                )))
+                .aggregations("db_wait_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("wait_ms").gte(JsonData.of(5000)))))))
+                .aggregations("oom_error_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("OutOfMemoryError"))))))
+                .aggregations("heap_90_plus", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("heap_pct").gte(JsonData.of(90)))))))
+                .aggregations("cb_open", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("circuit_breaker_state.keyword").value("open"))))))
+                .aggregations("npe_count", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("exception_type.keyword").value("java.lang.NullPointerException"))))))
+                .aggregations("rate_limit_429", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(429))))))
+                .aggregations("gateway_error_502", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(502))))))
+                .aggregations("service_unavailable_503", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(503))))))
+                .aggregations("server_error_500", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.term(t -> t.field("status_code").value(500))))))
+                .aggregations("conn_refused", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Connection refused"))))))
+                .aggregations("disk_full", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("No space left on device"))))))
+                .aggregations("disk_usage_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("disk_usage_pct").gte(JsonData.of(85)))))))
+                .aggregations("inode_exhausted", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("No inodes available"))))))
+            , Void.class);
+
+            response.aggregations().forEach((name, agg) -> {
+                if (agg.isFilter() && agg.filter().docCount() > 0) {
+                    signals.put(name, true);
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to fetch SRE signals: {}", e.getMessage());
+        }
+        return signals;
     }
 }

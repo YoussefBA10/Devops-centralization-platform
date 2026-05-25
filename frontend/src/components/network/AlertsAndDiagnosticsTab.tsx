@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getActiveAlerts, getAlertRules, silenceAlert, deleteAlertRule } from '../../services/api';
+import { getActiveAlerts, getAlertGroups, getAlertRules, silenceAlert, deleteAlertRule } from '../../services/api';
 import { AlertTriangle, BellOff, Settings, ShieldAlert, Trash2 } from 'lucide-react';
 import AddAlertRuleModal from './AddAlertRuleModal';
 import { useToast } from '../ui/Toast';
 
 const AlertsAndDiagnosticsTab: React.FC = () => {
   const [activeAlerts, setActiveAlerts] = useState<any[]>([]);
-   const [rules, setRules] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [view, setView] = useState<'raw' | 'smart'>('smart');
+  const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { showToast } = useToast();
@@ -14,14 +16,18 @@ const AlertsAndDiagnosticsTab: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [alertsRes, rulesRes] = await Promise.all([
+        const [alertsRes, groupsRes, rulesRes] = await Promise.all([
           getActiveAlerts(),
+          getAlertGroups(),
           getAlertRules()
         ]);
         
-        // Handle Alertmanager v2 format
         if (alertsRes.data && Array.isArray(alertsRes.data)) {
           setActiveAlerts(alertsRes.data.filter((a: any) => a.status.state === 'active'));
+        }
+        
+        if (groupsRes.data) {
+          setGroups(groupsRes.data);
         }
         
         if (rulesRes.data) {
@@ -70,36 +76,94 @@ const AlertsAndDiagnosticsTab: React.FC = () => {
 
   return (
     <div className="h-full w-full flex flex-col md:flex-row gap-6 p-6 overflow-y-auto">
-      {/* Left Panel: Active Alerts */}
+      {/* Left Panel: Active Alerts / Groups */}
       <div className="flex-[0.55] flex flex-col bg-white/5 border border-white/10 rounded-lg p-5">
-        <h2 className="text-lg font-bold flex items-center mb-4">
-          <AlertTriangle className="w-5 h-5 mr-2 text-amber-500" />
-          Active Network Alerts
-        </h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold flex items-center">
+            <AlertTriangle className="w-5 h-5 mr-2 text-amber-500" />
+            {view === 'raw' ? 'Active Network Alerts' : 'Smart Alert Groups'}
+          </h2>
+          <div className="flex bg-black/40 rounded-md p-1 border border-white/5">
+            <button 
+              onClick={() => setView('smart')}
+              className={`text-[10px] px-2 py-1 rounded transition-colors ${view === 'smart' ? 'bg-primary/20 text-primary font-bold' : 'text-muted-foreground hover:text-white'}`}
+            >
+              SMART
+            </button>
+            <button 
+              onClick={() => setView('raw')}
+              className={`text-[10px] px-2 py-1 rounded transition-colors ${view === 'raw' ? 'bg-primary/20 text-primary font-bold' : 'text-muted-foreground hover:text-white'}`}
+            >
+              RAW
+            </button>
+          </div>
+        </div>
         
         <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-          {activeAlerts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-emerald-500">
-              <ShieldAlert className="w-10 h-10 mb-2 opacity-50" />
-              <p>No active alerts. Network is healthy.</p>
-            </div>
+          {view === 'raw' ? (
+            activeAlerts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-emerald-500">
+                <ShieldAlert className="w-10 h-10 mb-2 opacity-50" />
+                <p>No active alerts. Network is healthy.</p>
+              </div>
+            ) : (
+              activeAlerts.map((alert, idx) => (
+                <div key={idx} className={`p-4 rounded-md border-l-4 bg-black/30 ${alert.labels?.severity === 'critical' ? 'border-red-500' : 'border-amber-500'}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-sm text-white">{alert.annotations?.summary || alert.labels?.alertname}</h3>
+                      <p className="text-xs text-muted-foreground mt-1">{alert.annotations?.description}</p>
+                      <div className="mt-2 text-[10px] bg-white/10 inline-block px-2 py-1 rounded text-muted-foreground">
+                        {alert.labels?.vm_id || alert.labels?.link_id || 'Global'}
+                      </div>
+                    </div>
+                    <button onClick={() => handleSilence(alert)} className="p-1.5 hover:bg-white/10 rounded text-muted-foreground hover:text-white transition-colors" title="Silence for 1h">
+                      <BellOff className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )
           ) : (
-            activeAlerts.map((alert, idx) => (
-              <div key={idx} className={`p-4 rounded-md border-l-4 bg-black/30 ${alert.labels?.severity === 'critical' ? 'border-red-500' : 'border-amber-500'}`}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-sm text-white">{alert.annotations?.summary || alert.labels?.alertname}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{alert.annotations?.description}</p>
-                    <div className="mt-2 text-[10px] bg-white/10 inline-block px-2 py-1 rounded text-muted-foreground">
-                      {alert.labels?.vm_id || alert.labels?.link_id || 'Global'}
+            groups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-emerald-500">
+                <ShieldAlert className="w-10 h-10 mb-2 opacity-50" />
+                <p>No smart groups detected. Infrastructure is stable.</p>
+              </div>
+            ) : (
+              groups.map((group) => (
+                <div key={group.id} className={`p-4 rounded-md border-l-4 bg-black/30 ${group.severity === 'critical' ? 'border-red-500' : 'border-amber-500'}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-white">{group.name}</h3>
+                        {group.incidentId && (
+                          <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30">
+                            INCIDENT #{group.incidentId}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        First fired: {new Date(group.firstFiredAt).toLocaleTimeString()}
+                      </p>
+                      <div className="flex gap-2 mt-2">
+                        <div className="text-[10px] bg-white/10 inline-block px-2 py-1 rounded text-muted-foreground">
+                          {group.fingerprint.substring(0, 8)}
+                        </div>
+                        <div className={`text-[10px] inline-block px-2 py-1 rounded font-bold ${group.severity === 'critical' ? 'text-red-400 bg-red-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
+                          {group.severity.toUpperCase()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                       <button onClick={() => {/* Resolve logic */}} className="p-1.5 hover:bg-white/10 rounded text-muted-foreground hover:text-white transition-colors" title="Mark as Resolved">
+                        <Settings className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <button onClick={() => handleSilence(alert)} className="p-1.5 hover:bg-white/10 rounded text-muted-foreground hover:text-white transition-colors" title="Silence for 1h">
-                    <BellOff className="w-4 h-4" />
-                  </button>
                 </div>
-              </div>
-            ))
+              ))
+            )
           )}
         </div>
       </div>

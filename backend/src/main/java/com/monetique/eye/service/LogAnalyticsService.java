@@ -1,0 +1,749 @@
+package com.monetique.eye.service;
+
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.aggregations.Aggregation;
+import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import com.monetique.eye.dto.LogAnalyticsResponseDTO;
+import com.monetique.eye.dto.LogAnalyticsResponseDTO.*;
+import com.monetique.eye.dto.LogEventDTO;
+import com.monetique.eye.entity.Application;
+import com.monetique.eye.entity.Environment;
+import com.monetique.eye.client.ElasticsearchLogClient;
+import com.monetique.eye.entity.Ticket;
+import com.monetique.eye.repository.ApplicationRepository;
+import com.monetique.eye.repository.EnvironmentRepository;
+import com.monetique.eye.repository.TicketRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class LogAnalyticsService {
+
+    private final PrometheusClient prometheusClient;
+    private final ElasticsearchClient esClient;
+    private final ElasticsearchLogClient elasticsearchLogClient;
+    private final ApplicationRepository applicationRepository;
+    private final EnvironmentRepository environmentRepository;
+    private final TicketRepository ticketRepository;
+    private final RootCauseIntelligenceService rootCauseIntelligenceService;
+
+    public LogAnalyticsResponseDTO getDashboardData(Long environmentId, String range, String serviceName, String nodeName, Long ticketId) {
+        // Resolve ticket context if provided
+        String effectiveServiceName = serviceName;
+        String effectiveNodeName = nodeName;
+
+        int hours = parseRange(range);
+        Instant end = Instant.now();
+
+        if (ticketId != null) {
+            Ticket ticket = ticketRepository.findById(ticketId).orElse(null);
+            if (ticket != null) {
+                if (ticket.getApplication() != null) {
+                    effectiveServiceName = ticket.getApplication().getServiceNameKeyword() != null ? 
+                        ticket.getApplication().getServiceNameKeyword() : ticket.getApplication().getName();
+                }
+                if (ticket.getNode() != null) {
+                    effectiveNodeName = ticket.getNode();
+                }
+                if (ticket.getCreatedAt() != null) {
+                    end = ticket.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant();
+                }
+                log.info("ANALYTICS: Resolved ticket #{} to service={} node={} time={}", ticketId, effectiveServiceName, effectiveNodeName, end);
+            }
+        }
+
+        if (effectiveNodeName != null && effectiveNodeName.matches("^node-\\d+$")) {
+            effectiveNodeName = effectiveNodeName.substring(5);
+        }
+
+        String pressureNodeName = (effectiveNodeName != null && !effectiveNodeName.isBlank())
+                ? effectiveNodeName
+                : nodeName;
+        List<Application> relatedApps = buildRelatedApps(environmentId, effectiveServiceName, serviceName);
+
+        Instant start = end.minus(hours, ChronoUnit.HOURS);
+
+        Environment env = environmentRepository.findById(environmentId).orElse(null);
+        String envLabel = env != null ? env.getPrometheusLabel() : ".*";
+
+        // When a specific service is requested (from a ticket), we need two filter sets:
+        // 1. Container-level filters: use broad env/node (".*"/null) to find the container wherever it runs
+        // 2. App-level filters: use the environment's own label for Spring Boot metrics (HTTP, DB pool)
+        String containerEnvLabel = envLabel;
+        String containerNodeName = nodeName;
+        String appEnvLabel = envLabel;     // For HTTP/DB metrics tied to the environment's backend
+        String appNodeName = nodeName;
+
+        // We will build a specific appFilter later based on registered apps
+        containerEnvLabel = envLabel;
+
+        List<Application> apps = new ArrayList<>();
+        if (effectiveServiceName != null && !effectiveServiceName.isBlank()) {
+            Application targetApp = applicationRepository.findByName(effectiveServiceName).orElse(null);
+            if (targetApp != null) {
+                apps.add(targetApp);
+                if (targetApp.getServiceNameKeyword() != null) {
+                    applicationRepository.findAllByServiceNameKeyword(targetApp.getServiceNameKeyword())
+                        .stream()
+                        .filter(a -> !a.getId().equals(targetApp.getId()))
+                        .forEach(apps::add);
+                }
+            }
+        }
+        
+        // Always include all environment apps for broad context as requested
+        List<Application> envApps = applicationRepository.findByEnvironmentId(environmentId);
+        for (Application a : envApps) {
+            if (!apps.contains(a)) apps.add(a);
+        }
+        
+        // For Spring Boot metrics (HTTP, DB), use a broader filter that matches any app in the env
+        String springFilter = apps.isEmpty() ? ".*" : apps.stream()
+                .map(Application::getServiceNameKeyword)
+                .filter(Objects::nonNull)
+                .collect(Collectors.joining("|"));
+        if (springFilter.isEmpty()) springFilter = ".*";
+
+        // Restricted appFilter: Only include registered microservices, not infra tools
+        // If a specific service is requested, we isolate it. Otherwise, we show everything in the env.
+        String appFilter = (serviceName != null && !serviceName.isBlank()) ? serviceName : springFilter;
+
+        List<String> availableServices = apps.stream()
+                .map(Application::getName)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        log.info("ANALYTICS: environmentId={} envLabel={} appFilter={} appsCount={} requestedService={}", 
+                environmentId, envLabel, appFilter, apps.size(), serviceName);
+
+        return LogAnalyticsResponseDTO.builder()
+                .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName, end))
+                .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, appFilter, appNodeName, apps, start, end))
+                .resourceUsage(fetchResourceUsage(containerEnvLabel, appFilter, containerNodeName, start, end))
+                .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
+                .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
+                .resourcePressure(fetchResourcePressure(containerEnvLabel, relatedApps, pressureNodeName, end))
+                .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, effectiveNodeName, start, end))
+                .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
+                .availableServices(availableServices)
+                .build();
+    }
+
+    private String nodeFilter(String nodeName) {
+        return (nodeName != null && !nodeName.isBlank()) ? String.format(", nodename=~\".*%s.*\"", nodeName) : "";
+    }
+
+    private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, String appNodeName, 
+                                                String containerEnvLabel, String appFilter, String containerNodeName, Instant end) {
+        List<MetricCard> cards = new ArrayList<>();
+
+        // 1. Error Rate
+        String errRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
+                appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+        Double errRate = prometheusClient.queryMetric(errRateQuery, end);
+        cards.add(MetricCard.builder()
+                .label("Error rate")
+                .value(String.format("%.2f%%", errRate))
+                .delta("")
+                .status(errRate > 5 ? "danger" : errRate > 1 ? "warning" : "neutral")
+                .source("prometheus")
+                .build());
+
+        // 2. Request Rate
+        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, nodeFilter(appNodeName));
+        Double reqRate = prometheusClient.queryMetric(reqRateQuery, end);
+        cards.add(MetricCard.builder()
+                .label("Request rate")
+                .value(String.format("%.1f req/s", reqRate))
+                .delta("")
+                .status("neutral")
+                .source("prometheus")
+                .build());
+
+        // 3. DB Pool Usage
+        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+        Double dbPool = prometheusClient.queryMetric(dbPoolQuery, end);
+        cards.add(MetricCard.builder()
+                .label("DB pool usage")
+                .value(String.format("%.1f%%", dbPool))
+                .delta("")
+                .status(dbPool > 90 ? "danger" : dbPool > 70 ? "warning" : "neutral")
+                .source("prometheus")
+                .build());
+
+        // 4. Memory Usage (Dynamic Limit)
+        String memQuery = String.format(Locale.US, "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), containerEnvLabel, appFilter, nodeFilter(containerNodeName));
+        Double memUsage = prometheusClient.queryMetric(memQuery, end);
+        cards.add(MetricCard.builder()
+                .label("Backend memory")
+                .value(String.format("%.1f%%", memUsage))
+                .delta("")
+                .status(memUsage > 85 ? "danger" : memUsage > 70 ? "warning" : "neutral")
+                .source("cadvisor")
+                .build());
+
+        // 5. Blackbox Probe
+        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, nodeFilter(appNodeName));
+        Double probeSuccess = prometheusClient.queryMetric(probeQuery, end);
+        cards.add(MetricCard.builder()
+                .label("Blackbox probe")
+                .value(String.format("%.1f%%", probeSuccess))
+                .delta("")
+                .status(probeSuccess < 95 ? "danger" : "neutral")
+                .source("blackbox")
+                .build());
+
+        return cards;
+    }
+
+    private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, String nodeName, List<Application> apps, Instant start, Instant end) {
+        long diff = end.getEpochSecond() - start.getEpochSecond();
+        String step = Math.max(60, diff / 11) + "s";
+        String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
+        List<String> labels = generateTimeLabels(start, end, 12);
+        
+        List<ChartData.Series> datasets = new ArrayList<>();
+        
+        // Total Traffic (The primary line)
+        datasets.add(ChartData.Series.builder()
+                .label("Total req/s")
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .color("#3b82f6")
+                .fill(false)
+                .build());
+
+        // Individual Service Traffic (If looking at multiple apps)
+        if (".*".equals(appFilter) || apps.size() > 1) {
+            datasets.addAll(fetchMultiRangeMetric(
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
+                "req/s", start, end, step, 12));
+            
+            datasets.addAll(fetchMultiRangeMetric(
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
+                "errors/min", start, end, step, 12));
+        } else {
+            datasets.add(ChartData.Series.builder()
+                .label("errors/min")
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .color("#ef4444")
+                .fill(true)
+                .build());
+        }
+
+        // DB Pool (Aggregated)
+        datasets.add(ChartData.Series.builder()
+                .label("DB pool %")
+                .data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12))
+                .color("#f59e0b")
+                .dashed(true)
+                .fill(false)
+                .build());
+
+        return ChartData.builder()
+                .labels(labels)
+                .datasets(datasets)
+                .build();
+    }
+
+    private ChartData fetchResourceUsage(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
+        long diff = end.getEpochSecond() - start.getEpochSecond();
+        String step = Math.max(60, diff / 11) + "s";
+        String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
+        List<String> labels = generateTimeLabels(start, end, 12);
+
+        String cpuQuery = String.format(Locale.US,
+                "max(sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[%s])) * 100)",
+                envLabel, appFilter, nodeFilter(nodeName), rateInterval);
+        String memQuery = String.format(Locale.US,
+                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or vector(0)",
+                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName));
+        String diskQuery = String.format(Locale.US,
+                "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s])) or vector(0)",
+                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName), envLabel, envLabel);
+
+        List<ChartData.Series> datasets = List.of(
+                ChartData.Series.builder()
+                        .label("CPU %")
+                        .data(fetchRangeMetric(cpuQuery, start, end, step, 12))
+                        .color("#3b82f6")
+                        .fill(false)
+                        .build(),
+                ChartData.Series.builder()
+                        .label("Memory %")
+                        .data(fetchRangeMetric(memQuery, start, end, step, 12))
+                        .color("#10b981")
+                        .fill(false)
+                        .build(),
+                ChartData.Series.builder()
+                        .label("Disk %")
+                        .data(fetchRangeMetric(diskQuery, start, end, step, 12))
+                        .color("#f59e0b")
+                        .fill(false)
+                        .build()
+        );
+
+        return ChartData.builder()
+                .labels(labels)
+                .datasets(datasets)
+                .build();
+    }
+
+    private List<ChartData.Series> fetchMultiRangeMetric(String query, String labelSuffix, Instant start, Instant end, String step, int count) {
+        List<ChartData.Series> seriesList = new ArrayList<>();
+        Map<String, Object> rangeData = prometheusClient.queryRange(query, String.valueOf(start.getEpochSecond()), String.valueOf(end.getEpochSecond()), step);
+        
+        // Vibrant color palette for microservices (excluding black)
+        String[] palette = {"#8b5cf6", "#ec4899", "#10b981", "#06b6d4", "#f97316", "#a855f7", "#14b8a6", "#f43f5e"};
+        
+        try {
+            List<Map> results = (List<Map>) rangeData.get("result");
+            if (results != null) {
+                int colorIdx = 0;
+                for (Map res : results) {
+                    Map<String, String> metric = (Map<String, String>) res.get("metric");
+                    String job = metric.get("job");
+                    if (job == null) job = "unknown";
+                    String serviceName = job.replace("monetique-", "").replace("-service", "");
+                    
+                    Double[] dataPoints = new Double[count];
+                    java.util.Arrays.fill(dataPoints, 0.0);
+                    
+                    List<List<Object>> values = (List<List<Object>>) res.get("values");
+                    long startSec = start.getEpochSecond();
+                    long endSec = end.getEpochSecond();
+                    long stepSec = Math.max(1, (endSec - startSec) / (count - 1));
+
+                    for (List<Object> value : values) {
+                        double ts = Double.parseDouble(value.get(0).toString());
+                        double val = Double.parseDouble(value.get(1).toString());
+                        int bucket = (int) ((ts - startSec) / stepSec);
+                        if (bucket >= 0 && bucket < count) {
+                            dataPoints[bucket] = val;
+                        }
+                    }
+
+                    boolean isErrorSeries = labelSuffix.toLowerCase().contains("error");
+                    seriesList.add(ChartData.Series.builder()
+                            .label(serviceName + " " + labelSuffix)
+                            .data(java.util.Arrays.asList(dataPoints))
+                            .color(isErrorSeries ? "#ef4444" : palette[colorIdx % palette.length])
+                            .fill(isErrorSeries)
+                            .build());
+                    
+                    if (!isErrorSeries) colorIdx++;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch multi-range metric: {}", e.getMessage());
+        }
+        return seriesList;
+    }
+
+    private List<Double> fetchRangeMetric(String query, Instant start, Instant end, String step, int count) {
+        Map<String, Object> rangeData = prometheusClient.queryRange(query, String.valueOf(start.getEpochSecond()), String.valueOf(end.getEpochSecond()), step);
+        Double[] dataPoints = new Double[count];
+        java.util.Arrays.fill(dataPoints, 0.0);
+        
+        long startSec = start.getEpochSecond();
+        long endSec = end.getEpochSecond();
+        long stepSec = (endSec - startSec) / (count - 1);
+        if (stepSec == 0) stepSec = 1;
+        
+        try {
+            List<Map> results = (List<Map>) rangeData.get("result");
+            if (results != null && !results.isEmpty()) {
+                List<List<Object>> values = (List<List<Object>>) results.get(0).get("values");
+                for (List<Object> value : values) {
+                    double ts = Double.parseDouble(value.get(0).toString());
+                    double val = Double.parseDouble(value.get(1).toString());
+                    
+                    int bucket = (int) ((ts - startSec) / stepSec);
+                    if (bucket >= 0 && bucket < count) {
+                        dataPoints[bucket] = val;
+                    } else if (bucket == count) {
+                        dataPoints[count - 1] = val;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch range metric for query: {}", query);
+        }
+        
+        return java.util.Arrays.asList(dataPoints);
+    }
+
+    private ChartData fetchProbeSuccess(String envLabel, String nodeName, Instant start, Instant end) {
+        long diff = end.getEpochSecond() - start.getEpochSecond();
+        String step = Math.max(60, diff / 11) + "s";
+        List<String> labels = generateTimeLabels(start, end, 12);
+        String query = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilter(nodeName));
+        return ChartData.builder()
+                .labels(labels)
+                .datasets(List.of(
+                        ChartData.Series.builder().label("probe_success %").data(fetchRangeMetric(query, start, end, step, 12)).color("#14b8a6").fill(false).build()
+                ))
+                .build();
+    }
+
+    /**
+     * Normalize an error message by stripping variable parts (timestamps, IPs, durations, UUIDs)
+     * so that repeated occurrences of the same root error group together.
+     */
+    private String normalizeErrorKey(String msg) {
+        if (msg == null) return "Unknown Error";
+        String key = msg;
+        // Strip category prefix like "[NETWORK] " or "[APPLICATION] "
+        key = key.replaceAll("^\\[\\w+\\]\\s*", "");
+        // Strip ISO timestamps with optional timezone offsets (2026-05-14T21:52:39.616+01:00)
+        key = key.replaceAll("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?([+-]\\d{2}:?\\d{2}|Z)?", "<time>");
+        // Strip common log pattern artifacts: [ thread-name ]
+        key = key.replaceAll("--- \\[[^\\]]+\\]", "--- [<thread>]");
+        // Strip log levels
+        key = key.replaceAll("\\b(ERROR|WARN|INFO|DEBUG|TRACE)\\b", "<level>");
+        // Strip memory addresses/hashes (e.g. @7f8a9b)
+        key = key.replaceAll("@[0-9a-f]{6,16}", "@<addr>");
+        // Strip epoch-style timestamps
+        key = key.replaceAll("\\b\\d{10,13}\\b", "<ts>");
+        // Strip IPs
+        key = key.replaceAll("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}(:\\d+)?", "<ip>");
+        // Strip durations like duration_seconds=0.001416494
+        key = key.replaceAll("duration_seconds=\\d+\\.\\d+", "duration_seconds=<dur>");
+        // Strip UUIDs
+        key = key.replaceAll("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>");
+        // Collapse whitespace
+        key = key.replaceAll("\\s+", " ").trim();
+        // Truncate to 200 chars to avoid overly long keys
+        if (key.length() > 200) key = key.substring(0, 200);
+        return key;
+    }
+
+    private String extractEndpoint(LogEventDTO log, Map<String, String> serviceTopUris) {
+        String service = log.getService() != null ? log.getService() : "unknown";
+        String category = log.getCategory() != null ? log.getCategory() : "APPLICATION";
+        
+        // 1. Trust explicit URI metadata if available (the industry standard for structured logs)
+        if (log.getUri() != null && !log.getUri().isBlank()) {
+            String normalized = log.getUri().replaceAll("\\s+", "");
+            if (!"/**".equals(normalized) && !"/ **".equals(normalized)) {
+                return log.getUri();
+            }
+        }
+
+        // 2. Fallback to heuristic parsing of the log message (for legacy apps)
+        String msg = log.getRawMessage();
+        if (msg != null) {
+            // Look for standard patterns like "GET /path"
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\b(GET|POST|PUT|DELETE|PATCH)\\s+([^\\s?\":,]+)").matcher(msg);
+            if (m.find()) {
+                String path = m.group(2);
+                if (!"/**".equals(path)) return path;
+            }
+        }
+
+        // 3. Fallback to Service Name + Category
+        // This is the most honest representation when the exact request context is missing.
+        if ("APPLICATION".equals(category)) {
+            return service;
+        }
+        return service + " [" + category + "]";
+    }
+
+    private Map<String, String> getServiceTopErrorUris(Instant start, Instant end) {
+        Map<String, String> mapping = new HashMap<>();
+        try {
+            // Get URIs with errors, prioritizing 5xx
+            // Query 1: Top 5xx URIs
+            String query5xx = "sum by (job, uri) (increase(http_server_requests_seconds_count{status=~\"5..\"}[24h])) > 0";
+            List<Map<String, Object>> results5xx = prometheusClient.queryList(query5xx);
+            
+            Map<String, Double> maxCounts = new HashMap<>();
+            
+            for (Map<String, Object> res : results5xx) {
+                Map<String, String> metric = (Map<String, String>) res.get("metric");
+                String job = metric.get("job");
+                String uri = metric.get("uri");
+                double val = Double.parseDouble(res.get("value").toString());
+                
+                if (job != null && uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
+                    String simpleJob = job.replace("monetique-", "").replace("-service", "");
+                    if (val > maxCounts.getOrDefault(simpleJob, -1.0)) {
+                        maxCounts.put(simpleJob, val);
+                        mapping.put(simpleJob, uri);
+                    }
+                }
+            }
+            
+            // Query 2: Fallback to 4xx if no 5xx URIs found for a service
+            String query4xx = "sum by (job, uri) (increase(http_server_requests_seconds_count{status=~\"4..\"}[24h])) > 0";
+            List<Map<String, Object>> results4xx = prometheusClient.queryList(query4xx);
+            for (Map<String, Object> res : results4xx) {
+                Map<String, String> metric = (Map<String, String>) res.get("metric");
+                String job = metric.get("job");
+                String uri = metric.get("uri");
+                double val = Double.parseDouble(res.get("value").toString());
+                
+                if (job != null && uri != null && !"/**".equals(uri) && !"/ **".equals(uri.replaceAll("\\s+", ""))) {
+                    String simpleJob = job.replace("monetique-", "").replace("-service", "");
+                    if (!mapping.containsKey(simpleJob) && val > maxCounts.getOrDefault(simpleJob, -1.0)) {
+                        maxCounts.put(simpleJob, val);
+                        mapping.put(simpleJob, uri);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch top error URIs from Prometheus: {}", e.getMessage());
+        }
+        return mapping;
+    }
+
+    private List<ErrorPattern> fetchTopErrors(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
+        try {
+            // Fetch top error URIs from Prometheus to help map logs to endpoints
+            Map<String, String> serviceTopUris = getServiceTopErrorUris(start, end);
+
+            org.springframework.data.domain.Page<LogEventDTO> errorLogs = elasticsearchLogClient.searchLogs(
+                    envLabel, appFilter, nodeName, null, "ERROR", start, end, 
+                    org.springframework.data.domain.PageRequest.of(0, 500));
+
+            // Filter out stack trace continuation lines — these are noise, not top-level errors
+            List<LogEventDTO> meaningfulErrors = errorLogs.getContent().stream()
+                    .filter(log -> {
+                        String msg = log.getRawMessage() != null ? log.getRawMessage().trim() : "";
+                        // Skip Java stack trace continuation lines
+                        if (msg.startsWith("at ") || msg.startsWith("...") || msg.startsWith("Caused by:")) return false;
+                        // Skip lines that are just class names with line numbers (e.g. "java.lang.Thread.run(Unknown Source)")
+                        if (msg.matches("^[a-z]+\\..*\\(.*\\.java:\\d+\\).*")) return false;
+                        return true;
+                    })
+                    .collect(Collectors.toList());
+
+            // Group by normalized message pattern (strips timestamps/IPs so duplicates merge)
+            Map<String, List<LogEventDTO>> patterns = meaningfulErrors.stream()
+                    .collect(Collectors.groupingBy(log -> {
+                        String service = log.getService() != null ? log.getService() : "unknown";
+                        String endpoint = extractEndpoint(log, serviceTopUris);
+                        String msg = log.getNormalizedSummary() != null ? log.getNormalizedSummary() : log.getRawMessage();
+                        return service + "::" + endpoint + "::" + normalizeErrorKey(msg);
+                    }));
+            return patterns.entrySet().stream()
+                    .map(entry -> {
+                        List<LogEventDTO> occurrences = entry.getValue();
+                        LogEventDTO first = occurrences.get(0);
+                        
+                        // Calculate actual trend (sparkline) across 7 buckets
+                        long diff = end.getEpochSecond() - start.getEpochSecond();
+                        long stepSec = Math.max(1, diff / 7);
+                        long[] sparkline = new long[7];
+                        for (LogEventDTO logEvent : occurrences) {
+                            int bucket = (int) ((logEvent.getTimestamp().getEpochSecond() - start.getEpochSecond()) / stepSec);
+                            if (bucket >= 0 && bucket < 7) {
+                                sparkline[bucket]++;
+                            } else if (bucket == 7) {
+                                sparkline[6]++;
+                            }
+                        }
+                        List<Integer> sparklineList = java.util.Arrays.stream(sparkline).mapToInt(l -> (int)l).boxed().collect(Collectors.toList());
+
+                        int statusCode = 500;
+                        try {
+                            if (first.getErrorType() != null && first.getErrorType().matches("\\d{3}")) {
+                                statusCode = Integer.parseInt(first.getErrorType());
+                            }
+                        } catch (Exception e) {}
+
+                        // Use extracted endpoint as label
+                        String endpoint = extractEndpoint(first, serviceTopUris);
+
+                        // Build a clean excerpt (use original message, not the normalized key)
+                        String excerpt = first.getNormalizedSummary() != null ? first.getNormalizedSummary() : first.getRawMessage();
+                        if (excerpt != null && excerpt.length() > 120) {
+                            excerpt = excerpt.substring(0, 120) + "...";
+                        }
+
+                        return ErrorPattern.builder()
+                                .service(first.getService() != null ? first.getService() : "unknown")
+                                .endpoint(endpoint)
+                                .messageExcerpt(excerpt)
+                                .statusCode(statusCode)
+                                .count(occurrences.size())
+                                .sparkline(sparklineList)
+                                .source("elasticsearch")
+                                .firstSeen(occurrences.get(occurrences.size()-1).getTimestamp().toString())
+                                .lastSeen(first.getTimestamp().toString())
+                                .build();
+                    })
+                    .sorted((a, b) -> Long.compare(b.getCount(), a.getCount()))
+                    .limit(10)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Failed to fetch top errors from ES", e);
+            return new ArrayList<>();
+        }
+    }
+
+    private List<Application> buildRelatedApps(Long environmentId, String effectiveServiceName, String requestServiceName) {
+        String filterName = (requestServiceName != null && !requestServiceName.isBlank())
+                ? requestServiceName
+                : effectiveServiceName;
+
+        if (filterName == null || filterName.isBlank()) {
+            return applicationRepository.findByEnvironmentId(environmentId);
+        }
+
+        List<Application> related = new ArrayList<>();
+        applicationRepository.findByNameIgnoreCaseAndEnvironmentId(filterName, environmentId).ifPresent(related::add);
+        if (related.isEmpty()) {
+            applicationRepository.findByName(filterName).ifPresent(related::add);
+        }
+
+        if (!related.isEmpty()) {
+            Application target = related.get(0);
+            if (target.getServiceNameKeyword() != null) {
+                applicationRepository.findAllByServiceNameKeyword(target.getServiceNameKeyword()).stream()
+                        .filter(a -> a.getEnvironment() != null && environmentId.equals(a.getEnvironment().getId()))
+                        .filter(a -> !related.contains(a))
+                        .forEach(related::add);
+            }
+            return related;
+        }
+
+        return applicationRepository.findAllByServiceNameKeyword(filterName).stream()
+                .filter(a -> a.getEnvironment() != null && environmentId.equals(a.getEnvironment().getId()))
+                .collect(Collectors.toList());
+    }
+
+    private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, String nodeName, Instant end) {
+        List<ResourcePressure> pressure = new ArrayList<>();
+        String nodePart = nodeFilter(nodeName);
+
+        for (Application app : apps) {
+            String serviceName = app.getServiceNameKeyword();
+            if (serviceName == null) continue;
+
+            Double cpu = prometheusClient.queryMetric(String.format(Locale.US,
+                    "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s])",
+                    envLabel, serviceName, nodePart), end);
+
+            Double mem = prometheusClient.queryMetric(String.format(Locale.US,
+                    "avg_over_time((max(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100))[2m:15s]) or " +
+                    "avg_over_time((max(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100))[2m:15s])",
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart), end);
+
+            Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
+
+            String callout = null;
+            if (disk > 90) callout = "Disk pressure critical";
+            else if (mem > 85) callout = "Memory pressure detected";
+            else if (cpu > 80) callout = "CPU throttling likely";
+
+            pressure.add(ResourcePressure.builder()
+                    .containerName(app.getName())
+                    .memoryUsage(mem > 0 ? mem : 0.0)
+                    .cpuUsage(cpu > 0 ? cpu : 0.0)
+                    .diskUsage(disk > 0 ? disk : 0.0)
+                    .callout(callout)
+                    .build());
+        }
+
+        return pressure;
+    }
+
+    private Double fetchAvgDiskUsagePercent(String serviceName, String envLabel, String nodePart, Instant end) {
+        String containerQuery = String.format(Locale.US,
+                "avg_over_time((max(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100))[2m:15s]) or " +
+                "avg_over_time((max(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100))[2m:15s])",
+                serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
+                serviceName, envLabel, nodePart, serviceName, envLabel, nodePart);
+        Double containerDisk = prometheusClient.queryMetric(containerQuery, end);
+        if (containerDisk > 0.0) {
+            return containerDisk;
+        }
+
+        String nodeQuery = String.format(Locale.US,
+                "avg_over_time((max((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100))[2m:15s])",
+                envLabel, envLabel);
+        return prometheusClient.queryMetric(nodeQuery, end);
+    }
+
+    private List<LogEventDTO> fetchLiveLogs(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
+        try {
+            org.springframework.data.domain.Page<LogEventDTO> logsPage = elasticsearchLogClient.searchLogs(
+                    envLabel, appFilter, nodeName, null, "ALL", 
+                    start, end, 
+                    org.springframework.data.domain.PageRequest.of(0, 100));
+            
+            List<LogEventDTO> rawLogs = logsPage.getContent();
+            List<LogEventDTO> grouped = new ArrayList<>();
+            
+            // Process in chronological order (reverse of DESC) for easy merging
+            List<LogEventDTO> chronoLogs = new ArrayList<>(rawLogs);
+            java.util.Collections.reverse(chronoLogs);
+            
+            for (LogEventDTO log : chronoLogs) {
+                if (grouped.isEmpty()) {
+                    grouped.add(log);
+                    continue;
+                }
+                
+                LogEventDTO last = grouped.get(grouped.size() - 1);
+                boolean sameOrigin = java.util.Objects.equals(last.getService(), log.getService()) && 
+                                   java.util.Objects.equals(last.getNode(), log.getNode());
+                
+                String msg = log.getRawMessage() != null ? log.getRawMessage().trim() : "";
+                boolean isContinuation = msg.startsWith("at ") || msg.startsWith("Caused by:") || 
+                                       msg.startsWith("...") || !msg.matches("^([0-9]{4}-|time=).*");
+                
+                // Merge if very close in time (<200ms) and looks like a continuation
+                if (sameOrigin && isContinuation && 
+                    Math.abs(log.getTimestamp().toEpochMilli() - last.getTimestamp().toEpochMilli()) < 200) {
+                    last.setRawMessage(last.getRawMessage() + "\n" + log.getRawMessage());
+                } else {
+                    grouped.add(log);
+                }
+            }
+            
+            java.util.Collections.reverse(grouped);
+            return grouped.stream().limit(50).collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Failed to fetch live logs from ES", e);
+            return new ArrayList<>();
+        }
+    }
+
+    private int parseRange(String range) {
+        if (range == null) return 6;
+        return switch (range) {
+            case "1h" -> 1;
+            case "24h" -> 24;
+            case "7d" -> 168;
+            default -> 6;
+        };
+    }
+
+    private List<String> generateTimeLabels(Instant start, Instant end, int count) {
+        List<String> labels = new ArrayList<>();
+        long totalSeconds = start.until(end, ChronoUnit.SECONDS);
+        long intervalSeconds = totalSeconds / (count - 1);
+        
+        String pattern = (totalSeconds >= 86400) ? "MMM dd HH:mm" : "HH:mm";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+        
+        for (int i = 0; i < count; i++) {
+            labels.add(formatter.format(start.plus(i * intervalSeconds, ChronoUnit.SECONDS).atZone(java.time.ZoneId.systemDefault())));
+        }
+        return labels;
+    }
+}

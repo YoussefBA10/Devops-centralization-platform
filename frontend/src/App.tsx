@@ -10,6 +10,7 @@ import OperationalIntelligence from './pages/OperationalIntelligence';
 import InfrastructureTopologyPage from './pages/InfrastructureTopologyPage';
 import LogsPage from './pages/LogsPage';
 import TicketsPage from './pages/TicketsPage';
+import AnalysePage from './pages/AnalysePage';
 import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
 import SetupWizard from './pages/SetupWizard';
@@ -112,6 +113,7 @@ function App() {
                     <Route path="/network-monitor/vm/:vmId" element={<NetworkMonitor />} />
                     <Route path="/infrastructure" element={<InfrastructureTopologyPage />} />
                     <Route path="/logs" element={<LogsPage />} />
+                    <Route path="/analyse" element={<AnalysePage />} />
                     <Route path="/tickets" element={<TicketsPage />} />
                     <Route path="/audit-log" element={<AuditLogPage />} />
                     <Route path="/chat" element={<ChatPage />} />

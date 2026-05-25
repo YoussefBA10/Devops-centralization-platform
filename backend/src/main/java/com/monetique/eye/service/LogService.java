@@ -27,12 +27,12 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String displayName = app.getName();
-        String keywordName = app.getServiceNameKeyword();
+        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getPrometheusLabel() : ".*";
+        String serviceKeyword = app.getServiceNameKeyword();
 
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(displayName, keywordName, query, severity, from, to, pageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(envLabel, serviceKeyword, null, query, severity, from, to, pageable);
         
-        long totalDocs = elasticsearchLogClient.getDocumentCount(displayName);
+        long totalDocs = elasticsearchLogClient.getDocumentCount(app.getName());
         
         // Simple heuristic for ingest rate for enterprise feel
         long eps = totalDocs / (30 * 24 * 60 * 60) + 1;
@@ -52,12 +52,12 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String displayName = app.getName();
-        String keywordName = app.getServiceNameKeyword();
+        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getPrometheusLabel() : ".*";
+        String serviceKeyword = app.getServiceNameKeyword();
 
         // Fetch top 1000 logs for export
         org.springframework.data.domain.Pageable exportPageable = org.springframework.data.domain.PageRequest.of(0, 1000);
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(displayName, keywordName, query, severity, from, to, exportPageable);
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(envLabel, serviceKeyword, null, query, severity, from, to, exportPageable);
 
         StringBuilder csv = new StringBuilder();
         csv.append('\uFEFF');

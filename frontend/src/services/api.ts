@@ -2,8 +2,8 @@ import axios from 'axios';
 import { showPermissionError } from '../components/ui/Toast';
 
 const getBaseURL = () => {
-  const url = import.meta.env.VITE_API_URL || 'http://localhost:8880/api';
-  return url.endsWith('/api') ? url : `${url}/api`;
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:8880/api/v1';
+  return url.endsWith('/api/v1') ? url : (url.endsWith('/api') ? `${url}/v1` : `${url}/api/v1`);
 };
 
 const api = axios.create({
@@ -132,6 +132,31 @@ export const silenceAlert = (id: string) => api.post(`/network/alerts/${id}/sile
 export const getAlertRules = () => api.get(`/network/alert-rules`);
 export const addAlertRule = (data: any) => api.post(`/network/alert-rules`, data);
 export const deleteAlertRule = (id: string) => api.delete(`/network/alert-rules/${id}`);
+
+// New Incident Management & Smart Alerting
+export const getIncidents = (params: { status?: string; severity?: string; before_id?: number; size?: number }) => 
+  api.get('/incidents', { params });
+export const getIncident = (id: number) => api.get(`/incidents/${id}`);
+export const updateIncident = (id: number, data: any) => api.patch(`/incidents/${id}`, data);
+export const getIncidentTimeline = (id: number, params: { page?: number; size?: number }) => 
+  api.get(`/incidents/${id}/timeline`, { params });
+export const addIncidentAttachment = (id: number, data: { type: string; referenceId?: string; snapshot?: any }) => 
+  api.post(`/incidents/${id}/attachments`, data);
+
+export const getAlertGroups = () => api.get('/alerts/groups');
+export const resolveAlertGroup = (id: number) => api.post(`/alerts/groups/${id}/resolve`);
+export const linkAlertGroupToIncident = (groupId: number, incidentId: number) => 
+  api.post(`/alerts/groups/${groupId}/link/${incidentId}`);
+
+// CI/CD Deployment tracking
+export const getDeploymentEvents = (appId?: number, env?: string, page = 0, size = 20) =>
+  api.get(`/deployments`, { params: { appId, env, page, size } });
+export const triggerPipeline = (data: { jobName: string; appId: string; env: string; gitBranch?: string }) =>
+  api.post(`/cicd/trigger`, data);
+
+// Analytics
+export const getAnalyticsDashboard = (envId: number, range: string, serviceName?: string, nodeName?: string, ticketId?: number) => 
+  api.get('/analytics/dashboard', { params: { environmentId: envId, range, serviceName, nodeName, ticketId } });
 
 // Prometheus Proxy
 export const prometheusQuery = (query: string) => api.get('/prometheus/query', { params: { query } });

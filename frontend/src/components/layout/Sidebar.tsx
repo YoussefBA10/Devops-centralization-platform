@@ -10,7 +10,9 @@ import {
   LayoutDashboard,
   Settings,
   Box,
-  Book
+  Book,
+  Network,
+  BarChart2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
@@ -57,13 +59,25 @@ const Sidebar: React.FC = () => {
       show: isAdmin || permissions?.monitoring?.infraGraph
     },
     { 
+      name: 'Network Monitor', 
+      path: '/network-monitor', 
+      icon: Network,
+      show: isAdmin || permissions?.monitoring?.network
+    },
+    { 
       name: 'Logs', 
       path: '/logs', 
       icon: Terminal,
       show: isAdmin || permissions?.monitoring?.logs
     },
     { 
-      name: 'Incidents', 
+      name: 'Analyse', 
+      path: '/analyse', 
+      icon: BarChart2,
+      show: isAdmin || permissions?.monitoring?.observability
+    },
+    { 
+      name: 'Tickets', 
       path: '/tickets', 
       icon: FileText,
       show: isAdmin || permissions?.incidents?.view

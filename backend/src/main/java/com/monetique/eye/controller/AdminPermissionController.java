@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/admin/permissions")
+@RequestMapping("/api/v1/admin/permissions")
 @RequiredArgsConstructor
 public class AdminPermissionController {
 

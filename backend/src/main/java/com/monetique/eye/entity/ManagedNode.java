@@ -17,6 +17,10 @@ public class ManagedNode {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Version
+    @Builder.Default
+    private Long version = 0L;
+
     @Column(nullable = false)
     private String ip;
 

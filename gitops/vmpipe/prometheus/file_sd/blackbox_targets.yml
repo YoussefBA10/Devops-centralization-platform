@@ -15,3 +15,4 @@
     job: "blackbox"
     probe_module: "http_2xx"
     environment: "central-node"
+

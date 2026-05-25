@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Network, Activity, Server, AlertTriangle } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
-// We will implement these tabs later
+
 import TopologyMapTab from '../components/network/TopologyMapTab';
 import LinkHealthTab from '../components/network/LinkHealthTab';
 import VmNetworkHealthTab from '../components/network/VmNetworkHealthTab';

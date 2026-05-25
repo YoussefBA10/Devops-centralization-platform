@@ -1,0 +1,84 @@
+package com.monetique.eye.controller;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/v1/test")
+@Slf4j
+public class ObservabilityTestController {
+
+    @GetMapping("/error")
+    public ResponseEntity<?> triggerError(@RequestParam(defaultValue = "500") int code) {
+        if (code >= 400 && code < 600) {
+            log.error("[APPLICATION] Simulated generic error for code {}", code);
+            return ResponseEntity.status(code).body(Map.of(
+                "status", "error",
+                "message", "Simulated generic error",
+                "code", code
+            ));
+        }
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Normal response"));
+    }
+
+    @GetMapping("/db-error")
+    public ResponseEntity<?> triggerDbError() {
+        log.error("[DATABASE] Simulated SQL exception in user repository");
+        return ResponseEntity.status(500).body(Map.of(
+            "status", "error",
+            "type", "DATABASE",
+            "message", "SQL Error: 1064, SQLState: 42000 (Simulated)"
+        ));
+    }
+
+    @GetMapping("/io-error")
+    public ResponseEntity<?> triggerIoError() {
+        log.error("[IO] Connection reset by peer during file upload");
+        return ResponseEntity.status(500).body(Map.of(
+            "status", "error",
+            "type", "IO",
+            "message", "Connection reset by peer (Simulated)"
+        ));
+    }
+
+    @GetMapping("/timeout")
+    public ResponseEntity<?> triggerTimeout() {
+        log.error("[NETWORK] Gateway Timeout: Remote service not responding");
+        return ResponseEntity.status(504).body(Map.of(
+            "status", "error",
+            "type", "NETWORK",
+            "message", "Gateway Timeout (Simulated)"
+        ));
+    }
+
+    @GetMapping("/leak")
+    public ResponseEntity<?> simulateLeak() {
+        log.warn("[APPLICATION] Simulated memory leak: heap usage above 90%");
+        return ResponseEntity.status(500).body(Map.of("message", "Leak simulation triggered"));
+    }
+
+    @GetMapping("/oom")
+    public void triggerOom() {
+        log.error("[CRITICAL] Starting memory exhaustion... Container will be OOM killed.");
+        new Thread(() -> {
+            try {
+                // Brief pause to allow HTTP response connection to flush
+                Thread.sleep(200);
+                java.util.List<byte[]> list = new java.util.ArrayList<>();
+                while (true) {
+                    list.add(new byte[50 * 1024 * 1024]); // 50MB chunks
+                }
+            } catch (Throwable t) {
+                log.error("OOM Exception triggered: {}, terminating JVM with exit code 137", t.getMessage());
+                System.exit(137);
+            }
+        }).start();
+    }
+}
