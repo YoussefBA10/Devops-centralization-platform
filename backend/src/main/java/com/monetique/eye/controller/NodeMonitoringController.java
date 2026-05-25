@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/prometheus/nodes")
+@RequestMapping("/api/v1/prometheus/nodes")
 @RequiredArgsConstructor
 public class NodeMonitoringController {
 

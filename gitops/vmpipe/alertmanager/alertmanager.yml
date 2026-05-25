@@ -22,6 +22,10 @@ route:
       receiver: 'monetique-backend'
       continue: true
     - match:
+        severity: warning
+      receiver: 'monetique-backend'
+      continue: true
+    - match:
         severity: critical
       receiver: 'email-critical'
       repeat_interval: 1h
