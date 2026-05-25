@@ -54,13 +54,24 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
             if (nodeName != null && !nodeName.isBlank() && !nodeName.equals(".*")) {
-                boolQuery.must(m -> m.bool(b -> b
-                    .should(s -> s.term(t -> t.field("agent.hostname.keyword").value(nodeName)))
-                    .should(s -> s.term(t -> t.field("host.name.keyword").value(nodeName)))
-                    .should(s -> s.wildcard(w -> w.field("nodename.keyword").value("*" + nodeName + "*")))
-                    .should(s -> s.wildcard(w -> w.field("node.keyword").value("*" + nodeName + "*")))
-                    .minimumShouldMatch("1")
-                ));
+                java.util.Set<String> nodeTerms = new java.util.LinkedHashSet<>();
+                nodeTerms.add(nodeName);
+                if (nodeName.startsWith("node-")) {
+                    String withoutPrefix = nodeName.substring(5);
+                    nodeTerms.add(withoutPrefix);
+                    if (withoutPrefix.matches("^[0-9][0-9.-]+$")) {
+                        nodeTerms.add(withoutPrefix.replace('-', '.'));
+                    }
+                }
+                boolQuery.must(m -> m.bool(b -> {
+                    for (String term : nodeTerms) {
+                        b.should(s -> s.term(t -> t.field("agent.hostname.keyword").value(term)));
+                        b.should(s -> s.term(t -> t.field("host.name.keyword").value(term)));
+                        b.should(s -> s.wildcard(w -> w.field("nodename.keyword").value("*" + term + "*")));
+                        b.should(s -> s.wildcard(w -> w.field("node.keyword").value("*" + term + "*")));
+                    }
+                    return b.minimumShouldMatch("1");
+                }));
             }
 
             // 1. Environment Filter (Mandatory if provided)

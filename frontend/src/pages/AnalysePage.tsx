@@ -105,12 +105,21 @@ const AnalysePage: React.FC = () => {
     return logs;
   }, [data?.liveLogs, logTab]);
 
+  const analyticsEnvironmentId = selectedTicket?.environment?.id ?? selectedEnvironment?.id;
+
+  useEffect(() => {
+    if (!ticketContext || !tickets.length || !selectedTicket?.environment) return;
+    if (selectedEnvironment?.id !== selectedTicket.environment.id) {
+      setSelectedEnvironment(selectedTicket.environment);
+    }
+  }, [ticketContext, tickets, selectedTicket, selectedEnvironment?.id, setSelectedEnvironment]);
+
   const fetchData = async () => {
-    if (!selectedEnvironment) return;
+    if (!analyticsEnvironmentId) return;
     setLoading(true);
     try {
       const response = await getAnalyticsDashboard(
-        selectedEnvironment.id, 
+        analyticsEnvironmentId, 
         timeRange, 
         serviceContext, 
         nodeContext, 
@@ -134,7 +143,7 @@ const AnalysePage: React.FC = () => {
     }
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [selectedEnvironment, timeRange, serviceContext, nodeContext, ticketContext]);
+  }, [analyticsEnvironmentId, timeRange, serviceContext, nodeContext, ticketContext]);
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -256,7 +265,7 @@ const AnalysePage: React.FC = () => {
     });
 
 
-  if (!selectedEnvironment) {
+  if (!analyticsEnvironmentId) {
     return (
       <div className="h-full flex items-center justify-center">
         <p className="text-muted-foreground">Select an environment to view analytics</p>

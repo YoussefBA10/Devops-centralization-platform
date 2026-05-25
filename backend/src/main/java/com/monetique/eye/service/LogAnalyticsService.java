@@ -66,27 +66,25 @@ public class LogAnalyticsService {
             }
         }
 
-        if (effectiveNodeName != null && effectiveNodeName.matches("^node-\\d+$")) {
-            effectiveNodeName = effectiveNodeName.substring(5);
+        String pressureNodeName = (effectiveNodeName != null && !effectiveNodeName.isBlank())
+                ? effectiveNodeName.trim()
+                : (nodeName != null ? nodeName.trim() : null);
+        NodeFilterParts nodeFilters = buildNodeFilters(pressureNodeName);
+
+        Long resolvedEnvironmentId = environmentId;
+        if (contextTicket != null && contextTicket.getEnvironment() != null) {
+            resolvedEnvironmentId = contextTicket.getEnvironment().getId();
         }
 
-        String pressureNodeName = (effectiveNodeName != null && !effectiveNodeName.isBlank())
-                ? effectiveNodeName
-                : nodeName;
-        List<Application> relatedApps = buildRelatedApps(environmentId, effectiveServiceName, serviceName);
+        List<Application> relatedApps = buildRelatedApps(resolvedEnvironmentId, effectiveServiceName, serviceName);
 
         Instant start = end.minus(hours, ChronoUnit.HOURS);
 
-        Environment env = environmentRepository.findById(environmentId).orElse(null);
+        Environment env = environmentRepository.findById(resolvedEnvironmentId).orElse(null);
         String envLabel = env != null ? env.getPrometheusLabel() : ".*";
 
-        // When a specific service is requested (from a ticket), we need two filter sets:
-        // 1. Container-level filters: use broad env/node (".*"/null) to find the container wherever it runs
-        // 2. App-level filters: use the environment's own label for Spring Boot metrics (HTTP, DB pool)
         String containerEnvLabel = envLabel;
-        String containerNodeName = nodeName;
-        String appEnvLabel = envLabel;     // For HTTP/DB metrics tied to the environment's backend
-        String appNodeName = nodeName;
+        String appEnvLabel = envLabel;
 
         // We will build a specific appFilter later based on registered apps
         containerEnvLabel = envLabel;
@@ -106,7 +104,7 @@ public class LogAnalyticsService {
         }
         
         // Always include all environment apps for broad context as requested
-        List<Application> envApps = applicationRepository.findByEnvironmentId(environmentId);
+        List<Application> envApps = applicationRepository.findByEnvironmentId(resolvedEnvironmentId);
         for (Application a : envApps) {
             if (!apps.contains(a)) apps.add(a);
         }
@@ -120,7 +118,9 @@ public class LogAnalyticsService {
 
         // Restricted appFilter: Only include registered microservices, not infra tools
         // If a specific service is requested, we isolate it. Otherwise, we show everything in the env.
-        String appFilter = (serviceName != null && !serviceName.isBlank()) ? serviceName : springFilter;
+        String appFilter = (serviceName != null && !serviceName.isBlank())
+                ? serviceName
+                : ((effectiveServiceName != null && !effectiveServiceName.isBlank()) ? effectiveServiceName : springFilter);
 
         List<String> availableServices = apps.stream()
                 .map(Application::getName)
@@ -128,24 +128,61 @@ public class LogAnalyticsService {
                 .sorted()
                 .collect(Collectors.toList());
 
-        log.info("ANALYTICS: environmentId={} envLabel={} appFilter={} appsCount={} requestedService={}", 
-                environmentId, envLabel, appFilter, apps.size(), serviceName);
+        log.info("ANALYTICS: environmentId={} resolvedEnvId={} envLabel={} appFilter={} node={} ticket={} window=[{} .. {}]",
+                environmentId, resolvedEnvironmentId, envLabel, appFilter, pressureNodeName, ticketId, start, end);
 
         return LogAnalyticsResponseDTO.builder()
-                .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName, end))
-                .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, appFilter, appNodeName, apps, start, end))
-                .resourceUsage(fetchResourceUsage(containerEnvLabel, appFilter, containerNodeName, start, end))
-                .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
-                .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
-                .resourcePressure(fetchResourcePressure(containerEnvLabel, relatedApps, pressureNodeName, end))
-                .rootCauseChain(resolveRootCauseChain(contextTicket, ticketId, appEnvLabel, appFilter, effectiveNodeName, start, end))
-                .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
+                .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, nodeFilters, containerEnvLabel, appFilter, end))
+                .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, appFilter, nodeFilters, apps, start, end))
+                .resourceUsage(fetchResourceUsage(containerEnvLabel, appFilter, nodeFilters, start, end))
+                .probeSuccess(fetchProbeSuccess(appEnvLabel, nodeFilters, start, end))
+                .topErrors(fetchTopErrors(appEnvLabel, appFilter, pressureNodeName, start, end))
+                .resourcePressure(fetchResourcePressure(containerEnvLabel, relatedApps, nodeFilters, end))
+                .rootCauseChain(resolveRootCauseChain(contextTicket, ticketId, appEnvLabel, appFilter, pressureNodeName, start, end))
+                .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, pressureNodeName, start, end))
                 .availableServices(availableServices)
                 .build();
     }
 
-    private String nodeFilter(String nodeName) {
-        return (nodeName != null && !nodeName.isBlank()) ? String.format(", nodename=~\".*%s.*\"", nodeName) : "";
+    private record NodeFilterParts(String cadvisor, String appMetrics) {
+        static NodeFilterParts empty() {
+            return new NodeFilterParts("", "");
+        }
+    }
+
+    /**
+     * Builds Prometheus selector fragments for node-scoped queries.
+     * Handles nodename forms like node-172-17-9-211 (IP dashes) and short node-131 slugs.
+     */
+    private NodeFilterParts buildNodeFilters(String rawNode) {
+        if (rawNode == null || rawNode.isBlank()) {
+            return NodeFilterParts.empty();
+        }
+        String trimmed = rawNode.trim();
+        String withoutPrefix = trimmed.startsWith("node-") ? trimmed.substring(5) : trimmed;
+        String ipLike = withoutPrefix.replace('-', '.');
+
+        List<String> cadvisorPatterns = new ArrayList<>();
+        cadvisorPatterns.add(promRegexAlternation(trimmed));
+        if (!withoutPrefix.equals(trimmed)) {
+            cadvisorPatterns.add(promRegexAlternation(withoutPrefix));
+        }
+        if (!ipLike.equals(withoutPrefix) && withoutPrefix.matches("^[0-9][0-9.-]+$")) {
+            cadvisorPatterns.add(promRegexAlternation(ipLike));
+        }
+
+        String cadvisor = ", nodename=~\".*(" + String.join("|", cadvisorPatterns) + ").*\"";
+
+        String appMetrics = "";
+        if (withoutPrefix.matches("^[0-9][0-9.-]+$")) {
+            appMetrics = ", instance=~\".*" + promRegexAlternation(ipLike) + ".*\"";
+        }
+
+        return new NodeFilterParts(cadvisor, appMetrics);
+    }
+
+    private String promRegexAlternation(String value) {
+        return value.replace(".", "\\.");
     }
 
     private boolean isPrometheusAutoTicket(Ticket ticket) {
@@ -191,13 +228,15 @@ public class LogAnalyticsService {
                 .build();
     }
 
-    private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, String appNodeName, 
-                                                String containerEnvLabel, String appFilter, String containerNodeName, Instant end) {
+    private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, NodeFilterParts nodeFilters,
+                                                String containerEnvLabel, String appFilter, Instant end) {
         List<MetricCard> cards = new ArrayList<>();
+        String appNode = nodeFilters.appMetrics();
+        String cadvisorNode = nodeFilters.cadvisor();
 
         // 1. Error Rate
         String errRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
-                appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+                appEnvLabel, springFilter, appNode, appEnvLabel, springFilter, appNode);
         Double errRate = prometheusClient.queryMetric(errRateQuery, end);
         cards.add(MetricCard.builder()
                 .label("Error rate")
@@ -208,7 +247,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 2. Request Rate
-        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, appNode);
         Double reqRate = prometheusClient.queryMetric(reqRateQuery, end);
         cards.add(MetricCard.builder()
                 .label("Request rate")
@@ -219,7 +258,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 3. DB Pool Usage
-        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, nodeFilter(appNodeName), appEnvLabel, springFilter, nodeFilter(appNodeName));
+        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, appNode, appEnvLabel, springFilter, appNode);
         Double dbPool = prometheusClient.queryMetric(dbPoolQuery, end);
         cards.add(MetricCard.builder()
                 .label("DB pool usage")
@@ -234,8 +273,8 @@ public class LogAnalyticsService {
         // filter that returns 0 when no container memory limit is configured.
         String memQuery = String.format(Locale.US,
                 "sum(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
-                "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"})), 1) * 100 or vector(0)",
-                containerEnvLabel, appFilter, nodeFilter(containerNodeName), containerEnvLabel);
+                "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or vector(0)",
+                containerEnvLabel, appFilter, cadvisorNode, containerEnvLabel, cadvisorNode);
         Double memUsage = prometheusClient.queryMetric(memQuery, end);
         cards.add(MetricCard.builder()
                 .label("Backend memory")
@@ -246,7 +285,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 5. Blackbox Probe
-        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, nodeFilter(appNodeName));
+        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, cadvisorNode);
         Double probeSuccess = prometheusClient.queryMetric(probeQuery, end);
         cards.add(MetricCard.builder()
                 .label("Blackbox probe")
@@ -259,7 +298,8 @@ public class LogAnalyticsService {
         return cards;
     }
 
-    private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, String nodeName, List<Application> apps, Instant start, Instant end) {
+    private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, NodeFilterParts nodeFilters, List<Application> apps, Instant start, Instant end) {
+        String appNode = nodeFilters.appMetrics();
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
@@ -270,7 +310,7 @@ public class LogAnalyticsService {
         // Total Traffic (The primary line)
         datasets.add(ChartData.Series.builder()
                 .label("Total req/s")
-                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, appNode, rateInterval), start, end, step, 12))
                 .color("#3b82f6")
                 .fill(false)
                 .build());
@@ -278,16 +318,16 @@ public class LogAnalyticsService {
         // Individual Service Traffic (If looking at multiple apps)
         if (".*".equals(appFilter) || apps.size() > 1) {
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, appNode, rateInterval),
                 "req/s", start, end, step, 12));
             
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, appNode, rateInterval),
                 "errors/min", start, end, step, 12));
         } else {
             datasets.add(ChartData.Series.builder()
                 .label("errors/min")
-                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, appNode, rateInterval), start, end, step, 12))
                 .color("#ef4444")
                 .fill(true)
                 .build());
@@ -296,7 +336,7 @@ public class LogAnalyticsService {
         // DB Pool (Aggregated)
         datasets.add(ChartData.Series.builder()
                 .label("DB pool %")
-                .data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12))
+                .data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, appNode, envLabel, appFilter, appNode), start, end, step, 12))
                 .color("#f59e0b")
                 .dashed(true)
                 .fill(false)
@@ -308,22 +348,24 @@ public class LogAnalyticsService {
                 .build();
     }
 
-    private ChartData fetchResourceUsage(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
+    private ChartData fetchResourceUsage(String envLabel, String appFilter, NodeFilterParts nodeFilters, Instant start, Instant end) {
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
         List<String> labels = generateTimeLabels(start, end, 12);
+        String cadvisorNode = nodeFilters.cadvisor();
 
         String cpuQuery = String.format(Locale.US,
                 "max(sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[%s])) * 100)",
-                envLabel, appFilter, nodeFilter(nodeName), rateInterval);
+                envLabel, appFilter, cadvisorNode, rateInterval);
         String memQuery = String.format(Locale.US,
-                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or vector(0)",
-                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName));
+                "max(max_over_time(max(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s})[2m:15s]) " +
+                "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or vector(0)",
+                envLabel, appFilter, cadvisorNode, envLabel, cadvisorNode);
         String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(String.format(Locale.US, "environment=\"%s\"", envLabel));
         String diskQuery = String.format(Locale.US,
                 "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or max(max_over_time((%s)[2m:15s])) or vector(0)",
-                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName), nodeDiskPct);
+                envLabel, appFilter, cadvisorNode, envLabel, appFilter, cadvisorNode, nodeDiskPct);
 
         List<ChartData.Series> datasets = List.of(
                 ChartData.Series.builder()
@@ -436,11 +478,11 @@ public class LogAnalyticsService {
         return java.util.Arrays.asList(dataPoints);
     }
 
-    private ChartData fetchProbeSuccess(String envLabel, String nodeName, Instant start, Instant end) {
+    private ChartData fetchProbeSuccess(String envLabel, NodeFilterParts nodeFilters, Instant start, Instant end) {
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         List<String> labels = generateTimeLabels(start, end, 12);
-        String query = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilter(nodeName));
+        String query = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100", envLabel, nodeFilters.cadvisor());
         return ChartData.builder()
                 .labels(labels)
                 .datasets(List.of(
@@ -676,9 +718,9 @@ public class LogAnalyticsService {
                 .collect(Collectors.toList());
     }
 
-    private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, String nodeName, Instant end) {
+    private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, NodeFilterParts nodeFilters, Instant end) {
         List<ResourcePressure> pressure = new ArrayList<>();
-        String nodePart = nodeFilter(nodeName);
+        String nodePart = nodeFilters.cadvisor();
 
         for (Application app : apps) {
             String serviceName = app.getServiceNameKeyword();
@@ -691,11 +733,11 @@ public class LogAnalyticsService {
             // Divide by node total RAM — avoids 0% when container_spec_memory_limit_bytes is unset.
             Double mem = prometheusClient.queryMetric(String.format(Locale.US,
                     "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s})[2m:15s]) " +
-                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"})), 1) * 100 or " +
+                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or " +
                     "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s})[2m:15s]) " +
-                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"})), 1) * 100 or vector(0)",
-                    serviceName, envLabel, nodePart, envLabel,
-                    serviceName, envLabel, nodePart, envLabel), end);
+                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or vector(0)",
+                    serviceName, envLabel, nodePart, envLabel, nodePart,
+                    serviceName, envLabel, nodePart, envLabel, nodePart), end);
 
             Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
 
