@@ -562,68 +562,83 @@ const AnalysePage: React.FC = () => {
             <CardContent className="p-4 space-y-4">
               <AnimatePresence>
                 {data?.rootCauseChain.map((rule, i) => (
-                  <motion.div 
-                    key={rule.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    className={`p-4 rounded-xl border space-y-3 transition-all ${
-                      i === 0 ? "bg-primary/[0.03] border-primary/30 shadow-[0_0_15px_rgba(0,123,255,0.05)]" : "bg-background border-border opacity-80"
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {i === 0 && (
-                          <Badge className="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 uppercase font-black tracking-widest text-[10px]">
-                            Primary Cause
-                          </Badge>
-                        )}
-                        
-                        {rule.probability !== undefined && (
-                          <Badge variant="secondary" className="text-[10px] font-black bg-primary/10 text-primary border-primary/20">
-                            {Math.round(rule.probability)}% PROBABILITY
-                          </Badge>
-                        )}
+                  rule.type === 'no_ticket' ? (
+                    <motion.div
+                      key={rule.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 space-y-3"
+                    >
+                      <p className="text-sm font-black text-amber-500 uppercase tracking-widest">{rule.title}</p>
+                      <p className="text-sm text-foreground font-medium">{rule.description}</p>
+                      {rule.evidence?.map((ev: string, ei: number) => (
+                        <p key={ei} className="text-xs text-muted-foreground">{ev}</p>
+                      ))}
+                    </motion.div>
+                  ) : (
+                    <motion.div 
+                      key={rule.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className={`p-4 rounded-xl border space-y-3 transition-all ${
+                        i === 0 ? "bg-primary/[0.03] border-primary/30 shadow-[0_0_15px_rgba(0,123,255,0.05)]" : "bg-background border-border opacity-80"
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {i === 0 && (
+                            <Badge className="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20 uppercase font-black tracking-widest text-[10px]">
+                              Primary Cause
+                            </Badge>
+                          )}
+                          
+                          {rule.probability !== undefined && (
+                            <Badge variant="secondary" className="text-[10px] font-black bg-primary/10 text-primary border-primary/20">
+                              {Math.round(rule.probability)}% PROBABILITY
+                            </Badge>
+                          )}
 
-                        <Badge variant="outline" className={`text-[9px] uppercase ${
-                          rule.confidence === 'high' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5' :
-                          rule.confidence === 'medium' ? 'border-amber-500 text-amber-500 bg-amber-500/5' :
-                          'border-muted-foreground text-muted-foreground'
-                        }`}>
-                          {rule.confidence} Confidence
-                        </Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {rule.sources.map((s: string) => (
-                          <span key={s} className="text-[8px] uppercase tracking-tighter opacity-50 px-1.5 py-0.5 border border-border rounded-md">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3 pt-1">
-                      <h4 className="text-base font-black text-foreground tracking-tight">{rule.title}</h4>
-                      
-                      {rule.evidence && rule.evidence.length > 0 && (
-                        <div className="bg-black/20 rounded-lg p-3 border border-white/5 space-y-2">
-                          <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                            <Brain className="w-3 h-3" /> Diagnostics Evidence
-                          </p>
-                          {rule.evidence.map((ev: string, ei: number) => (
-                            <div key={ei} className="flex items-start gap-2">
-                              <div className="w-1.5 h-1.5 rounded-sm bg-primary/60 mt-1 shrink-0" />
-                              <p className="text-xs font-mono text-foreground/80 leading-relaxed">{ev}</p>
-                            </div>
+                          <Badge variant="outline" className={`text-[9px] uppercase ${
+                            rule.confidence === 'high' ? 'border-emerald-500 text-emerald-500 bg-emerald-500/5' :
+                            rule.confidence === 'medium' ? 'border-amber-500 text-amber-500 bg-amber-500/5' :
+                            'border-muted-foreground text-muted-foreground'
+                          }`}>
+                            {rule.confidence} Confidence
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {rule.sources.map((s: string) => (
+                            <span key={s} className="text-[8px] uppercase tracking-tighter opacity-50 px-1.5 py-0.5 border border-border rounded-md">
+                              {s}
+                            </span>
                           ))}
                         </div>
-                      )}
-                    </div>
-                    
-                    <Button variant="outline" size="sm" className="w-full text-[10px] font-black uppercase h-8 gap-2 hover:bg-primary hover:text-primary-foreground transition-colors mt-2">
-                      Remediation Plan <ExternalLink className="w-3 h-3" />
-                    </Button>
-                  </motion.div>
+                      </div>
+                      
+                      <div className="space-y-3 pt-1">
+                        <h4 className="text-base font-black text-foreground tracking-tight">{rule.title}</h4>
+                        
+                        {rule.evidence && rule.evidence.length > 0 && (
+                          <div className="bg-black/20 rounded-lg p-3 border border-white/5 space-y-2">
+                            <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                              <Brain className="w-3 h-3" /> Diagnostics Evidence
+                            </p>
+                            {rule.evidence.map((ev: string, ei: number) => (
+                              <div key={ei} className="flex items-start gap-2">
+                                <div className="w-1.5 h-1.5 rounded-sm bg-primary/60 mt-1 shrink-0" />
+                                <p className="text-xs font-mono text-foreground/80 leading-relaxed">{ev}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <Button variant="outline" size="sm" className="w-full text-[10px] font-black uppercase h-8 gap-2 hover:bg-primary hover:text-primary-foreground transition-colors mt-2">
+                        Remediation Plan <ExternalLink className="w-3 h-3" />
+                      </Button>
+                    </motion.div>
+                  )
                 ))}
               </AnimatePresence>
             </CardContent>

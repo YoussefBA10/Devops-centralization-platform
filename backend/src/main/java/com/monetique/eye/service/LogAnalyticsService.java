@@ -11,6 +11,7 @@ import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.client.ElasticsearchLogClient;
 import com.monetique.eye.entity.Ticket;
+import com.monetique.eye.repository.AlertGroupRepository;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.TicketRepository;
@@ -36,28 +37,30 @@ public class LogAnalyticsService {
     private final ApplicationRepository applicationRepository;
     private final EnvironmentRepository environmentRepository;
     private final TicketRepository ticketRepository;
+    private final AlertGroupRepository alertGroupRepository;
     private final RootCauseIntelligenceService rootCauseIntelligenceService;
 
     public LogAnalyticsResponseDTO getDashboardData(Long environmentId, String range, String serviceName, String nodeName, Long ticketId) {
         // Resolve ticket context if provided
         String effectiveServiceName = serviceName;
         String effectiveNodeName = nodeName;
+        Ticket contextTicket = null;
 
         int hours = parseRange(range);
         Instant end = Instant.now();
 
         if (ticketId != null) {
-            Ticket ticket = ticketRepository.findById(ticketId).orElse(null);
-            if (ticket != null) {
-                if (ticket.getApplication() != null) {
-                    effectiveServiceName = ticket.getApplication().getServiceNameKeyword() != null ? 
-                        ticket.getApplication().getServiceNameKeyword() : ticket.getApplication().getName();
+            contextTicket = ticketRepository.findById(ticketId).orElse(null);
+            if (contextTicket != null) {
+                if (contextTicket.getApplication() != null) {
+                    effectiveServiceName = contextTicket.getApplication().getServiceNameKeyword() != null ? 
+                        contextTicket.getApplication().getServiceNameKeyword() : contextTicket.getApplication().getName();
                 }
-                if (ticket.getNode() != null) {
-                    effectiveNodeName = ticket.getNode();
+                if (contextTicket.getNode() != null) {
+                    effectiveNodeName = contextTicket.getNode();
                 }
-                if (ticket.getCreatedAt() != null) {
-                    end = ticket.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant();
+                if (contextTicket.getCreatedAt() != null) {
+                    end = contextTicket.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant();
                 }
                 log.info("ANALYTICS: Resolved ticket #{} to service={} node={} time={}", ticketId, effectiveServiceName, effectiveNodeName, end);
             }
@@ -135,7 +138,7 @@ public class LogAnalyticsService {
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
                 .resourcePressure(fetchResourcePressure(containerEnvLabel, relatedApps, pressureNodeName, end))
-                .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, effectiveNodeName, start, end))
+                .rootCauseChain(resolveRootCauseChain(contextTicket, ticketId, appEnvLabel, appFilter, effectiveNodeName, start, end))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
                 .availableServices(availableServices)
                 .build();
@@ -143,6 +146,49 @@ public class LogAnalyticsService {
 
     private String nodeFilter(String nodeName) {
         return (nodeName != null && !nodeName.isBlank()) ? String.format(", nodename=~\".*%s.*\"", nodeName) : "";
+    }
+
+    private boolean isPrometheusAutoTicket(Ticket ticket) {
+        if (ticket == null || ticket.getId() == null) {
+            return false;
+        }
+        if (!alertGroupRepository.findByTicketId(ticket.getId()).isEmpty()) {
+            return true;
+        }
+        String title = ticket.getTitle() != null ? ticket.getTitle() : "";
+        String description = ticket.getDescription() != null ? ticket.getDescription() : "";
+        return title.startsWith("[ALERT]")
+                || description.contains("Automated ticket raised from Prometheus");
+    }
+
+    private List<RootCauseRule> resolveRootCauseChain(
+            Ticket ticket,
+            Long ticketId,
+            String envLabel,
+            String appFilter,
+            String nodeName,
+            Instant start,
+            Instant end) {
+        if (ticketId == null || !isPrometheusAutoTicket(ticket)) {
+            return List.of(noPrometheusTicketRule());
+        }
+        return rootCauseIntelligenceService.analyze(envLabel, appFilter, nodeName, start, end);
+    }
+
+    private RootCauseRule noPrometheusTicketRule() {
+        return RootCauseRule.builder()
+                .id("no-prometheus-ticket")
+                .type("no_ticket")
+                .title("No incident ticket")
+                .description("There is not actual ticket to resolve")
+                .confidence("low")
+                .probability(0.0)
+                .evidence(List.of(
+                        "Root cause analysis requires a ticket auto-created from a Prometheus alert",
+                        "Select an [ALERT] ticket from the dropdown or wait for Alertmanager to raise one"
+                ))
+                .sources(List.of("Prometheus", "Alertmanager"))
+                .build();
     }
 
     private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, String appNodeName, 
