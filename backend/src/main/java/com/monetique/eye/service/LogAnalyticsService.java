@@ -229,8 +229,13 @@ public class LogAnalyticsService {
                 .source("prometheus")
                 .build());
 
-        // 4. Memory Usage (Dynamic Limit)
-        String memQuery = String.format(Locale.US, "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or vector(0)", containerEnvLabel, appFilter, nodeFilter(containerNodeName), containerEnvLabel, appFilter, nodeFilter(containerNodeName));
+        // 4. Backend Memory — sum of all env backend containers as % of node total RAM
+        // Using node_memory_MemTotal_bytes avoids the container_spec_memory_limit_bytes > 0
+        // filter that returns 0 when no container memory limit is configured.
+        String memQuery = String.format(Locale.US,
+                "sum(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
+                "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"})), 1) * 100 or vector(0)",
+                containerEnvLabel, appFilter, nodeFilter(containerNodeName), containerEnvLabel);
         Double memUsage = prometheusClient.queryMetric(memQuery, end);
         cards.add(MetricCard.builder()
                 .label("Backend memory")
@@ -683,11 +688,14 @@ public class LogAnalyticsService {
                     "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s])",
                     envLabel, serviceName, nodePart), end);
 
+            // Divide by node total RAM — avoids 0% when container_spec_memory_limit_bytes is unset.
             Double mem = prometheusClient.queryMetric(String.format(Locale.US,
-                    "avg_over_time((max(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100))[2m:15s]) or " +
-                    "avg_over_time((max(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100))[2m:15s])",
-                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
-                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart), end);
+                    "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s})[2m:15s]) " +
+                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"})), 1) * 100 or " +
+                    "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s})[2m:15s]) " +
+                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"})), 1) * 100 or vector(0)",
+                    serviceName, envLabel, nodePart, envLabel,
+                    serviceName, envLabel, nodePart, envLabel), end);
 
             Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
 

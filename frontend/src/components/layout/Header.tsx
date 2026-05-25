@@ -49,7 +49,7 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-16 bg-card/50 backdrop-blur-md border-b border-border px-8 flex items-center justify-between sticky top-0 z-10">
+    <header className="h-16 bg-card/50 backdrop-blur-md border-b border-border px-8 flex items-center justify-between sticky top-0 z-30">
       <div className="flex items-center gap-4 flex-1">
         {/* Selection Area */}
         <div className="flex items-center gap-2">
