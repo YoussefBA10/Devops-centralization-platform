@@ -11,9 +11,11 @@ import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.client.ElasticsearchLogClient;
 import com.monetique.eye.entity.Ticket;
+import com.monetique.eye.entity.ManagedNode;
 import com.monetique.eye.repository.AlertGroupRepository;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
+import com.monetique.eye.repository.ManagedNodeRepository;
 import com.monetique.eye.repository.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class LogAnalyticsService {
     private final EnvironmentRepository environmentRepository;
     private final TicketRepository ticketRepository;
     private final AlertGroupRepository alertGroupRepository;
+    private final ManagedNodeRepository managedNodeRepository;
     private final RootCauseIntelligenceService rootCauseIntelligenceService;
 
     public LogAnalyticsResponseDTO getDashboardData(Long environmentId, String range, String serviceName, String nodeName, Long ticketId) {
@@ -69,19 +72,22 @@ public class LogAnalyticsService {
         String pressureNodeName = (effectiveNodeName != null && !effectiveNodeName.isBlank())
                 ? effectiveNodeName.trim()
                 : (nodeName != null ? nodeName.trim() : null);
-        NodeFilterParts nodeFilters = buildNodeFilters(pressureNodeName);
 
         Long resolvedEnvironmentId = environmentId;
         if (contextTicket != null && contextTicket.getEnvironment() != null) {
             resolvedEnvironmentId = contextTicket.getEnvironment().getId();
         }
 
-        List<Application> relatedApps = buildRelatedApps(resolvedEnvironmentId, effectiveServiceName, serviceName);
-
         Instant start = end.minus(hours, ChronoUnit.HOURS);
 
         Environment env = environmentRepository.findById(resolvedEnvironmentId).orElse(null);
         String envLabel = env != null ? env.getPrometheusLabel() : ".*";
+
+        ResolvedNode resolvedNode = resolveNode(pressureNodeName, env);
+        NodeFilterParts nodeFilters = buildNodeFilters(resolvedNode);
+
+        List<Application> relatedApps = buildRelatedApps(resolvedEnvironmentId, effectiveServiceName, serviceName);
+        List<Application> pressureApps = filterAppsForNode(relatedApps, resolvedNode);
 
         String containerEnvLabel = envLabel;
         String appEnvLabel = envLabel;
@@ -137,52 +143,185 @@ public class LogAnalyticsService {
                 .resourceUsage(fetchResourceUsage(containerEnvLabel, appFilter, nodeFilters, start, end))
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, nodeFilters, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, pressureNodeName, start, end))
-                .resourcePressure(fetchResourcePressure(containerEnvLabel, relatedApps, nodeFilters, end))
+                .resourcePressure(fetchResourcePressure(containerEnvLabel, pressureApps, relatedApps, nodeFilters, resolvedNode, end))
                 .rootCauseChain(resolveRootCauseChain(contextTicket, ticketId, appEnvLabel, appFilter, pressureNodeName, start, end))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, pressureNodeName, start, end))
                 .availableServices(availableServices)
                 .build();
     }
 
-    private record NodeFilterParts(String cadvisor, String appMetrics) {
+    private record ResolvedNode(String nodeName, String ip, boolean central) {}
+
+    private record NodeFilterParts(String cadvisor, String hostInstance) {
         static NodeFilterParts empty() {
             return new NodeFilterParts("", "");
         }
+
+        boolean isScoped() {
+            return !cadvisor.isEmpty() || !hostInstance.isEmpty();
+        }
     }
 
-    /**
-     * Builds Prometheus selector fragments for node-scoped queries.
-     * Handles nodename forms like node-172-17-9-211 (IP dashes) and short node-131 slugs.
-     */
-    private NodeFilterParts buildNodeFilters(String rawNode) {
+    private ResolvedNode resolveNode(String rawNode, Environment env) {
         if (rawNode == null || rawNode.isBlank()) {
-            return NodeFilterParts.empty();
+            return null;
         }
         String trimmed = rawNode.trim();
         String withoutPrefix = trimmed.startsWith("node-") ? trimmed.substring(5) : trimmed;
-        String ipLike = withoutPrefix.replace('-', '.');
+        String ip = withoutPrefix.matches("^[0-9][0-9.-]+$") ? withoutPrefix.replace('-', '.') : withoutPrefix;
+        String nodeName = trimmed.startsWith("node-") ? trimmed : "node-" + withoutPrefix.replace('.', '-');
+        boolean central = "central-node".equalsIgnoreCase(trimmed) || "central-node".equalsIgnoreCase(nodeName);
+
+        if (env != null) {
+            Optional<ManagedNode> byName = managedNodeRepository.findByEnvironmentAndNodeName(env, nodeName);
+            if (byName.isEmpty() && !ip.equals(withoutPrefix)) {
+                byName = managedNodeRepository.findByEnvironmentAndIp(env, ip);
+            }
+            if (byName.isPresent()) {
+                ManagedNode mn = byName.get();
+                if (mn.getNodeName() != null) {
+                    nodeName = mn.getNodeName();
+                }
+                if (mn.getIp() != null) {
+                    ip = mn.getIp();
+                }
+                central = "central-node".equalsIgnoreCase(nodeName);
+            }
+        }
+
+        return new ResolvedNode(nodeName, ip, central);
+    }
+
+    /**
+     * Builds Prometheus selector fragments — cAdvisor/blackbox use nodename; node_exporter/Spring use instance (IP).
+     */
+    private NodeFilterParts buildNodeFilters(ResolvedNode resolved) {
+        if (resolved == null) {
+            return NodeFilterParts.empty();
+        }
+        String trimmed = resolved.nodeName();
+        String ip = resolved.ip();
+        String withoutPrefix = trimmed.startsWith("node-") ? trimmed.substring(5) : trimmed;
 
         List<String> cadvisorPatterns = new ArrayList<>();
         cadvisorPatterns.add(promRegexAlternation(trimmed));
         if (!withoutPrefix.equals(trimmed)) {
             cadvisorPatterns.add(promRegexAlternation(withoutPrefix));
         }
-        if (!ipLike.equals(withoutPrefix) && withoutPrefix.matches("^[0-9][0-9.-]+$")) {
-            cadvisorPatterns.add(promRegexAlternation(ipLike));
+        if (ip != null && !ip.isBlank()) {
+            cadvisorPatterns.add(promRegexAlternation(ip));
         }
 
         String cadvisor = ", nodename=~\".*(" + String.join("|", cadvisorPatterns) + ").*\"";
+        String hostInstance = (ip != null && !ip.isBlank())
+                ? ", instance=~\".*" + promRegexAlternation(ip) + ".*\""
+                : "";
 
-        String appMetrics = "";
-        if (withoutPrefix.matches("^[0-9][0-9.-]+$")) {
-            appMetrics = ", instance=~\".*" + promRegexAlternation(ipLike) + ".*\"";
+        return new NodeFilterParts(cadvisor, hostInstance);
+    }
+
+    private String envSelector(String envLabel) {
+        if (envLabel == null || envLabel.isBlank() || ".*".equals(envLabel)) {
+            return "environment=~\".+\"";
         }
+        return String.format(Locale.US, "environment=~\"%s\"", envLabel.replace("\"", ""));
+    }
 
-        return new NodeFilterParts(cadvisor, appMetrics);
+    private String appHttpRateExpr(String envLabel, String springFilter, NodeFilterParts nf, String extraLabels, String rateWindow) {
+        String extra = extraLabels != null ? extraLabels : "";
+        String window = rateWindow != null ? rateWindow : "5m";
+        String env = envSelector(envLabel);
+        String job = String.format(Locale.US, "job=~\".*%s.*\"", springFilter);
+        if (!nf.isScoped()) {
+            return String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{%s, %s%s}[%s]))", env, job, extra, window);
+        }
+        List<String> parts = new ArrayList<>();
+        if (!nf.hostInstance().isEmpty()) {
+            parts.add(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{%s, %s%s%s}[%s]))", env, job, nf.hostInstance(), extra, window));
+        }
+        if (!nf.cadvisor().isEmpty()) {
+            parts.add(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{%s, %s%s%s}[%s]))", env, job, nf.cadvisor(), extra, window));
+        }
+        if (parts.isEmpty()) {
+            return String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{%s, %s%s}[%s]))", env, job, extra, window);
+        }
+        return parts.size() == 1 ? parts.get(0) : String.join(" or ", parts);
+    }
+
+    private String prometheusNodeSuffix(NodeFilterParts nf) {
+        if (!nf.isScoped()) {
+            return "";
+        }
+        return !nf.cadvisor().isEmpty() ? nf.cadvisor() : nf.hostInstance();
+    }
+
+    /** Instance selector for node_exporter metrics (not nodename). */
+    private String nodeHostSelector(NodeFilterParts nf) {
+        return nf.hostInstance() != null ? nf.hostInstance() : "";
+    }
+
+    private String prometheusDiskEnvSelector(String envLabel, String hostInstance) {
+        if (envLabel == null || envLabel.isBlank() || ".*".equals(envLabel)) {
+            return "environment=~\".+\"" + (hostInstance != null ? hostInstance : "");
+        }
+        return String.format(Locale.US, "environment=\"%s\"", envLabel) + (hostInstance != null ? hostInstance : "");
+    }
+
+    private String appHikariExpr(String envLabel, String springFilter, NodeFilterParts nf, String numeratorLabels) {
+        String env = envSelector(envLabel);
+        String job = String.format(Locale.US, "job=~\".*%s.*\"", springFilter);
+        if (!nf.isScoped()) {
+            return String.format(Locale.US, "sum(hikaricp_connections_active{%s, %s%s})", env, job, numeratorLabels);
+        }
+        List<String> parts = new ArrayList<>();
+        if (!nf.hostInstance().isEmpty()) {
+            parts.add(String.format(Locale.US, "sum(hikaricp_connections_active{%s, %s%s%s})", env, job, nf.hostInstance(), numeratorLabels));
+        }
+        if (!nf.cadvisor().isEmpty()) {
+            parts.add(String.format(Locale.US, "sum(hikaricp_connections_active{%s, %s%s%s})", env, job, nf.cadvisor(), numeratorLabels));
+        }
+        return parts.isEmpty()
+                ? String.format(Locale.US, "sum(hikaricp_connections_active{%s, %s%s})", env, job, numeratorLabels)
+                : (parts.size() == 1 ? parts.get(0) : String.join(" or ", parts));
+    }
+
+    private String nodeMemoryTotalExpr(String envLabel, NodeFilterParts nf) {
+        String env = envSelector(envLabel);
+        if (!nf.isScoped()) {
+            return String.format("max(node_memory_MemTotal_bytes{%s})", env);
+        }
+        if (!nf.hostInstance().isEmpty()) {
+            return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.hostInstance());
+        }
+        return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.cadvisor());
     }
 
     private String promRegexAlternation(String value) {
         return value.replace(".", "\\.");
+    }
+
+    private List<Application> filterAppsForNode(List<Application> apps, ResolvedNode resolved) {
+        if (resolved == null || apps.isEmpty()) {
+            return apps;
+        }
+        String ip = resolved.ip();
+        String nodeName = resolved.nodeName();
+        String ipDashed = ip != null ? ip.replace('.', '-') : "";
+
+        List<Application> onNode = apps.stream()
+                .filter(a -> {
+                    String target = a.getTargetNode();
+                    if (target == null || target.isBlank()) {
+                        return false;
+                    }
+                    return target.equals(ip)
+                            || target.equals(nodeName)
+                            || target.replace('.', '-').equals(ipDashed)
+                            || ("node-" + target.replace('.', '-')).equals(nodeName);
+                })
+                .collect(Collectors.toList());
+
+        return onNode.isEmpty() ? apps : onNode;
     }
 
     private boolean isPrometheusAutoTicket(Ticket ticket) {
@@ -231,12 +370,13 @@ public class LogAnalyticsService {
     private List<MetricCard> fetchSummaryCards(String appEnvLabel, String springFilter, NodeFilterParts nodeFilters,
                                                 String containerEnvLabel, String appFilter, Instant end) {
         List<MetricCard> cards = new ArrayList<>();
-        String appNode = nodeFilters.appMetrics();
         String cadvisorNode = nodeFilters.cadvisor();
+        String nodeMemTotal = nodeMemoryTotalExpr(containerEnvLabel, nodeFilters);
 
         // 1. Error Rate
-        String errRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[5m])) / sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m])) * 100", 
-                appEnvLabel, springFilter, appNode, appEnvLabel, springFilter, appNode);
+        String errNum = appHttpRateExpr(appEnvLabel, springFilter, nodeFilters, ", status=~\"5..\"", "5m");
+        String errDen = appHttpRateExpr(appEnvLabel, springFilter, nodeFilters, "", "5m");
+        String errRateQuery = String.format(Locale.US, "(%s) / (%s) * 100", errNum, errDen);
         Double errRate = prometheusClient.queryMetric(errRateQuery, end);
         cards.add(MetricCard.builder()
                 .label("Error rate")
@@ -247,7 +387,7 @@ public class LogAnalyticsService {
                 .build());
 
         // 2. Request Rate
-        String reqRateQuery = String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[5m]))", appEnvLabel, springFilter, appNode);
+        String reqRateQuery = appHttpRateExpr(appEnvLabel, springFilter, nodeFilters, "", "5m");
         Double reqRate = prometheusClient.queryMetric(reqRateQuery, end);
         cards.add(MetricCard.builder()
                 .label("Request rate")
@@ -258,7 +398,9 @@ public class LogAnalyticsService {
                 .build());
 
         // 3. DB Pool Usage
-        String dbPoolQuery = String.format(Locale.US, "sum(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s}) / sum(hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s}) * 100 or vector(0)", appEnvLabel, springFilter, appNode, appEnvLabel, springFilter, appNode);
+        String dbActive = appHikariExpr(appEnvLabel, springFilter, nodeFilters, "");
+        String dbMax = appHikariExpr(appEnvLabel, springFilter, nodeFilters, "").replace("connections_active", "connections_max");
+        String dbPoolQuery = String.format(Locale.US, "(%s) / (%s) * 100 or vector(0)", dbActive, dbMax);
         Double dbPool = prometheusClient.queryMetric(dbPoolQuery, end);
         cards.add(MetricCard.builder()
                 .label("DB pool usage")
@@ -268,24 +410,32 @@ public class LogAnalyticsService {
                 .source("prometheus")
                 .build());
 
-        // 4. Backend Memory — sum of all env backend containers as % of node total RAM
-        // Using node_memory_MemTotal_bytes avoids the container_spec_memory_limit_bytes > 0
-        // filter that returns 0 when no container memory limit is configured.
-        String memQuery = String.format(Locale.US,
+        // 4. Memory — backend containers on node, or host RAM when no containers (worker nodes)
+        String env = envSelector(appEnvLabel);
+        String host = nodeHostSelector(nodeFilters);
+        String containerMemQuery = String.format(Locale.US,
                 "sum(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
-                "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or vector(0)",
-                containerEnvLabel, appFilter, cadvisorNode, containerEnvLabel, cadvisorNode);
+                "/ clamp_min(scalar(%s), 1) * 100",
+                containerEnvLabel, appFilter, cadvisorNode, nodeMemTotal);
+        String memQuery = containerMemQuery + " or vector(0)";
+        if (nodeFilters.isScoped() && !host.isEmpty()) {
+            memQuery = String.format(Locale.US,
+                    "(%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or vector(0)",
+                    containerMemQuery, env, host, env, host);
+        }
         Double memUsage = prometheusClient.queryMetric(memQuery, end);
+        String memLabel = nodeFilters.isScoped() && !host.isEmpty() ? "Node memory" : "Backend memory";
+        String memSource = nodeFilters.isScoped() && !host.isEmpty() ? "node_exporter" : "cadvisor";
         cards.add(MetricCard.builder()
-                .label("Backend memory")
+                .label(memLabel)
                 .value(String.format("%.1f%%", memUsage))
                 .delta("")
                 .status(memUsage > 85 ? "danger" : memUsage > 70 ? "warning" : "neutral")
-                .source("cadvisor")
+                .source(memSource)
                 .build());
 
         // 5. Blackbox Probe
-        String probeQuery = String.format(Locale.US, "avg(probe_success{environment=\"%s\"%s}) * 100 or vector(100)", appEnvLabel, cadvisorNode);
+        String probeQuery = String.format(Locale.US, "avg(probe_success{%s%s}) * 100 or vector(100)", envSelector(appEnvLabel), cadvisorNode);
         Double probeSuccess = prometheusClient.queryMetric(probeQuery, end);
         cards.add(MetricCard.builder()
                 .label("Blackbox probe")
@@ -299,7 +449,6 @@ public class LogAnalyticsService {
     }
 
     private ChartData fetchTrafficCorrelation(String envLabel, String appFilter, NodeFilterParts nodeFilters, List<Application> apps, Instant start, Instant end) {
-        String appNode = nodeFilters.appMetrics();
         long diff = end.getEpochSecond() - start.getEpochSecond();
         String step = Math.max(60, diff / 11) + "s";
         String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
@@ -310,33 +459,37 @@ public class LogAnalyticsService {
         // Total Traffic (The primary line)
         datasets.add(ChartData.Series.builder()
                 .label("Total req/s")
-                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, appNode, rateInterval), start, end, step, 12))
+                .data(fetchRangeMetric(appHttpRateExpr(envLabel, appFilter, nodeFilters, "", rateInterval), start, end, step, 12))
                 .color("#3b82f6")
                 .fill(false)
                 .build());
 
         // Individual Service Traffic (If looking at multiple apps)
+        String nodeSuffix = prometheusNodeSuffix(nodeFilters);
+        String envSel = envSelector(envLabel);
         if (".*".equals(appFilter) || apps.size() > 1) {
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{environment=\"%s\", job=~\".*%s.*\"%s}[%s]))", envLabel, appFilter, appNode, rateInterval),
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{%s, job=~\".*%s.*\"%s}[%s]))", envSel, appFilter, nodeSuffix, rateInterval),
                 "req/s", start, end, step, 12));
             
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, appNode, rateInterval),
+                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{%s, job=~\".*%s.*\", status=~\"5..\"%s}[%s])) * 60", envSel, appFilter, nodeSuffix, rateInterval),
                 "errors/min", start, end, step, 12));
         } else {
             datasets.add(ChartData.Series.builder()
                 .label("errors/min")
-                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, appNode, rateInterval), start, end, step, 12))
+                .data(fetchRangeMetric("(" + appHttpRateExpr(envLabel, appFilter, nodeFilters, ", status=~\"5..\"", rateInterval) + ") * 60", start, end, step, 12))
                 .color("#ef4444")
                 .fill(true)
                 .build());
         }
 
         // DB Pool (Aggregated)
+        String dbActiveRange = appHikariExpr(envLabel, appFilter, nodeFilters, "");
+        String dbMaxRange = dbActiveRange.replace("connections_active", "connections_max");
         datasets.add(ChartData.Series.builder()
                 .label("DB pool %")
-                .data(fetchRangeMetric(String.format(Locale.US, "avg(hikaricp_connections_active{environment=\"%s\", job=~\".*%s.*\"%s} / hikaricp_connections_max{environment=\"%s\", job=~\".*%s.*\"%s} * 100)", envLabel, appFilter, appNode, envLabel, appFilter, appNode), start, end, step, 12))
+                .data(fetchRangeMetric(String.format(Locale.US, "(%s) / (%s) * 100", dbActiveRange, dbMaxRange), start, end, step, 12))
                 .color("#f59e0b")
                 .dashed(true)
                 .fill(false)
@@ -354,18 +507,38 @@ public class LogAnalyticsService {
         String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
         List<String> labels = generateTimeLabels(start, end, 12);
         String cadvisorNode = nodeFilters.cadvisor();
+        String env = envSelector(envLabel);
+        String host = nodeHostSelector(nodeFilters);
 
-        String cpuQuery = String.format(Locale.US,
+        String containerCpu = String.format(Locale.US,
                 "max(sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[%s])) * 100)",
                 envLabel, appFilter, cadvisorNode, rateInterval);
-        String memQuery = String.format(Locale.US,
+        String cpuQuery = containerCpu;
+        if (nodeFilters.isScoped() && !host.isEmpty()) {
+            String hostCpu = String.format(Locale.US,
+                    "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", %s%s}[%s])) * 100)",
+                    env, host, rateInterval);
+            cpuQuery = String.format(Locale.US, "(%s) or (%s)", hostCpu, containerCpu);
+        }
+
+        String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
+        String containerMem = String.format(Locale.US,
                 "max(max_over_time(max(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s})[2m:15s]) " +
-                "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or vector(0)",
-                envLabel, appFilter, cadvisorNode, envLabel, cadvisorNode);
-        String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(String.format(Locale.US, "environment=\"%s\"", envLabel));
-        String diskQuery = String.format(Locale.US,
-                "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or max(max_over_time((%s)[2m:15s])) or vector(0)",
-                envLabel, appFilter, cadvisorNode, envLabel, appFilter, cadvisorNode, nodeDiskPct);
+                "/ clamp_min(scalar(%s), 1) * 100",
+                envLabel, appFilter, cadvisorNode, nodeMemTotal);
+        String memQuery = containerMem + " or vector(0)";
+        if (nodeFilters.isScoped() && !host.isEmpty()) {
+            String hostMem = String.format(Locale.US,
+                    "(1 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s})) * 100",
+                    env, host, env, host);
+            memQuery = String.format(Locale.US, "(%s) or (%s) or vector(0)", hostMem, containerMem);
+        }
+
+        String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(prometheusDiskEnvSelector(envLabel, host));
+        String containerDisk = String.format(Locale.US,
+                "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s]))",
+                envLabel, appFilter, cadvisorNode, envLabel, appFilter, cadvisorNode);
+        String diskQuery = String.format(Locale.US, "%s or max(max_over_time((%s)[2m:15s])) or vector(0)", containerDisk, nodeDiskPct);
 
         List<ChartData.Series> datasets = List.of(
                 ChartData.Series.builder()
@@ -718,10 +891,18 @@ public class LogAnalyticsService {
                 .collect(Collectors.toList());
     }
 
-    private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, NodeFilterParts nodeFilters, Instant end) {
+    private List<ResourcePressure> fetchResourcePressure(
+            String envLabel,
+            List<Application> pressureApps,
+            List<Application> fallbackApps,
+            NodeFilterParts nodeFilters,
+            ResolvedNode resolvedNode,
+            Instant end) {
         List<ResourcePressure> pressure = new ArrayList<>();
-        String nodePart = nodeFilters.cadvisor();
+        String nodePart = prometheusNodeSuffix(nodeFilters);
+        String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
 
+        List<Application> apps = !pressureApps.isEmpty() ? pressureApps : fallbackApps;
         for (Application app : apps) {
             String serviceName = app.getServiceNameKeyword();
             if (serviceName == null) continue;
@@ -730,16 +911,19 @@ public class LogAnalyticsService {
                     "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s])",
                     envLabel, serviceName, nodePart), end);
 
-            // Divide by node total RAM — avoids 0% when container_spec_memory_limit_bytes is unset.
             Double mem = prometheusClient.queryMetric(String.format(Locale.US,
                     "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s})[2m:15s]) " +
-                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or " +
+                    "/ clamp_min(scalar(%s), 1) * 100 or " +
                     "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s})[2m:15s]) " +
-                    "/ clamp_min(scalar(max(node_memory_MemTotal_bytes{environment=~\"%s\"%s})), 1) * 100 or vector(0)",
-                    serviceName, envLabel, nodePart, envLabel, nodePart,
-                    serviceName, envLabel, nodePart, envLabel, nodePart), end);
+                    "/ clamp_min(scalar(%s), 1) * 100 or vector(0)",
+                    serviceName, envLabel, nodePart, nodeMemTotal,
+                    serviceName, envLabel, nodePart, nodeMemTotal), end);
 
             Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
+
+            if (cpu <= 0 && mem <= 0 && disk <= 0) {
+                continue;
+            }
 
             String callout = null;
             if (disk > 90) callout = "Disk pressure critical";
@@ -755,7 +939,47 @@ public class LogAnalyticsService {
                     .build());
         }
 
+        if (pressure.isEmpty() && resolvedNode != null && nodeFilters.isScoped()) {
+            pressure.add(fetchHostResourcePressure(envLabel, nodeFilters, resolvedNode, end));
+        }
+
         return pressure;
+    }
+
+    private ResourcePressure fetchHostResourcePressure(String envLabel, NodeFilterParts nodeFilters, ResolvedNode resolvedNode, Instant end) {
+        String env = envSelector(envLabel);
+        String host = nodeHostSelector(nodeFilters);
+        if (host.isEmpty()) {
+            host = nodeFilters.cadvisor();
+        }
+
+        Double cpu = prometheusClient.queryMetric(String.format(Locale.US,
+                "avg_over_time((100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", %s%s}[1m])) * 100))[2m:15s])",
+                env, host), end);
+
+        Double mem = prometheusClient.queryMetric(String.format(Locale.US,
+                "avg_over_time((100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100))[2m:15s])",
+                env, host, env, host), end);
+
+        Double disk = 0.0;
+        if (!host.isEmpty()) {
+            String diskSelector = prometheusDiskEnvSelector(envLabel, host);
+            String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(diskSelector);
+            disk = prometheusClient.queryMetric(String.format(Locale.US, "avg_over_time((%s)[2m:15s])", nodeDiskPct), end);
+        }
+
+        String callout = null;
+        if (disk > 90) callout = "Disk pressure critical";
+        else if (mem > 85) callout = "Memory pressure detected";
+        else if (cpu > 80) callout = "CPU throttling likely";
+
+        return ResourcePressure.builder()
+                .containerName(resolvedNode.nodeName() + " (host)")
+                .memoryUsage(mem > 0 ? mem : 0.0)
+                .cpuUsage(cpu > 0 ? cpu : 0.0)
+                .diskUsage(disk > 0 ? disk : 0.0)
+                .callout(callout)
+                .build();
     }
 
     private Double fetchAvgDiskUsagePercent(String serviceName, String envLabel, String nodePart, Instant end) {

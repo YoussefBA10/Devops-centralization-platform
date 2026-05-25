@@ -9,7 +9,8 @@ import {
   ExternalLink,
   Brain,
   Zap,
-  Ticket as TicketIcon
+  Ticket as TicketIcon,
+  AlertTriangle
 } from 'lucide-react';
 import api from '../services/api';
 import type { Ticket } from '../types/index';
@@ -276,6 +277,15 @@ const AnalysePage: React.FC = () => {
   return (
     <div className="p-8 space-y-8 animate-in fade-in duration-500 pb-20">
       {/* 0. Context Bar (if active) */}
+      {nodeContext && data && filteredLogs.length === 0 && (
+        <div className="flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
+          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            No application logs for this node in the selected window. Charts and resource pressure still use Prometheus host metrics where available.
+          </p>
+        </div>
+      )}
+
       {(serviceContext || nodeContext) && (
         <div className="flex items-center justify-between p-4 bg-primary/10 border border-primary/20 rounded-2xl shadow-sm">
           <div className="flex items-center gap-3">
