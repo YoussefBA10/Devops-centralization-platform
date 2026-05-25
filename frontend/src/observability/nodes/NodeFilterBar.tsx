@@ -92,7 +92,7 @@ export const NodeFilterBar: React.FC<NodeFilterBarProps> = ({
   };
 
   return (
-    <div className="sticky top-0 z-50 bg-[#1a1d27]/90 border-b border-[#2a2d3a] p-3 shadow-2xl backdrop-blur-md">
+    <div className="sticky top-0 z-20 bg-[#1a1d27]/90 border-b border-[#2a2d3a] p-3 shadow-2xl backdrop-blur-md">
       <div className="max-w-[1600px] mx-auto">
         <div className="flex items-center justify-between gap-4 md:hidden">
           <div className="flex items-center gap-2">

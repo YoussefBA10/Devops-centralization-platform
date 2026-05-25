@@ -1022,8 +1022,11 @@ public class DeploymentService {
         list.add(createTarget(nodeExporterTarget, Map.of("job", "node-exporter", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
         list.add(createTarget(cadvisorTarget, Map.of("job", "cadvisor", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
         list.add(createTarget(filebeatTarget, Map.of("job", "filebeat", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
-        list.add(createTarget(backendTarget, Map.of("job", "monetique-backend", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
-        list.add(createTarget(frontendTarget, Map.of("job", "monetique-frontend", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        
+        if (ip.equals(centralIp)) {
+            list.add(createTarget(backendTarget, Map.of("job", "monetique-backend", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+            list.add(createTarget(frontendTarget, Map.of("job", "monetique-frontend", "environment", envLabel, "nodename", nodeName, "node_id", String.valueOf(nodeId))));
+        }
         
         return list;
     }

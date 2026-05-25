@@ -75,7 +75,7 @@ export const NodeMonitoringPage: React.FC = () => {
   useEffect(() => {
     const fetchNodes = async () => {
       try {
-        const result = await prometheus.queryInstant('node_uname_info');
+        const result = await prometheus.queryInstant('up{job="node-exporter"}');
         if (result && result.length > 0) {
           const fetchedNodes = Array.from(new Set(result.map(r => r.metric.instance))).filter(Boolean);
           setNodes(fetchedNodes);
