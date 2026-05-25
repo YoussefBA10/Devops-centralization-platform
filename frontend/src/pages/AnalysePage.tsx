@@ -58,7 +58,7 @@ interface AnalyticsData {
 }
 
 const AnalysePage: React.FC = () => {
-  const { selectedEnvironment } = useEnvironment();
+  const { selectedEnvironment, setSelectedEnvironment } = useEnvironment();
   const { selectedCluster } = useCluster();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
