@@ -15,6 +15,7 @@ import java.util.Map;
 public class LogAnalyticsResponseDTO {
     private List<MetricCard> summaryCards;
     private ChartData trafficCorrelation;
+    private ChartData resourceUsage;
     private ChartData probeSuccess;
     private List<ErrorPattern> topErrors;
     private List<ResourcePressure> resourcePressure;

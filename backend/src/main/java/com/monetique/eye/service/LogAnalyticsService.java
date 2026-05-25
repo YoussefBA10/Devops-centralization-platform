@@ -57,7 +57,7 @@ public class LogAnalyticsService {
                     effectiveNodeName = ticket.getNode();
                 }
                 if (ticket.getCreatedAt() != null) {
-                    end = ticket.getCreatedAt().minusMinutes(2).atZone(java.time.ZoneId.systemDefault()).toInstant();
+                    end = ticket.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant();
                 }
                 log.info("ANALYTICS: Resolved ticket #{} to service={} node={} time={}", ticketId, effectiveServiceName, effectiveNodeName, end);
             }
@@ -66,6 +66,11 @@ public class LogAnalyticsService {
         if (effectiveNodeName != null && effectiveNodeName.matches("^node-\\d+$")) {
             effectiveNodeName = effectiveNodeName.substring(5);
         }
+
+        String pressureNodeName = (effectiveNodeName != null && !effectiveNodeName.isBlank())
+                ? effectiveNodeName
+                : nodeName;
+        List<Application> relatedApps = buildRelatedApps(environmentId, effectiveServiceName, serviceName);
 
         Instant start = end.minus(hours, ChronoUnit.HOURS);
 
@@ -126,9 +131,10 @@ public class LogAnalyticsService {
         return LogAnalyticsResponseDTO.builder()
                 .summaryCards(fetchSummaryCards(appEnvLabel, springFilter, appNodeName, containerEnvLabel, appFilter, containerNodeName, end))
                 .trafficCorrelation(fetchTrafficCorrelation(appEnvLabel, appFilter, appNodeName, apps, start, end))
+                .resourceUsage(fetchResourceUsage(containerEnvLabel, appFilter, containerNodeName, start, end))
                 .probeSuccess(fetchProbeSuccess(appEnvLabel, appNodeName, start, end))
                 .topErrors(fetchTopErrors(appEnvLabel, appFilter, containerNodeName, start, end))
-                .resourcePressure(fetchResourcePressure(containerEnvLabel, apps, containerNodeName, end))
+                .resourcePressure(fetchResourcePressure(containerEnvLabel, relatedApps, pressureNodeName, end))
                 .rootCauseChain(rootCauseIntelligenceService.analyze(appEnvLabel, appFilter, effectiveNodeName, start, end))
                 .liveLogs(fetchLiveLogs(appEnvLabel, appFilter, containerNodeName, start, end))
                 .availableServices(availableServices)
@@ -251,6 +257,49 @@ public class LogAnalyticsService {
                 .build();
     }
 
+    private ChartData fetchResourceUsage(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {
+        long diff = end.getEpochSecond() - start.getEpochSecond();
+        String step = Math.max(60, diff / 11) + "s";
+        String rateInterval = Math.max(5, (diff / 60) / 11) + "m";
+        List<String> labels = generateTimeLabels(start, end, 12);
+
+        String cpuQuery = String.format(Locale.US,
+                "max(sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[%s])) * 100)",
+                envLabel, appFilter, nodeFilter(nodeName), rateInterval);
+        String memQuery = String.format(Locale.US,
+                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or vector(0)",
+                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName));
+        String diskQuery = String.format(Locale.US,
+                "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s])) or vector(0)",
+                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName), envLabel, envLabel);
+
+        List<ChartData.Series> datasets = List.of(
+                ChartData.Series.builder()
+                        .label("CPU %")
+                        .data(fetchRangeMetric(cpuQuery, start, end, step, 12))
+                        .color("#3b82f6")
+                        .fill(false)
+                        .build(),
+                ChartData.Series.builder()
+                        .label("Memory %")
+                        .data(fetchRangeMetric(memQuery, start, end, step, 12))
+                        .color("#10b981")
+                        .fill(false)
+                        .build(),
+                ChartData.Series.builder()
+                        .label("Disk %")
+                        .data(fetchRangeMetric(diskQuery, start, end, step, 12))
+                        .color("#f59e0b")
+                        .fill(false)
+                        .build()
+        );
+
+        return ChartData.builder()
+                .labels(labels)
+                .datasets(datasets)
+                .build();
+    }
+
     private List<ChartData.Series> fetchMultiRangeMetric(String query, String labelSuffix, Instant start, Instant end, String step, int count) {
         List<ChartData.Series> seriesList = new ArrayList<>();
         Map<String, Object> rangeData = prometheusClient.queryRange(query, String.valueOf(start.getEpochSecond()), String.valueOf(end.getEpochSecond()), step);
@@ -285,14 +334,15 @@ public class LogAnalyticsService {
                         }
                     }
 
+                    boolean isErrorSeries = labelSuffix.toLowerCase().contains("error");
                     seriesList.add(ChartData.Series.builder()
                             .label(serviceName + " " + labelSuffix)
                             .data(java.util.Arrays.asList(dataPoints))
-                            .color(palette[colorIdx % palette.length])
-                            .fill(false)
+                            .color(isErrorSeries ? "#ef4444" : palette[colorIdx % palette.length])
+                            .fill(isErrorSeries)
                             .build());
                     
-                    colorIdx++;
+                    if (!isErrorSeries) colorIdx++;
                 }
             }
         } catch (Exception e) {
@@ -543,22 +593,62 @@ public class LogAnalyticsService {
         }
     }
 
+    private List<Application> buildRelatedApps(Long environmentId, String effectiveServiceName, String requestServiceName) {
+        String filterName = (requestServiceName != null && !requestServiceName.isBlank())
+                ? requestServiceName
+                : effectiveServiceName;
+
+        if (filterName == null || filterName.isBlank()) {
+            return applicationRepository.findByEnvironmentId(environmentId);
+        }
+
+        List<Application> related = new ArrayList<>();
+        applicationRepository.findByNameIgnoreCaseAndEnvironmentId(filterName, environmentId).ifPresent(related::add);
+        if (related.isEmpty()) {
+            applicationRepository.findByName(filterName).ifPresent(related::add);
+        }
+
+        if (!related.isEmpty()) {
+            Application target = related.get(0);
+            if (target.getServiceNameKeyword() != null) {
+                applicationRepository.findAllByServiceNameKeyword(target.getServiceNameKeyword()).stream()
+                        .filter(a -> a.getEnvironment() != null && environmentId.equals(a.getEnvironment().getId()))
+                        .filter(a -> !related.contains(a))
+                        .forEach(related::add);
+            }
+            return related;
+        }
+
+        return applicationRepository.findAllByServiceNameKeyword(filterName).stream()
+                .filter(a -> a.getEnvironment() != null && environmentId.equals(a.getEnvironment().getId()))
+                .collect(Collectors.toList());
+    }
+
     private List<ResourcePressure> fetchResourcePressure(String envLabel, List<Application> apps, String nodeName, Instant end) {
         List<ResourcePressure> pressure = new ArrayList<>();
-        
+        String nodePart = nodeFilter(nodeName);
+
         for (Application app : apps) {
             String serviceName = app.getServiceNameKeyword();
             if (serviceName == null) continue;
-            
-            Double mem = prometheusClient.getContainerMemoryUsagePercentAtCrash(serviceName, envLabel, end);
-            Double disk = prometheusClient.getDiskUsagePercentAtCrash(serviceName, envLabel, end);
-            Double cpu = prometheusClient.queryMetric(String.format(Locale.US, "sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[5m])) * 100", envLabel, serviceName, nodeFilter(nodeName)), end);
-            
+
+            Double cpu = prometheusClient.queryMetric(String.format(Locale.US,
+                    "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s])",
+                    envLabel, serviceName, nodePart), end);
+
+            Double mem = prometheusClient.queryMetric(String.format(Locale.US,
+                    "avg_over_time((max(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100))[2m:15s]) or " +
+                    "avg_over_time((max(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100))[2m:15s])",
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart), end);
+
+            Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
+
             String callout = null;
             if (disk > 90) callout = "Disk pressure critical";
             else if (mem > 85) callout = "Memory pressure detected";
             else if (cpu > 80) callout = "CPU throttling likely";
-            
+
             pressure.add(ResourcePressure.builder()
                     .containerName(app.getName())
                     .memoryUsage(mem > 0 ? mem : 0.0)
@@ -567,8 +657,25 @@ public class LogAnalyticsService {
                     .callout(callout)
                     .build());
         }
-        
+
         return pressure;
+    }
+
+    private Double fetchAvgDiskUsagePercent(String serviceName, String envLabel, String nodePart, Instant end) {
+        String containerQuery = String.format(Locale.US,
+                "avg_over_time((max(((container_fs_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_fs_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100))[2m:15s]) or " +
+                "avg_over_time((max(((container_fs_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_fs_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100))[2m:15s])",
+                serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
+                serviceName, envLabel, nodePart, serviceName, envLabel, nodePart);
+        Double containerDisk = prometheusClient.queryMetric(containerQuery, end);
+        if (containerDisk > 0.0) {
+            return containerDisk;
+        }
+
+        String nodeQuery = String.format(Locale.US,
+                "avg_over_time((max((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100))[2m:15s])",
+                envLabel, envLabel);
+        return prometheusClient.queryMetric(nodeQuery, end);
     }
 
     private List<LogEventDTO> fetchLiveLogs(String envLabel, String appFilter, String nodeName, Instant start, Instant end) {

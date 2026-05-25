@@ -47,6 +47,7 @@ ChartJS.register(
 interface AnalyticsData {
   summaryCards: any[];
   trafficCorrelation: any;
+  resourceUsage: any;
   probeSuccess: any;
   topErrors: any[];
   resourcePressure: any[];
@@ -69,6 +70,22 @@ const AnalysePage: React.FC = () => {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [logTab, setLogTab] = useState('All');
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
+
+  // Find the currently selected ticket object for display
+  const selectedTicket = useMemo(() => {
+    if (!ticketContext) return null;
+    return tickets.find(t => t.id === parseInt(ticketContext)) || null;
+  }, [ticketContext, tickets]);
+
+  const incidentWindow = useMemo(() => {
+    if (!selectedTicket?.createdAt) return null;
+    const end = new Date(selectedTicket.createdAt);
+    const rangeHours: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
+    const hours = rangeHours[timeRange] ?? 6;
+    const start = new Date(end.getTime() - hours * 60 * 60 * 1000);
+    return { start, end };
+  }, [selectedTicket, timeRange]);
 
   const filteredLogs = useMemo(() => {
     if (!data?.liveLogs) return [];
@@ -98,6 +115,7 @@ const AnalysePage: React.FC = () => {
         ticketContext ? parseInt(ticketContext) : undefined
       );
       setData(response.data);
+      setLastFetchedAt(new Date());
     } catch (error) {
       console.error('Failed to fetch analytics data', error);
     } finally {
@@ -107,6 +125,11 @@ const AnalysePage: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    // When a ticket is selected, we are doing historical root cause analysis — do NOT poll.
+    // Live polling would be misleading; the data is frozen up to incident creation.
+    if (ticketContext) {
+      return; // No interval, no auto-refresh
+    }
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [selectedEnvironment, timeRange, serviceContext, nodeContext, ticketContext]);
@@ -201,6 +224,28 @@ const AnalysePage: React.FC = () => {
       default: return 'text-primary';
     }
   };
+
+  const ERROR_SERIES_COLOR = '#ef4444';
+
+  const isErrorSeriesLabel = (label: string) =>
+    /errors?\/min/i.test(label) || /error\s*rate/i.test(label);
+
+  const resolveSeriesColor = (ds: { label: string; color: string }) =>
+    isErrorSeriesLabel(ds.label) ? ERROR_SERIES_COLOR : ds.color;
+
+  const mapChartDatasets = (datasets: any[]) =>
+    datasets.map((ds: any) => {
+      const color = resolveSeriesColor(ds);
+      return {
+        ...ds,
+        borderColor: color,
+        backgroundColor: ds.fill ? `${color}20` : 'transparent',
+        borderDash: ds.dashed ? [5, 5] : [],
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      };
+    });
 
 
   if (!selectedEnvironment) {
@@ -298,12 +343,16 @@ const AnalysePage: React.FC = () => {
 
         <div className="flex items-center gap-4">
           <div className="text-right hidden sm:block">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Last Updated</p>
-            <p className="text-xs font-mono font-black">{new Date().toLocaleTimeString()}</p>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+              {ticketContext ? 'Snapshot Taken' : 'Last Updated'}
+            </p>
+            <p className="text-xs font-mono font-black">
+              {lastFetchedAt ? lastFetchedAt.toLocaleTimeString() : '—'}
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={fetchData} className="h-10 rounded-xl gap-2">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {ticketContext ? 'Re-analyze' : 'Refresh'}
           </Button>
         </div>
       </div>
@@ -318,7 +367,9 @@ const AnalysePage: React.FC = () => {
                 <Badge variant="outline" className="text-[9px] uppercase tracking-tighter opacity-60">{card.source}</Badge>
               </div>
               <div className="flex items-end justify-between gap-2">
-                <span className={`text-2xl font-black tracking-tight ${getStatusColor(card.status)}`}>{card.value}</span>
+                <span className={`text-2xl font-black tracking-tight ${
+                  card.label === 'Error rate' ? 'text-destructive' : getStatusColor(card.status)
+                }`}>{card.value}</span>
                 <div className={`flex items-center gap-1 text-[10px] font-bold ${card.delta.startsWith('+') ? 'text-emerald-500' : 'text-destructive'}`}>
                   {card.delta.startsWith('+') ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                   {card.delta}
@@ -329,6 +380,27 @@ const AnalysePage: React.FC = () => {
         ))}
       </div>
 
+      {/* Pre-Incident Analysis Banner */}
+      {ticketContext && selectedTicket && (
+        <div className="flex items-start gap-4 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl">
+          <div className="mt-0.5 w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+            <Brain className="w-4 h-4 text-amber-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black text-amber-500 uppercase tracking-widest">Historical Pre-Incident Snapshot</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              All metrics below show the selected range <span className="font-bold text-foreground">ending at incident creation</span> (nothing after).
+              Auto-refresh is disabled.
+            </p>
+            {incidentWindow && (
+              <p className="text-[10px] font-mono text-amber-500/70 mt-1.5">
+                Window: {incidentWindow.start.toLocaleString()} → {incidentWindow.end.toLocaleString()} (incident created)
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* 3. Traffic & Error Correlation Chart */}
         <div className="xl:col-span-2 space-y-8">
@@ -337,9 +409,16 @@ const AnalysePage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-black tracking-tight">Traffic & Error Correlation</CardTitle>
-                  <CardDescription className="text-xs">Correlating req/s with log error rates and resource usage</CardDescription>
+                  <CardDescription className="text-xs">
+                    {ticketContext
+                      ? `Historical data — ${timeRange} before incident creation`
+                      : 'Correlating req/s with log error rates and resource usage'}
+                  </CardDescription>
                 </div>
-                <Badge className="bg-primary/10 text-primary border-primary/20">LIVE</Badge>
+                {ticketContext
+                  ? <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">HISTORICAL</Badge>
+                  : <Badge className="bg-primary/10 text-primary border-primary/20">LIVE</Badge>
+                }
               </div>
             </CardHeader>
             <CardContent className="p-6">
@@ -348,22 +427,73 @@ const AnalysePage: React.FC = () => {
                   <Line 
                     data={{
                       labels: data.trafficCorrelation.labels,
-                      datasets: data.trafficCorrelation.datasets.map((ds: any) => ({
-                        ...ds,
-                        borderColor: ds.color,
-                        backgroundColor: ds.fill ? `${ds.color}20` : 'transparent',
-                        borderDash: ds.dashed ? [5, 5] : [],
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                      }))
+                      datasets: mapChartDatasets(data.trafficCorrelation.datasets),
                     }} 
                     options={chartOptions} 
                   />
                 )}
               </div>
               <div className="mt-6 flex flex-wrap gap-6 justify-center">
-                {data?.trafficCorrelation.datasets.map((ds: any, i: number) => (
+                {data?.trafficCorrelation.datasets.map((ds: any, i: number) => {
+                  const color = resolveSeriesColor(ds);
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }}></div>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                        isErrorSeriesLabel(ds.label) ? 'text-destructive' : 'text-muted-foreground'
+                      }`}>{ds.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Resource usage: CPU, memory, disk */}
+          <Card className="bg-background border-border overflow-hidden">
+            <CardHeader className="border-b border-border bg-secondary/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
+                    <Cpu className="w-5 h-5 text-primary" />
+                    Resource Usage
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    {ticketContext
+                      ? 'CPU, memory, and disk utilization before the incident'
+                      : 'Container CPU, memory, and disk utilization over time'}
+                  </CardDescription>
+                </div>
+                {ticketContext
+                  ? <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20">HISTORICAL</Badge>
+                  : <Badge className="bg-primary/10 text-primary border-primary/20">LIVE</Badge>
+                }
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="h-[300px] w-full">
+                {data?.resourceUsage && (
+                  <Line
+                    data={{
+                      labels: data.resourceUsage.labels,
+                      datasets: mapChartDatasets(data.resourceUsage.datasets),
+                    }}
+                    options={{
+                      ...chartOptions,
+                      scales: {
+                        ...chartOptions.scales,
+                        y: {
+                          ...chartOptions.scales?.y,
+                          min: 0,
+                          max: 100,
+                        },
+                      },
+                    }}
+                  />
+                )}
+              </div>
+              <div className="mt-6 flex flex-wrap gap-6 justify-center">
+                {data?.resourceUsage?.datasets.map((ds: any, i: number) => (
                   <div key={i} className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: ds.color }}></div>
                     <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{ds.label}</span>
@@ -376,10 +506,16 @@ const AnalysePage: React.FC = () => {
           {/* 4. Blackbox Probe Success Chart */}
           <Card className="bg-background border-border overflow-hidden">
             <CardHeader className="border-b border-border bg-secondary/10">
-              <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
-                <Globe className="w-5 h-5 text-teal-500" />
-                Endpoint Reachability (SLO)
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-teal-500" />
+                  Endpoint Reachability (SLO)
+                </CardTitle>
+                {ticketContext
+                  ? <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[9px]">PRE-INCIDENT</Badge>
+                  : <Badge className="bg-teal-500/10 text-teal-500 border-teal-500/20 text-[9px]">LIVE</Badge>
+                }
+              </div>
             </CardHeader>
             <CardContent className="p-6">
               <div className="h-[180px] w-full">
@@ -500,6 +636,13 @@ const AnalysePage: React.FC = () => {
                 <Cpu className="w-5 h-5 text-primary" />
                 Resource Pressure
               </CardTitle>
+              <CardDescription className="text-xs">
+                {ticketContext
+                  ? '2-min average CPU, memory, and disk for services tied to this incident'
+                  : serviceContext
+                    ? `2-min average for ${serviceContext} and related services`
+                    : '2-min average CPU, memory, and disk across environment services'}
+              </CardDescription>
             </CardHeader>
             <CardContent className="p-4 space-y-6">
               {data?.resourcePressure.map((container, i) => (
@@ -558,7 +701,11 @@ const AnalysePage: React.FC = () => {
         <CardHeader className="border-b border-border bg-secondary/5 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg font-black tracking-tight">Top Errors by Endpoint</CardTitle>
-            <CardDescription className="text-xs">Aggregated error patterns ranked by frequency</CardDescription>
+            <CardDescription className="text-xs">
+              {ticketContext
+                ? `Error patterns from ${timeRange} before incident creation`
+                : 'Aggregated error patterns ranked by frequency'}
+            </CardDescription>
           </div>
           <Button variant="outline" size="sm" className="gap-2">
             Ask AI Assistant <Brain className="w-4 h-4" />
@@ -622,9 +769,13 @@ const AnalysePage: React.FC = () => {
             <div>
               <CardTitle className="text-lg font-black tracking-tight flex items-center gap-2">
                 <Zap className="w-5 h-5 text-primary fill-primary" />
-                Live Log Stream
+                {ticketContext ? 'Pre-Incident Log Stream' : 'Live Log Stream'}
               </CardTitle>
-              <CardDescription className="text-xs">Real-time event synthesis from all services</CardDescription>
+              <CardDescription className="text-xs">
+                {ticketContext
+                  ? `Logs from ${timeRange} before incident creation`
+                  : 'Real-time event synthesis from all services'}
+              </CardDescription>
             </div>
             <div className="flex gap-1 bg-secondary/50 p-1 rounded-xl border border-border">
               {['All', 'Errors', 'Warnings', 'Info'].map((tab) => (
