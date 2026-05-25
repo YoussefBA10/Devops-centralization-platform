@@ -28,6 +28,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEnvironment } from '../context/EnvironmentContext';
+import { useCluster } from '../context/ClusterContext';
 import { getAnalyticsDashboard } from '../services/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
@@ -58,6 +59,7 @@ interface AnalyticsData {
 
 const AnalysePage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
+  const { selectedCluster } = useCluster();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
@@ -136,16 +138,22 @@ const AnalysePage: React.FC = () => {
 
   useEffect(() => {
     const fetchTickets = async () => {
-      if (!selectedEnvironment) return;
       try {
-        const response = await api.get<Ticket[]>(`/tickets?environmentId=${selectedEnvironment.id}`);
+        // When "All Clusters" is selected (selectedCluster === null), load tickets
+        // from every environment so the incident dropdown is complete.
+        const url = selectedCluster === null
+          ? '/tickets?clusters=all'
+          : selectedEnvironment
+            ? `/tickets?environmentId=${selectedEnvironment.id}`
+            : '/tickets?clusters=all';
+        const response = await api.get<Ticket[]>(url);
         setTickets(response.data);
       } catch (err) {
         console.error('Failed to fetch tickets', err);
       }
     };
     fetchTickets();
-  }, [selectedEnvironment]);
+  }, [selectedEnvironment, selectedCluster]);
 
   const handleTicketSelect = (ticketId: string) => {
     if (!ticketId) {
