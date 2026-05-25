@@ -315,9 +315,10 @@ public class LogAnalyticsService {
         String memQuery = String.format(Locale.US,
                 "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or vector(0)",
                 envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName));
+        String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(String.format(Locale.US, "environment=\"%s\"", envLabel));
         String diskQuery = String.format(Locale.US,
-                "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s])) or vector(0)",
-                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName), envLabel, envLabel);
+                "max(max_over_time(((container_fs_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_fs_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s])) or max(max_over_time((%s)[2m:15s])) or vector(0)",
+                envLabel, appFilter, nodeFilter(nodeName), envLabel, appFilter, nodeFilter(nodeName), nodeDiskPct);
 
         List<ChartData.Series> datasets = List.of(
                 ChartData.Series.builder()
@@ -718,9 +719,8 @@ public class LogAnalyticsService {
             return containerDisk;
         }
 
-        String nodeQuery = String.format(Locale.US,
-                "avg_over_time((max((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100))[2m:15s])",
-                envLabel, envLabel);
+        String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(String.format(Locale.US, "environment=\"%s\"", envLabel));
+        String nodeQuery = String.format(Locale.US, "avg_over_time((max(%s))[2m:15s])", nodeDiskPct);
         return prometheusClient.queryMetric(nodeQuery, end);
     }
 

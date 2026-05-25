@@ -166,14 +166,19 @@ public class PrometheusClient {
         return queryMetric(query);
     }
 
+    /**
+     * Node disk used % — prefers /data partition, falls back to / when /data is absent.
+     * @param envSelector Prometheus label selector fragment, e.g. {@code environment="prod"}
+     */
+    public String nodeDiskUsedPercentExpr(String envSelector) {
+        return String.format(Locale.US,
+                "(1 - ((node_filesystem_avail_bytes{%s, mountpoint=\"/data\"} or ignoring(mountpoint, device, fstype) node_filesystem_avail_bytes{%s, mountpoint=\"/\"}) / " +
+                "(node_filesystem_size_bytes{%s, mountpoint=\"/data\"} or ignoring(mountpoint, device, fstype) node_filesystem_size_bytes{%s, mountpoint=\"/\"}))) * 100",
+                envSelector, envSelector, envSelector, envSelector);
+    }
+
     public Double getDiskUsagePercent(String envLabel) {
-        String query = String.format(
-            "avg(1 - (" +
-            "(node_filesystem_avail_bytes{mountpoint=\"/data\", environment=\"%s\"} or ignoring(mountpoint, device, fstype) node_filesystem_avail_bytes{mountpoint=\"/\", environment=\"%s\"}) / " +
-            "(node_filesystem_size_bytes{mountpoint=\"/data\", environment=\"%s\"} or ignoring(mountpoint, device, fstype) node_filesystem_size_bytes{mountpoint=\"/\", environment=\"%s\"})" +
-            ")) * 100", 
-            envLabel, envLabel, envLabel, envLabel
-        );
+        String query = String.format("avg(%s)", nodeDiskUsedPercentExpr("environment=\"" + envLabel + "\""));
         return queryMetric(query);
     }
 
@@ -297,11 +302,10 @@ public class PrometheusClient {
             return containerDisk;
         }
 
-        // 2. Check node-level filesystem pressure for this environment
+        // 2. Node-level: prefer /data partition, fallback to /
         String nodeQuery = String.format(
-            "max(max_over_time(((1 - (node_filesystem_avail_bytes{mountpoint=~\"/|/data\", environment=\"%s\"} / node_filesystem_size_bytes{mountpoint=~\"/|/data\", environment=\"%s\"})) * 100)[2m:15s]))",
-            envFilter, envFilter
-        );
+            "max(max_over_time((%s)[2m:15s]))",
+            nodeDiskUsedPercentExpr("environment=\"" + envFilter + "\""));
         return queryMetric(nodeQuery, end);
     }
 
