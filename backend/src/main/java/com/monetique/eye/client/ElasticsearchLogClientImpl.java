@@ -96,6 +96,8 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                         b.should(s -> s.term(t -> t.field("environment.keyword").value(env)));
                     }
                     b.should(s -> s.term(t -> t.field("environment.keyword").value("unknown")));
+                    // Allow Loki logs through since they often lack the strict environment label
+                    b.should(s -> s.term(t -> t.field("ingest_source.keyword").value("loki")));
                     return b.minimumShouldMatch("1");
                 }));
             }
