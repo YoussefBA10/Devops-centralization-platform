@@ -320,7 +320,7 @@ const TicketsPage: React.FC = () => {
                <div className="space-y-4">
                  <div>
                    <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground block mb-2">Description</label>
-                   <div className="bg-secondary/50 p-4 rounded-md text-sm whitespace-pre-wrap">
+                   <div className="bg-secondary/50 p-4 rounded-md text-sm whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto">
                      {viewingTicket.description || 'No description provided.'}
                    </div>
                  </div>
