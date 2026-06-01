@@ -64,10 +64,11 @@ public class EnvironmentController {
         if (label == null || label.isEmpty()) {
             return label;
         }
+        String val = label;
         if (label.contains("=")) {
-            return label.substring(label.indexOf('=') + 1);
+            val = label.substring(label.indexOf('=') + 1);
         }
-        return label;
+        return val.replace("\"", "").trim();
     }
 
     @GetMapping

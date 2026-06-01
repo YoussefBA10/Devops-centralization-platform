@@ -129,6 +129,9 @@ public class DeploymentService {
             // 3. Deploy based on mode
             String rawLabel = environment.getPrometheusLabel();
             String envLabel = (rawLabel != null && rawLabel.contains("=")) ? rawLabel.substring(rawLabel.indexOf('=') + 1) : rawLabel;
+            if (envLabel != null) {
+                envLabel = envLabel.replace("\"", "").trim();
+            }
             if (envLabel == null || envLabel.isEmpty()) {
                 envLabel = environment.getSafeName();
             }
@@ -949,6 +952,9 @@ public class DeploymentService {
             String envLabel = (rawLabel != null && rawLabel.contains("="))
                     ? rawLabel.substring(rawLabel.indexOf('=') + 1)
                     : rawLabel;
+            if (envLabel != null) {
+                envLabel = envLabel.replace("\"", "").trim();
+            }
             if (envLabel == null || envLabel.isEmpty()) {
                 envLabel = environment.getSafeName();
             }
@@ -965,7 +971,7 @@ public class DeploymentService {
             // 2. Update blackbox_targets.yml (Probes)
             updateTargetFile(
                 new File(gitopsPath + "/vmpipe/prometheus/file_sd/blackbox_targets.yml"),
-                generateBlackboxTargets(cleanIp, centralIp, envLabel, nodeName)
+                generateBlackboxTargets(cleanIp, centralIp, envLabel, nodeName, nodeId)
             );
 
             log.info("Updated Prometheus targets for node {}", cleanIp);
@@ -1031,7 +1037,7 @@ public class DeploymentService {
         return list;
     }
 
-    private List<Map<String, Object>> generateBlackboxTargets(String ip, String centralIp, String envLabel, String nodeName) {
+    private List<Map<String, Object>> generateBlackboxTargets(String ip, String centralIp, String envLabel, String nodeName, Long nodeId) {
         List<Map<String, Object>> list = new ArrayList<>();
         
         // 1. Node Health (ICMP)
@@ -1041,11 +1047,25 @@ public class DeploymentService {
             nodeTarget = "http://backend:8880/actuator/health";
             nodeModule = "http_2xx";
         }
-        list.add(createTarget(nodeTarget, Map.of("job", "blackbox", "environment", envLabel, "nodename", nodeName, "probe_module", nodeModule, "target_type", "node")));
+        list.add(createTarget(nodeTarget, Map.of(
+            "job", "blackbox",
+            "environment", envLabel,
+            "nodename", nodeName,
+            "probe_module", nodeModule,
+            "target_type", "node",
+            "node_id", String.valueOf(nodeId)
+        )));
 
         // 2. Frontend Health (HTTP)
         String frontendTarget = "http://" + (ip.equals(centralIp) ? "frontend" : ip) + ":80";
-        list.add(createTarget(frontendTarget, Map.of("job", "blackbox", "environment", envLabel, "nodename", nodeName, "probe_module", "http_2xx", "target_type", "frontend")));
+        list.add(createTarget(frontendTarget, Map.of(
+            "job", "blackbox",
+            "environment", envLabel,
+            "nodename", nodeName,
+            "probe_module", "http_2xx",
+            "target_type", "frontend",
+            "node_id", String.valueOf(nodeId)
+        )));
         
         return list;
     }

@@ -27,7 +27,18 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getPrometheusLabel() : ".*";
+        String envLabel = ".*";
+        if (app.getEnvironment() != null) {
+            String raw = app.getEnvironment().getPrometheusLabel();
+            if (raw != null) {
+                if (raw.contains("=")) {
+                    raw = raw.substring(raw.indexOf('=') + 1);
+                }
+                envLabel = raw.replace("\"", "").trim();
+            } else {
+                envLabel = app.getEnvironment().getSafeName();
+            }
+        }
         String serviceKeyword = app.getServiceNameKeyword();
 
         Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(envLabel, serviceKeyword, null, query, severity, from, to, pageable);
@@ -52,7 +63,18 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getPrometheusLabel() : ".*";
+        String envLabel = ".*";
+        if (app.getEnvironment() != null) {
+            String raw = app.getEnvironment().getPrometheusLabel();
+            if (raw != null) {
+                if (raw.contains("=")) {
+                    raw = raw.substring(raw.indexOf('=') + 1);
+                }
+                envLabel = raw.replace("\"", "").trim();
+            } else {
+                envLabel = app.getEnvironment().getSafeName();
+            }
+        }
         String serviceKeyword = app.getServiceNameKeyword();
 
         // Fetch top 1000 logs for export

@@ -770,6 +770,10 @@ public class InfrastructureService {
         
         String label = env.getPrometheusLabel();
         if (label != null && !label.isEmpty()) {
+            if (label.contains("=")) {
+                label = label.substring(label.indexOf('=') + 1);
+            }
+            label = label.replace("\"", "").trim();
             variants.add(label);
         }
         
@@ -823,7 +827,11 @@ public class InfrastructureService {
                 .orElseThrow(() -> new RuntimeException("Environment not found"));
 
         String rawLabel = env.getPrometheusLabel();
-        final String envLabel = (rawLabel == null || rawLabel.isEmpty()) ? env.getSafeName() : rawLabel;
+        String tempLabel = (rawLabel == null || rawLabel.isEmpty()) ? env.getSafeName() : rawLabel;
+        if (tempLabel.contains("=")) {
+            tempLabel = tempLabel.substring(tempLabel.indexOf('=') + 1);
+        }
+        final String envLabel = tempLabel.replace("\"", "").trim();
         List<Map<String, Object>> rawAlerts = prometheusClient.getActiveAlerts();
 
         return rawAlerts.stream()

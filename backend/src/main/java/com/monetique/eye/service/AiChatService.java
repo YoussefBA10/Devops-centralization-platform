@@ -144,7 +144,14 @@ public class AiChatService {
         List<Environment> environments = environmentRepository.findAll();
         sb.append("INFRASTRUCTURE STATUS & METRICS:\n");
         for (Environment env : environments) {
-            String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+            String rawLabel = env.getPrometheusLabel();
+            String envLabel = env.getName().toLowerCase();
+            if (rawLabel != null) {
+                if (rawLabel.contains("=")) {
+                    rawLabel = rawLabel.substring(rawLabel.indexOf('=') + 1);
+                }
+                envLabel = rawLabel.replace("\"", "").trim();
+            }
             Double cpu = prometheusClient.getCpuUsage(envLabel);
             Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
             

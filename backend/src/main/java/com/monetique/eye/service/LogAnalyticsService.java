@@ -484,22 +484,29 @@ public class LogAnalyticsService {
                 .source("prometheus")
                 .build());
 
-        // 4. Memory — backend containers on node, or host RAM when no containers (worker nodes)
+        // 4. Memory — backend containers on node, or host RAM when no containers (e.g. standalone smgs nodes)
         String env = envSelector(appEnvLabel);
         String host = nodeHostSelector(nodeFilters);
         String containerMemQuery = String.format(Locale.US,
                 "sum(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
                 "/ clamp_min(scalar(%s), 1) * 100",
                 containerEnvLabel, appFilter, cadvisorNode, nodeMemTotal);
-        String memQuery = containerMemQuery + " or vector(0)";
+        // Always include an env-scoped node_memory fallback so non-containerised environments
+        // (e.g. smgs standalone) show real node_exporter RAM even when no specific node is selected.
+        String nodeMemFallback = String.format(Locale.US,
+                "(100 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s}) * 100)",
+                env, env);
+        String memQuery = containerMemQuery + " or " + nodeMemFallback + " or vector(0)";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             memQuery = String.format(Locale.US,
                     "(%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or vector(0)",
                     containerMemQuery, env, host, env, host);
         }
         Double memUsage = prometheusClient.queryMetric(memQuery, end);
-        String memLabel = nodeFilters.isScoped() && !host.isEmpty() ? "Node memory" : "Backend memory";
-        String memSource = nodeFilters.isScoped() && !host.isEmpty() ? "node_exporter" : "cadvisor";
+        // Source label: scoped-to-host → node_exporter; otherwise "prometheus" since either cadvisor or
+        // node_exporter may have won the `or` chain (e.g. non-containerised smgs nodes).
+        String memLabel = nodeFilters.isScoped() && !host.isEmpty() ? "Node memory" : "Memory usage";
+        String memSource = nodeFilters.isScoped() && !host.isEmpty() ? "node_exporter" : "prometheus";
         cards.add(MetricCard.builder()
                 .label(memLabel)
                 .value(String.format("%.1f%%", memUsage))
@@ -588,7 +595,11 @@ public class LogAnalyticsService {
         String containerCpu = String.format(Locale.US,
                 "max(sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[%s])) * 100)",
                 envLabel, appFilter, cadvisorNode, rateInterval);
-        String cpuQuery = containerCpu;
+        // Always include env-scoped host CPU fallback for non-containerised environments (e.g. smgs standalone).
+        String hostCpuFallback = String.format(Locale.US,
+                "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\", %s}[%s])) * 100)",
+                env, rateInterval);
+        String cpuQuery = String.format(Locale.US, "(%s) or (%s)", containerCpu, hostCpuFallback);
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             String hostCpu = String.format(Locale.US,
                     "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", %s%s}[%s])) * 100)",
@@ -601,7 +612,11 @@ public class LogAnalyticsService {
                 "max(max_over_time(max(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s})[2m:15s]) " +
                 "/ clamp_min(scalar(%s), 1) * 100",
                 envLabel, appFilter, cadvisorNode, nodeMemTotal);
-        String memQuery = containerMem + " or vector(0)";
+        // Always include env-scoped node_memory fallback for non-containerised environments (e.g. smgs standalone).
+        String nodeMemFallbackRange = String.format(Locale.US,
+                "(1 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s})) * 100",
+                env, env);
+        String memQuery = containerMem + " or " + nodeMemFallbackRange + " or vector(0)";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             String hostMem = String.format(Locale.US,
                     "(1 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s})) * 100",
@@ -1015,8 +1030,19 @@ public class LogAnalyticsService {
                     .build());
         }
 
-        if (pressure.isEmpty() && resolvedNode != null && nodeFilters.isScoped()) {
-            pressure.add(fetchHostResourcePressure(envLabel, nodeFilters, resolvedNode, end));
+        // Always add a host-level entry when no container pressure was found.
+        // For unscoped queries (no specific node), use empty NodeFilterParts so the query filters
+        // by environment only — this ensures non-containerised envs like smgs show real node data.
+        if (pressure.isEmpty()) {
+            if (resolvedNode != null && nodeFilters.isScoped()) {
+                pressure.add(fetchHostResourcePressure(envLabel, nodeFilters, resolvedNode, end));
+            } else {
+                // Env-wide fallback: aggregate host metrics across the whole environment.
+                ResourcePressure envPressure = fetchHostResourcePressure(envLabel, NodeFilterParts.empty(), null, end);
+                if (envPressure.getCpuUsage() > 0 || envPressure.getMemoryUsage() > 0 || envPressure.getDiskUsage() > 0) {
+                    pressure.add(envPressure);
+                }
+            }
         }
 
         return pressure;
@@ -1028,6 +1054,8 @@ public class LogAnalyticsService {
         if (host.isEmpty()) {
             host = nodeFilters.cadvisor() + nodeFilters.nodeId();
         }
+        // When host is still empty (unscoped env-level fallback), disk is queried via env selector only.
+        String diskHostPart = host;
 
         Double cpu = prometheusClient.queryMetric(String.format(Locale.US,
                 "avg_over_time((100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", %s%s}[1m])) * 100))[2m:15s])",
@@ -1038,19 +1066,23 @@ public class LogAnalyticsService {
                 env, host, env, host), end);
 
         Double disk = 0.0;
-        if (!host.isEmpty()) {
-            String diskSelector = prometheusDiskEnvSelector(envLabel, host);
-            String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(diskSelector);
-            disk = prometheusClient.queryMetric(String.format(Locale.US, "avg_over_time((%s)[2m:15s])", nodeDiskPct), end);
-        }
+        String diskHost = diskHostPart.isEmpty() ? "" : diskHostPart;
+        String diskSelector = prometheusDiskEnvSelector(envLabel, diskHost);
+        String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(diskSelector);
+        disk = prometheusClient.queryMetric(String.format(Locale.US, "avg_over_time((%s)[2m:15s])", nodeDiskPct), end);
 
         String callout = null;
         if (disk > 90) callout = "Disk pressure critical";
         else if (mem > 85) callout = "Memory pressure detected";
         else if (cpu > 80) callout = "CPU throttling likely";
 
+        // resolvedNode may be null for env-wide (unscoped) fallback queries
+        String displayName = (resolvedNode != null)
+                ? resolvedNode.nodeName() + " (host)"
+                : envLabel + " (env average)";
+
         return ResourcePressure.builder()
-                .containerName(resolvedNode.nodeName() + " (host)")
+                .containerName(displayName)
                 .memoryUsage(mem > 0 ? mem : 0.0)
                 .cpuUsage(cpu > 0 ? cpu : 0.0)
                 .diskUsage(disk > 0 ? disk : 0.0)

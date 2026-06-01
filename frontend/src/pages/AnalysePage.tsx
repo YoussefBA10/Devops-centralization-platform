@@ -157,7 +157,8 @@ const AnalysePage: React.FC = () => {
             ? `/tickets?environmentId=${selectedEnvironment.id}`
             : '/tickets?clusters=all';
         const response = await api.get<Ticket[]>(url);
-        setTickets(response.data);
+        const applicationTickets = response.data.filter(ticket => ticket.application != null);
+        setTickets(applicationTickets);
       } catch (err) {
         console.error('Failed to fetch tickets', err);
       }
