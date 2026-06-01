@@ -81,6 +81,11 @@ public class LogService {
         }
         String serviceKeyword = app.getServiceNameKeyword();
 
+        // Include target node in environment filter for remote node apps
+        if (app.getTargetNode() != null && !app.getTargetNode().isBlank()) {
+            envLabel += "," + app.getTargetNode();
+        }
+
         // Fetch top 1000 logs for export
         org.springframework.data.domain.Pageable exportPageable = org.springframework.data.domain.PageRequest.of(0, 1000);
         Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(envLabel, serviceKeyword, null, query, severity, from, to, exportPageable);

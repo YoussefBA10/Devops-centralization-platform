@@ -51,8 +51,12 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
     private Page<LogEventDTO> executeSearch(String displayName, String keywordName, String nodeName, String queryStr, String severity, Instant from,
             Instant to, Pageable pageable) {
         try {
+            log.info("ES Query params: displayName='{}', keywordName='{}', nodeName='{}', severity='{}', from={}, to={}",
+                    displayName, keywordName, nodeName, severity, from, to);
+
             BoolQuery.Builder boolQuery = new BoolQuery.Builder();
 
+            // Node filter: soft filter using should (not must) so it doesn't exclude docs missing these fields
             if (nodeName != null && !nodeName.isBlank() && !nodeName.equals(".*")) {
                 java.util.Set<String> nodeTerms = new java.util.LinkedHashSet<>();
                 nodeTerms.add(nodeName);
@@ -63,25 +67,33 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                         nodeTerms.add(withoutPrefix.replace('-', '.'));
                     }
                 }
-                boolQuery.must(m -> m.bool(b -> {
+                boolQuery.should(m -> m.bool(b -> {
                     for (String term : nodeTerms) {
                         b.should(s -> s.term(t -> t.field("agent.hostname.keyword").value(term)));
                         b.should(s -> s.term(t -> t.field("host.name.keyword").value(term)));
                         b.should(s -> s.wildcard(w -> w.field("nodename.keyword").value("*" + term + "*")));
                         b.should(s -> s.wildcard(w -> w.field("node.keyword").value("*" + term + "*")));
+                        // Also match via environment field (logstash fallback sets environment = node name)
+                        b.should(s -> s.term(t -> t.field("environment.keyword").value(term.toLowerCase())));
                     }
                     return b.minimumShouldMatch("1");
                 }));
             }
 
-            // 1. Environment Filter (Mandatory if provided, but allows unknown for remote nodes without env labels)
+            // 1. Environment Filter — handles both comma-separated (LogService) and pipe-separated (LogAnalyticsService) values
             if (displayName != null && !displayName.equals(".*")) {
-                String[] envs = displayName.split(",");
+                // Split on both comma and pipe to handle all callers
+                String[] envs = displayName.split("[,|]");
+                java.util.Set<String> uniqueEnvs = new java.util.LinkedHashSet<>();
+                for (String env : envs) {
+                    if (env != null && !env.isBlank() && !env.equals("null") && !env.equals(".*")) {
+                        uniqueEnvs.add(env.trim().toLowerCase());
+                    }
+                }
+                log.info("ES Environment filter terms: {}", uniqueEnvs);
                 boolQuery.filter(f -> f.bool(b -> {
-                    for (String env : envs) {
-                        if (env != null && !env.isBlank() && !env.equals("null") && !env.equals(".*")) {
-                            b.should(s -> s.term(t -> t.field("environment.keyword").value(env.trim().toLowerCase())));
-                        }
+                    for (String env : uniqueEnvs) {
+                        b.should(s -> s.term(t -> t.field("environment.keyword").value(env)));
                     }
                     b.should(s -> s.term(t -> t.field("environment.keyword").value("unknown")));
                     return b.minimumShouldMatch("1");
@@ -104,6 +116,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 }
 
                 if (!namesToMatch.isEmpty()) {
+                    log.info("ES Service filter terms: {}", namesToMatch);
                     boolQuery.must(m -> m.bool(b -> {
                         namesToMatch.forEach(name -> {
                             String wildcardName = "*" + name + "*";
@@ -112,6 +125,7 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                             b.should(s -> s.wildcard(w -> w.field("app.keyword").value(wildcardName)));
                             b.should(s -> s.wildcard(w -> w.field("compose_service.keyword").value(wildcardName)));
                             b.should(s -> s.wildcard(w -> w.field("job.keyword").value(wildcardName)));
+                            b.should(s -> s.wildcard(w -> w.field("container.name.keyword").value(wildcardName)));
                         });
                         return b.minimumShouldMatch("1");
                     }));
@@ -164,10 +178,11 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
             }
 
             long total = response.hits().total() != null ? response.hits().total().value() : 0;
+            log.info("ES Query result: {} hits (total={}), displayName='{}', keywordName='{}'", logs.size(), total, displayName, keywordName);
             return new PageImpl<>(logs, pageable, total);
 
         } catch (Exception e) {
-            log.error("Failed to query ES for application {}: {}", displayName, e.getMessage());
+            log.error("Failed to query ES for application {}: {}", displayName, e.getMessage(), e);
             throw new RuntimeException("Elasticsearch query failed", e);
         }
     }
