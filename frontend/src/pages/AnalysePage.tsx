@@ -339,11 +339,11 @@ const AnalysePage: React.FC = () => {
             className="w-full bg-secondary/50 border border-border rounded-xl pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none cursor-pointer"
             value={ticketContext || ""}
           >
-            <option value="" disabled>Choose an incident to start analysis...</option>
-            <option value="">Clear Filter (Global View)</option>
+            <option value="" disabled className="bg-secondary text-foreground">Choose an incident to start analysis...</option>
+            <option value="" className="bg-secondary text-foreground">Clear Filter (Global View)</option>
             {tickets.map(ticket => (
-              <option key={ticket.id} value={ticket.id}>
-                {ticket.title}
+              <option key={ticket.id} value={ticket.id} className="bg-secondary text-foreground">
+                {ticket.title} - {new Date(ticket.createdAt).toLocaleString()} - Node: {ticket.node || 'N/A'}
               </option>
             ))}
           </select>
