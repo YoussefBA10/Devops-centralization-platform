@@ -269,9 +269,8 @@
         src: "../vmpipe/filebeat/remote_filebeat.yml"
         dest: "/home/{{ ansible_user }}/filebeat.yml"
         mode: '0644'
-      when: 
-        - containerized_flag
-        - filebeat_status_check.stdout | default('') != 'running'
+      when: containerized_flag
+      register: filebeat_config_result
 
     - name: Run Filebeat
       shell: |
@@ -288,7 +287,7 @@
         executable: /bin/bash
       when: 
         - containerized_flag
-        - filebeat_status_check.stdout | default('') != 'running'
+        - (filebeat_status_check.stdout | default('') != 'running') or filebeat_config_result.changed
 
     - name: Cleanup Filebeat tarball from remote
       file:
