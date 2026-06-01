@@ -41,7 +41,11 @@ public class LogService {
         }
         String serviceKeyword = app.getServiceNameKeyword();
 
-        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(envLabel, serviceKeyword, app.getTargetNode(), query, severity, from, to, pageable);
+        String finalEnvLabel = envLabel;
+        if (app.getTargetNode() != null && !app.getTargetNode().isBlank()) {
+            finalEnvLabel += "," + app.getTargetNode();
+        }
+        Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(finalEnvLabel, serviceKeyword, null, query, severity, from, to, pageable);
         
         long totalDocs = elasticsearchLogClient.getDocumentCount(app.getName());
         
