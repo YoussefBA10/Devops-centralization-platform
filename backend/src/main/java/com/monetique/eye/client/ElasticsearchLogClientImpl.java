@@ -74,9 +74,16 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 }));
             }
 
-            // 1. Environment Filter (Mandatory if provided)
+            // 1. Environment Filter (Mandatory if provided, but allows unknown for remote nodes without env labels)
             if (displayName != null && !displayName.equals(".*")) {
-                boolQuery.filter(f -> f.term(t -> t.field("environment.keyword").value(displayName.toLowerCase())));
+                boolQuery.filter(f -> f.bool(b -> {
+                    b.should(s -> s.term(t -> t.field("environment.keyword").value(displayName.toLowerCase())));
+                    b.should(s -> s.term(t -> t.field("environment.keyword").value("unknown")));
+                    if (nodeName != null && !nodeName.isBlank() && !nodeName.equals(".*")) {
+                        b.should(s -> s.term(t -> t.field("environment.keyword").value(nodeName.toLowerCase())));
+                    }
+                    return b.minimumShouldMatch("1");
+                }));
             }
 
             // 2. Service Filter (Conditional)
