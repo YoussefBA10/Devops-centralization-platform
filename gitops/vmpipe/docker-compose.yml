@@ -335,7 +335,29 @@ services:
       - backend
     networks:
       - monetique-eye-net
-      
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: always
+    user: root
+    labels:
+      app: "monetique-eye"
+      env: "central-node"
+      node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "ci-cd"
+    ports:
+      - "8082:8080"
+      - "50000:50000"
+    volumes:
+      - ./../../data/jenkins:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JAVA_OPTS=-Xmx512m
+    networks:
+      - monetique-eye-net
+
 volumes:
   mysql_data:
   prometheus_data:
