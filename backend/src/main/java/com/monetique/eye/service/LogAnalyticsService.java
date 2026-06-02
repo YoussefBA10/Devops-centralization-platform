@@ -609,7 +609,7 @@ public class LogAnalyticsService {
 
         String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
         String containerMem = String.format(Locale.US,
-                "max(max_over_time(max(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s})[2m:15s]) " +
+                "max(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
                 "/ clamp_min(scalar(%s), 1) * 100",
                 envLabel, appFilter, cadvisorNode, nodeMemTotal);
         // Always include env-scoped node_memory fallback for non-containerised environments (e.g. smgs standalone).
