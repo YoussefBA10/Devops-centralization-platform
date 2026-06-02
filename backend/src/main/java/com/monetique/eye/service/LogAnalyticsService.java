@@ -1011,7 +1011,7 @@ public class LogAnalyticsService {
             Double cpu = prometheusClient.queryMetric(String.format(Locale.US,
                     "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s]) or " +
                     "avg_over_time((sum(rate(namedprocess_namegroup_cpu_seconds_total{environment=~\"%s\", groupname=~\".*%s.*\"%s}[1m])) * 100)[2m:15s]) or vector(0)",
-                    envLabel, serviceName, nodePart, envLabel, serviceName, host), end);
+                    envLabel, serviceName, nodePart, envLabel, serviceName, nodePart), end);
 
             Double mem = prometheusClient.queryMetric(String.format(Locale.US,
                     "max(avg_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100)[2m:15s])) or " +
@@ -1019,7 +1019,7 @@ public class LogAnalyticsService {
                     "max(avg_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", groupname=~\".*%s.*\", environment=~\"%s\"%s} / clamp_min(scalar(%s), 1)) * 100)[2m:15s])) or vector(0)",
                     serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
                     serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
-                    serviceName, envLabel, host, nodeMemTotal), end);
+                    serviceName, envLabel, nodePart, nodeMemTotal), end);
 
             Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
 
