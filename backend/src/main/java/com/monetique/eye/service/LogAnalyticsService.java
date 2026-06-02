@@ -495,7 +495,11 @@ public class LogAnalyticsService {
         String nodeMemFallback = String.format(Locale.US,
                 "(100 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s}) * 100)",
                 env, env);
-        String memQuery = containerMemQuery + " or " + nodeMemFallback + " or vector(0)";
+        String processMemQuery = String.format(Locale.US,
+                "max(max_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\", groupname=~\".*%s.*\"%s} / clamp_min(scalar(%s), 1)) * 100)[2m:15s]))",
+                containerEnvLabel, appFilter, host, nodeMemTotal);
+
+        String memQuery = containerMemQuery + " or " + processMemQuery + " or " + nodeMemFallback + " or vector(0)";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             memQuery = String.format(Locale.US,
                     "(%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or vector(0)",
@@ -598,12 +602,16 @@ public class LogAnalyticsService {
         String hostCpuFallback = String.format(Locale.US,
                 "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\", %s}[%s])) * 100)",
                 env, rateInterval);
-        String cpuQuery = String.format(Locale.US, "(%s) or (%s)", containerCpu, hostCpuFallback);
+        String processCpu = String.format(Locale.US,
+                "max(sum(rate(namedprocess_namegroup_cpu_seconds_total{environment=~\"%s\", groupname=~\".*%s.*\"%s}[%s])) * 100)",
+                envLabel, appFilter, host, rateInterval);
+        
+        String cpuQuery = String.format(Locale.US, "(%s) or (%s) or (%s)", containerCpu, processCpu, hostCpuFallback);
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             String hostCpu = String.format(Locale.US,
                     "100 - (avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", %s%s}[%s])) * 100)",
                     env, host, rateInterval);
-            cpuQuery = String.format(Locale.US, "(%s) or (%s)", hostCpu, containerCpu);
+            cpuQuery = String.format(Locale.US, "(%s) or (%s) or (%s)", hostCpu, containerCpu, processCpu);
         }
 
         String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
@@ -614,12 +622,16 @@ public class LogAnalyticsService {
         String nodeMemFallbackRange = String.format(Locale.US,
                 "(1 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s})) * 100",
                 env, env);
-        String memQuery = containerMem + " or " + nodeMemFallbackRange + " or vector(0)";
+        String processMem = String.format(Locale.US,
+                "max(max_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\", groupname=~\".*%s.*\"%s} / clamp_min(scalar(%s), 1)) * 100)[2m:15s]))",
+                envLabel, appFilter, host, nodeMemTotal);
+
+        String memQuery = containerMem + " or " + processMem + " or " + nodeMemFallbackRange + " or vector(0)";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             String hostMem = String.format(Locale.US,
                     "(1 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s})) * 100",
                     env, host, env, host);
-            memQuery = String.format(Locale.US, "(%s) or (%s) or vector(0)", hostMem, containerMem);
+            memQuery = String.format(Locale.US, "(%s) or (%s) or (%s) or vector(0)", hostMem, containerMem, processMem);
         }
 
         String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(prometheusDiskEnvSelector(envLabel, host));
@@ -997,14 +1009,17 @@ public class LogAnalyticsService {
             if (serviceName == null) continue;
 
             Double cpu = prometheusClient.queryMetric(String.format(Locale.US,
-                    "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s])",
-                    envLabel, serviceName, nodePart), end);
+                    "avg_over_time((sum(rate(container_cpu_usage_seconds_total{environment=~\"%s\", name=~\".*%s.*\"%s}[1m])) * 100)[2m:15s]) or " +
+                    "avg_over_time((sum(rate(namedprocess_namegroup_cpu_seconds_total{environment=~\"%s\", groupname=~\".*%s.*\"%s}[1m])) * 100)[2m:15s]) or vector(0)",
+                    envLabel, serviceName, nodePart, envLabel, serviceName, host), end);
 
             Double mem = prometheusClient.queryMetric(String.format(Locale.US,
                     "max(avg_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100)[2m:15s])) or " +
-                    "max(avg_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100)[2m:15s])) or vector(0)",
+                    "max(avg_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100)[2m:15s])) or " +
+                    "max(avg_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", groupname=~\".*%s.*\", environment=~\"%s\"%s} / clamp_min(scalar(%s), 1)) * 100)[2m:15s])) or vector(0)",
                     serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
-                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart), end);
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
+                    serviceName, envLabel, host, nodeMemTotal), end);
 
             Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
 
