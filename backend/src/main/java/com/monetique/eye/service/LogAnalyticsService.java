@@ -496,7 +496,7 @@ public class LogAnalyticsService {
         // 4. Memory — backend containers on node, or host RAM when no containers (e.g. standalone smgs nodes)
         String env = envSelector(appEnvLabel);
         String host = nodeHostSelector(nodeFilters);
-        String containerMemQuery = containerMemoryPercentExpr(containerEnvLabel, appFilter, cadvisorNode);
+        String containerMemQuery = containerMemoryPercentExpr(containerEnvLabel, appFilter, "");
         // Always include an env-scoped node_memory fallback so non-containerised environments
         // (e.g. smgs standalone) show real node_exporter RAM even when no specific node is selected.
         String nodeMemFallback = String.format(Locale.US,
@@ -626,7 +626,7 @@ public class LogAnalyticsService {
         }
 
         String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
-        String containerMem = containerMemoryPercentExpr(envLabel, appFilter, cadvisorNode);
+        String containerMem = containerMemoryPercentExpr(envLabel, appFilter, "");
         // Always include env-scoped node_memory fallback for non-containerised environments (e.g. smgs standalone).
         String nodeMemFallbackRange = String.format(Locale.US,
                 "(1 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s})) * 100",
