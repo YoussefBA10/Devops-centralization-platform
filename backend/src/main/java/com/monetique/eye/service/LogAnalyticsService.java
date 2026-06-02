@@ -370,6 +370,15 @@ public class LogAnalyticsService {
         return String.format("max(node_memory_MemTotal_bytes{%s%s})", env, nf.cadvisor() + nf.nodeId());
     }
 
+    private String containerMemoryPercentExpr(String envLabel, String appFilter, String nodeSelector) {
+        String node = nodeSelector != null ? nodeSelector : "";
+        return String.format(Locale.US,
+                "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100)[2m:15s])) or " +
+                "max(max_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100)[2m:15s]))",
+                appFilter, envLabel, node, appFilter, envLabel, node,
+                appFilter, envLabel, node, appFilter, envLabel, node);
+    }
+
     private String promRegexAlternation(String value) {
         return value.replace(".", "\\.");
     }
@@ -487,9 +496,7 @@ public class LogAnalyticsService {
         // 4. Memory — backend containers on node, or host RAM when no containers (e.g. standalone smgs nodes)
         String env = envSelector(appEnvLabel);
         String host = nodeHostSelector(nodeFilters);
-        String containerMemQuery = String.format(Locale.US,
-                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s]))",
-                containerEnvLabel, appFilter, cadvisorNode, containerEnvLabel, appFilter, cadvisorNode);
+        String containerMemQuery = containerMemoryPercentExpr(containerEnvLabel, appFilter, cadvisorNode);
         // Always include an env-scoped node_memory fallback so non-containerised environments
         // (e.g. smgs standalone) show real node_exporter RAM even when no specific node is selected.
         String nodeMemFallback = String.format(Locale.US,
@@ -615,9 +622,7 @@ public class LogAnalyticsService {
         }
 
         String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
-        String containerMem = String.format(Locale.US,
-                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s]))",
-                envLabel, appFilter, cadvisorNode, envLabel, appFilter, cadvisorNode);
+        String containerMem = containerMemoryPercentExpr(envLabel, appFilter, cadvisorNode);
         // Always include env-scoped node_memory fallback for non-containerised environments (e.g. smgs standalone).
         String nodeMemFallbackRange = String.format(Locale.US,
                 "(1 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s})) * 100",
