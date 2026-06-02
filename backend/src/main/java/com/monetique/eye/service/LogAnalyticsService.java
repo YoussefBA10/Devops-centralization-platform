@@ -488,9 +488,8 @@ public class LogAnalyticsService {
         String env = envSelector(appEnvLabel);
         String host = nodeHostSelector(nodeFilters);
         String containerMemQuery = String.format(Locale.US,
-                "sum(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
-                "/ clamp_min(scalar(%s), 1) * 100",
-                containerEnvLabel, appFilter, cadvisorNode, nodeMemTotal);
+                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s]))",
+                containerEnvLabel, appFilter, cadvisorNode, containerEnvLabel, appFilter, cadvisorNode);
         // Always include an env-scoped node_memory fallback so non-containerised environments
         // (e.g. smgs standalone) show real node_exporter RAM even when no specific node is selected.
         String nodeMemFallback = String.format(Locale.US,
@@ -609,9 +608,8 @@ public class LogAnalyticsService {
 
         String nodeMemTotal = nodeMemoryTotalExpr(envLabel, nodeFilters);
         String containerMem = String.format(Locale.US,
-                "max(max_over_time(container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s}[2m:15s])) " +
-                "/ clamp_min(scalar(%s), 1) * 100",
-                envLabel, appFilter, cadvisorNode, nodeMemTotal);
+                "max(max_over_time(((container_memory_usage_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} / (container_spec_memory_limit_bytes{environment=~\"%s\", name=~\".*%s.*\"%s} > 0)) * 100)[2m:15s]))",
+                envLabel, appFilter, cadvisorNode, envLabel, appFilter, cadvisorNode);
         // Always include env-scoped node_memory fallback for non-containerised environments (e.g. smgs standalone).
         String nodeMemFallbackRange = String.format(Locale.US,
                 "(1 - (node_memory_MemAvailable_bytes{%s} / node_memory_MemTotal_bytes{%s})) * 100",
@@ -1003,12 +1001,10 @@ public class LogAnalyticsService {
                     envLabel, serviceName, nodePart), end);
 
             Double mem = prometheusClient.queryMetric(String.format(Locale.US,
-                    "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s})[2m:15s]) " +
-                    "/ clamp_min(scalar(%s), 1) * 100 or " +
-                    "avg_over_time(max(container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s})[2m:15s]) " +
-                    "/ clamp_min(scalar(%s), 1) * 100 or vector(0)",
-                    serviceName, envLabel, nodePart, nodeMemTotal,
-                    serviceName, envLabel, nodePart, nodeMemTotal), end);
+                    "max(avg_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", environment=~\"%s\"%s} > 0)) * 100)[2m:15s])) or " +
+                    "max(avg_over_time(((container_memory_usage_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} / (container_spec_memory_limit_bytes{name=~\".*%s.*\", container_label_env=~\"%s\"%s} > 0)) * 100)[2m:15s])) or vector(0)",
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart,
+                    serviceName, envLabel, nodePart, serviceName, envLabel, nodePart), end);
 
             Double disk = fetchAvgDiskUsagePercent(serviceName, envLabel, nodePart, end);
 
