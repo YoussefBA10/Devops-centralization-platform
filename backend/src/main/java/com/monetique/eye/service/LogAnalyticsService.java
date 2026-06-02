@@ -407,6 +407,35 @@ public class LogAnalyticsService {
         return max;
     }
 
+    private List<Double> fetchContainerMemorySeriesViaInstant(String appFilter, String envLabel, Instant start, Instant end, int count) {
+        Double[] points = new Double[count];
+        java.util.Arrays.fill(points, 0.0);
+        long startSec = start.getEpochSecond();
+        long endSec = end.getEpochSecond();
+        long stepSec = Math.max(1, (endSec - startSec) / Math.max(1, count - 1));
+        for (int i = 0; i < count; i++) {
+            Instant ts = Instant.ofEpochSecond(startSec + (i * stepSec));
+            try {
+                Double v = prometheusClient.getContainerMemoryUsagePercentAtCrash(appFilter, envLabel, ts);
+                points[i] = (v != null && Double.isFinite(v) && v > 0) ? v : 0.0;
+            } catch (Exception ignored) {
+                points[i] = 0.0;
+            }
+        }
+        return java.util.Arrays.asList(points);
+    }
+
+    private List<Double> maxSeries(List<Double> primary, List<Double> secondary) {
+        int size = Math.min(primary.size(), secondary.size());
+        List<Double> out = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            double a = primary.get(i) != null ? primary.get(i) : 0.0;
+            double b = secondary.get(i) != null ? secondary.get(i) : 0.0;
+            out.add(Math.max(a, b));
+        }
+        return out;
+    }
+
     private List<Application> filterAppsForNode(List<Application> apps, ResolvedNode resolved) {
         if (resolved == null || apps.isEmpty()) {
             return apps;
@@ -540,7 +569,9 @@ public class LogAnalyticsService {
                     "max((%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or (%s) or (%s) or (%s) or vector(0))",
                     containerMemQuery, env, host, env, host, unscopedContainerMem, unscopedProcessMem, nodeMemFallback);
         }
-        Double memUsage = queryMetricMaxAtTime(memQuery, end);
+        Double memUsage = Math.max(
+                queryMetricMaxAtTime(memQuery, end),
+                prometheusClient.getContainerMemoryUsagePercentAtCrash(appFilter, containerEnvLabel, end));
         // Source label: scoped-to-host → node_exporter; otherwise "prometheus" since either cadvisor or
         // node_exporter may have won the `or` chain (e.g. non-containerised smgs nodes).
         String memLabel = nodeFilters.isScoped() && !host.isEmpty() ? "Node memory" : "Memory usage";
@@ -679,6 +710,10 @@ public class LogAnalyticsService {
                 envLabel, appFilter, cadvisorNode, envLabel, appFilter, cadvisorNode);
         String diskQuery = String.format(Locale.US, "%s or max(max_over_time((%s)[2m:15s])) or vector(0)", containerDisk, nodeDiskPct);
 
+        List<Double> memRange = fetchRangeMetric(memQuery, start, end, step, 12);
+        List<Double> memInstantFallback = fetchContainerMemorySeriesViaInstant(appFilter, envLabel, start, end, 12);
+        List<Double> resolvedMemSeries = maxSeries(memRange, memInstantFallback);
+
         List<ChartData.Series> datasets = List.of(
                 ChartData.Series.builder()
                         .label("CPU %")
@@ -688,7 +723,7 @@ public class LogAnalyticsService {
                         .build(),
                 ChartData.Series.builder()
                         .label("Memory %")
-                        .data(fetchRangeMetric(memQuery, start, end, step, 12))
+                        .data(resolvedMemSeries)
                         .color("#10b981")
                         .fill(false)
                         .build(),
