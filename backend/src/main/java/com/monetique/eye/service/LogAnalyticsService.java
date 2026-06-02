@@ -383,6 +383,30 @@ public class LogAnalyticsService {
         return value.replace(".", "\\.");
     }
 
+    /**
+     * For selector-heavy PromQL (especially with `or` fallbacks), Prometheus can return
+     * multiple series at the same instant. We take the highest value to avoid picking a
+     * zero-valued fallback series just because it appears first in the response.
+     */
+    private Double queryMetricMaxAtTime(String query, Instant time) {
+        List<Map<String, Object>> rows = prometheusClient.queryList(query, time);
+        double max = 0.0;
+        for (Map<String, Object> row : rows) {
+            Object raw = row.get("value");
+            if (raw == null) {
+                continue;
+            }
+            try {
+                double v = Double.parseDouble(raw.toString());
+                if (Double.isFinite(v)) {
+                    max = Math.max(max, v);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return max;
+    }
+
     private List<Application> filterAppsForNode(List<Application> apps, ResolvedNode resolved) {
         if (resolved == null || apps.isEmpty()) {
             return apps;
@@ -516,7 +540,7 @@ public class LogAnalyticsService {
                     "max((%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or (%s) or (%s) or (%s) or vector(0))",
                     containerMemQuery, env, host, env, host, unscopedContainerMem, unscopedProcessMem, nodeMemFallback);
         }
-        Double memUsage = prometheusClient.queryMetric(memQuery, end);
+        Double memUsage = queryMetricMaxAtTime(memQuery, end);
         // Source label: scoped-to-host → node_exporter; otherwise "prometheus" since either cadvisor or
         // node_exporter may have won the `or` chain (e.g. non-containerised smgs nodes).
         String memLabel = nodeFilters.isScoped() && !host.isEmpty() ? "Node memory" : "Memory usage";
@@ -746,16 +770,20 @@ public class LogAnalyticsService {
         try {
             List<Map> results = (List<Map>) rangeData.get("result");
             if (results != null && !results.isEmpty()) {
-                List<List<Object>> values = (List<List<Object>>) results.get(0).get("values");
-                for (List<Object> value : values) {
-                    double ts = Double.parseDouble(value.get(0).toString());
-                    double val = Double.parseDouble(value.get(1).toString());
-                    
-                    int bucket = (int) ((ts - startSec) / stepSec);
-                    if (bucket >= 0 && bucket < count) {
-                        dataPoints[bucket] = val;
-                    } else if (bucket == count) {
-                        dataPoints[count - 1] = val;
+                for (Map res : results) {
+                    List<List<Object>> values = (List<List<Object>>) res.get("values");
+                    if (values == null) continue;
+                    for (List<Object> value : values) {
+                        double ts = Double.parseDouble(value.get(0).toString());
+                        double val = Double.parseDouble(value.get(1).toString());
+                        if (!Double.isFinite(val)) continue;
+
+                        int bucket = (int) ((ts - startSec) / stepSec);
+                        if (bucket >= 0 && bucket < count) {
+                            dataPoints[bucket] = Math.max(dataPoints[bucket], val);
+                        } else if (bucket == count) {
+                            dataPoints[count - 1] = Math.max(dataPoints[count - 1], val);
+                        }
                     }
                 }
             }
