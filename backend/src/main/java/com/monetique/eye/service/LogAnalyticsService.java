@@ -506,10 +506,10 @@ public class LogAnalyticsService {
                 "max(max_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\", groupname=~\".*%s.*\"%s} / clamp_min(scalar(%s), 1)) * 100)[2m:15s]))",
                 containerEnvLabel, appFilter, host, nodeMemTotal);
 
-        String memQuery = containerMemQuery + " or " + processMemQuery + " or " + nodeMemFallback + " or vector(0)";
+        String memQuery = "max((" + containerMemQuery + ") or (" + processMemQuery + ") or (" + nodeMemFallback + ") or vector(0))";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             memQuery = String.format(Locale.US,
-                    "(%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or vector(0)",
+                    "max((%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or vector(0))",
                     containerMemQuery, env, host, env, host);
         }
         Double memUsage = prometheusClient.queryMetric(memQuery, end);
@@ -631,12 +631,12 @@ public class LogAnalyticsService {
                 "max(max_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\", groupname=~\".*%s.*\"%s} / clamp_min(scalar(%s), 1)) * 100)[2m:15s]))",
                 envLabel, appFilter, host, nodeMemTotal);
 
-        String memQuery = containerMem + " or " + processMem + " or " + nodeMemFallbackRange + " or vector(0)";
+        String memQuery = "max((" + containerMem + ") or (" + processMem + ") or (" + nodeMemFallbackRange + ") or vector(0))";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
             String hostMem = String.format(Locale.US,
                     "(1 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s})) * 100",
                     env, host, env, host);
-            memQuery = String.format(Locale.US, "(%s) or (%s) or (%s) or vector(0)", hostMem, containerMem, processMem);
+            memQuery = String.format(Locale.US, "max((%s) or (%s) or (%s) or vector(0))", hostMem, containerMem, processMem);
         }
 
         String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(prometheusDiskEnvSelector(envLabel, host));
