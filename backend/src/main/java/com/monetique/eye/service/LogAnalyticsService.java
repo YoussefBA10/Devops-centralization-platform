@@ -508,9 +508,13 @@ public class LogAnalyticsService {
 
         String memQuery = "max((" + containerMemQuery + ") or (" + processMemQuery + ") or (" + nodeMemFallback + ") or vector(0))";
         if (nodeFilters.isScoped() && !host.isEmpty()) {
+            String unscopedContainerMem = containerMemoryPercentExpr(containerEnvLabel, appFilter, "");
+            String unscopedProcessMem = String.format(Locale.US,
+                    "max(max_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\", groupname=~\".*%s.*\"} / clamp_min(scalar(%s), 1)) * 100)[2m:15s]))",
+                    containerEnvLabel, appFilter, nodeMemoryTotalExpr(containerEnvLabel, NodeFilterParts.empty()));
             memQuery = String.format(Locale.US,
-                    "max((%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or vector(0))",
-                    containerMemQuery, env, host, env, host);
+                    "max((%s) or (100 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s}) * 100) or (%s) or (%s) or (%s) or vector(0))",
+                    containerMemQuery, env, host, env, host, unscopedContainerMem, unscopedProcessMem, nodeMemFallback);
         }
         Double memUsage = prometheusClient.queryMetric(memQuery, end);
         // Source label: scoped-to-host → node_exporter; otherwise "prometheus" since either cadvisor or
@@ -636,7 +640,13 @@ public class LogAnalyticsService {
             String hostMem = String.format(Locale.US,
                     "(1 - (node_memory_MemAvailable_bytes{%s%s} / node_memory_MemTotal_bytes{%s%s})) * 100",
                     env, host, env, host);
-            memQuery = String.format(Locale.US, "max((%s) or (%s) or (%s) or vector(0))", hostMem, containerMem, processMem);
+            String unscopedContainerMem = containerMemoryPercentExpr(envLabel, appFilter, "");
+            String unscopedProcessMem = String.format(Locale.US,
+                    "max(max_over_time(((namedprocess_namegroup_memory_bytes{memtype=\"resident\", environment=~\"%s\", groupname=~\".*%s.*\"} / clamp_min(scalar(%s), 1)) * 100)[2m:15s]))",
+                    envLabel, appFilter, nodeMemoryTotalExpr(envLabel, NodeFilterParts.empty()));
+            memQuery = String.format(Locale.US,
+                    "max((%s) or (%s) or (%s) or (%s) or (%s) or vector(0))",
+                    hostMem, containerMem, processMem, unscopedContainerMem, unscopedProcessMem);
         }
 
         String nodeDiskPct = prometheusClient.nodeDiskUsedPercentExpr(prometheusDiskEnvSelector(envLabel, host));
