@@ -79,6 +79,11 @@ public class Application {
         if (status == null) status = "DEPLOYING";
     }
 
+    @PostLoad
+    protected void onPostLoad() {
+        if (version == null) version = 0L;
+    }
+
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     @ToString.Exclude

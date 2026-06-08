@@ -82,6 +82,11 @@ public class Environment {
         createdAt = LocalDateTime.now();
     }
 
+    @PostLoad
+    protected void onPostLoad() {
+        if (version == null) version = 0L;
+    }
+
     public String getSafeName() {
         if (name == null) return "unknown";
         return name.toLowerCase().replaceAll("[^a-z0-9]", "-").replaceAll("-+", "-").replaceAll("^-|-$", "");

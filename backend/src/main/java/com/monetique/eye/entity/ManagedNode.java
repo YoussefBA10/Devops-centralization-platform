@@ -62,4 +62,9 @@ public class ManagedNode {
     @EqualsAndHashCode.Exclude
     @JsonIgnore
     private Environment environment;
+
+    @PostLoad
+    protected void onPostLoad() {
+        if (version == null) version = 0L;
+    }
 }
