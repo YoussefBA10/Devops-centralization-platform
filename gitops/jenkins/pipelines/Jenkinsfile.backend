@@ -39,7 +39,7 @@ pipeline {
                           -Dsonar.java.binaries=target/classes \
                           -Dsonar.host.url=http://sonarqube:9000 \
                           -Dsonar.login=admin \
-                          -Dsonar.password=admin123
+                          -Dsonar.password=admin
                         """
                     }
                 }
@@ -50,7 +50,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('backend') {
-                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports"
+                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports --nvdApiKey D4BF99BB-9A69-F111-836B-129478FCB64D"
                     }
                 }
             }
