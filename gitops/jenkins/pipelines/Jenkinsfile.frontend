@@ -64,7 +64,7 @@ pipeline {
         stage('Trivy Image Scan') {
             steps {
                 // --exit-code 0 ensures it does not crash the pipeline if vulnerabilities are found
-                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v \${PWD}/trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
             }
         }
 
