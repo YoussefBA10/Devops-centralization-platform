@@ -257,10 +257,7 @@ services:
 
 # --- Application Stack ---
   backend:
-    build:
-      context: ../../backend
-      dockerfile: Dockerfile
-    image: backend:v1
+    image: harbor:80/monetique/backend:latest
     container_name: backend
     restart: always
     labels:
@@ -315,12 +312,7 @@ services:
       - monetique-eye-net
 
   frontend:
-    build:
-      context: ../../frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${BACKEND_API}
-    image: frontend:v1
+    image: harbor:80/monetique/frontend:latest
     container_name: frontend
     restart: always
     labels:
@@ -335,11 +327,53 @@ services:
       - backend
     networks:
       - monetique-eye-net
-      
+  sonarqube:
+    image: sonarqube:9.9-community
+    container_name: sonarqube
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "central-node"
+      node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "ci-cd"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    networks:
+      - monetique-eye-net
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: always
+    user: root
+    labels:
+      app: "monetique-eye"
+      env: "central-node"
+      node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "ci-cd"
+    ports:
+      - "8082:8080"
+      - "50000:50000"
+    volumes:
+      - ./../../data/jenkins:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JAVA_OPTS=-Xmx512m
+    networks:
+      - monetique-eye-net
 volumes:
   mysql_data:
   prometheus_data:
   elasticsearch_data:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:
 
 networks:
   monetique-eye-net:

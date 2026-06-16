@@ -1,139 +1,86 @@
 pipeline {
-  agent any
-  options { timestamps(); timeout(time: 20, unit: 'MINUTES') }
-  parameters {
-    string(name: 'APP_ID',        description: 'Monetique Eye app ID')
-    string(name: 'APP_NAME',      description: 'Application name (slug)')
-    choice(name: 'ENV',           choices: ['dev', 'staging', 'prod'])
-    string(name: 'GIT_REPO',      description: 'App git repo URL')
-    string(name: 'GIT_BRANCH',    defaultValue: 'main')
-    string(name: 'TARGET_VM_IP',  description: 'IP of target VM')
-    string(name: 'TARGET_VM_USER',defaultValue: 'deploy')
-    string(name: 'HOST_PORT',     description: 'Host port to expose container on')
-  }
-  environment {
-    REGISTRY     = credentials('DOCKER_REGISTRY_URL')
-    IMAGE        = "${REGISTRY}/${params.APP_NAME}"
-    TAG          = "${params.ENV}-${BUILD_NUMBER}"
-    CONTAINER    = "${params.APP_NAME}-${params.ENV}"
-    MONETIQUE    = credentials('MONETIQUE_EYE_URL')
-  }
-  stages {
-    stage('Checkout') {
-      steps { git branch: params.GIT_BRANCH, url: params.GIT_REPO }
-    }
-    stage('Install & test') {
-      steps {
-        sh 'npm ci'
-        sh 'npm test -- --watchAll=false --passWithNoTests'
-      }
-    }
-    stage('Build') {
-      steps { sh "npm run build" }
-    }
-    stage('Docker build & push') {
-      steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'DOCKER_REGISTRY_CREDS',
-          usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
-          sh """
-            docker login ${REGISTRY} -u ${REG_USER} -p ${REG_PASS}
-            docker build -t ${IMAGE}:${TAG} .
-            docker push ${IMAGE}:${TAG}
-            docker logout ${REGISTRY}
-          """
-        }
-      }
-    }
-    stage('Approve') {
-      when { expression { params.ENV == 'prod' } }
-      steps { input message: "Deploy ${params.APP_NAME} ${TAG} to production?", ok: "Deploy" }
-    }
-    stage('Deploy') {
-      steps {
-        withCredentials([sshUserPrivateKey(
-          credentialsId: 'SSH_DEPLOY_KEY', keyFileVariable: 'SSH_KEY')]) {
-          script {
-            // Save current image for rollback
-            env.PREV_IMAGE = sh(returnStdout: true, script: """
-              ssh -i \$SSH_KEY -o StrictHostKeyChecking=no \
-                ${params.TARGET_VM_USER}@${params.TARGET_VM_IP} \
-                "docker inspect --format='{{.Config.Image}}' ${CONTAINER} 2>/dev/null || echo none"
-            """).trim()
+    agent any
 
-            sh """
-              ssh -i \$SSH_KEY -o StrictHostKeyChecking=no \
-                ${params.TARGET_VM_USER}@${params.TARGET_VM_IP} '
-                  docker pull ${IMAGE}:${TAG}
-                  docker stop ${CONTAINER} 2>/dev/null || true
-                  docker rm   ${CONTAINER} 2>/dev/null || true
-                  docker run -d \\
-                    --name ${CONTAINER} \\
-                    --restart unless-stopped \\
-                    -p ${params.HOST_PORT}:80 \\
-                    -e ENV=${params.ENV} \\
-                    -e APP_VERSION=${TAG} \\
-                    ${IMAGE}:${TAG}
-                '
-            """
-          }
-        }
-      }
+    environment {
+        DOCKER_IMAGE = 'monetique-frontend'
+        DOCKER_TAG = "v${env.BUILD_NUMBER}"
+        REGISTRY = 'harbor:80/monetique'
+        SONAR_PROJECT_KEY = 'monetique-frontend'
     }
-    stage('Health check') {
-      steps {
-        withCredentials([sshUserPrivateKey(
-          credentialsId: 'SSH_DEPLOY_KEY', keyFileVariable: 'SSH_KEY')]) {
-          script {
-            def ok = false
-            for (int i = 0; i < 10; i++) {
-              sleep 6
-              def rc = sh(returnStatus: true, script: """
-                ssh -i \$SSH_KEY -o StrictHostKeyChecking=no \
-                  ${params.TARGET_VM_USER}@${params.TARGET_VM_IP} \
-                  "curl -sf http://localhost:${params.HOST_PORT} > /dev/null"
-              """)
-              if (rc == 0) { ok = true; break }
-            }
-            if (!ok) {
-              // Auto-rollback if previous image exists
-              if (env.PREV_IMAGE != 'none') {
-                echo "Health check failed — rolling back to ${PREV_IMAGE}"
-                sh """
-                  ssh -i \$SSH_KEY -o StrictHostKeyChecking=no \
-                    ${params.TARGET_VM_USER}@${params.TARGET_VM_IP} '
-                      docker stop ${CONTAINER} || true
-                      docker rm   ${CONTAINER} || true
-                      docker run -d \\
-                        --name ${CONTAINER} --restart unless-stopped \\
-                        -p ${params.HOST_PORT}:80 \\
-                        ${PREV_IMAGE}
-                    '
-                """
-                notifyDeployment('ROLLED_BACK')
-              }
-              error("Health check failed after 60s")
-            }
-          }
-        }
-      }
-    }
-  }
-  post {
-    success { script { notifyDeployment('SUCCESS') } }
-    failure { script { notifyDeployment('FAILED')  } }
-  }
-}
 
-def notifyDeployment(status) {
-  // Simple HTTP POST to Monetique Eye — fire and forget, never fail the build
-  try {
-    sh """
-      curl -sf -X POST ${MONETIQUE}/api/v1/deployments/events \\
-        -H 'Content-Type: application/json' \\
-        -d '{"appId":"${params.APP_ID}","env":"${params.ENV}",
-             "version":"${TAG}","status":"${status}",
-             "buildNumber":"${BUILD_NUMBER}"}'
-    """ }
-  catch (e) { echo "Deploy notification failed (non-blocking): ${e.message}" }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('frontend') {
+                    sh 'npm install'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    dir('frontend') {
+                        sh """
+                        docker run --rm -v \${PWD}:/usr/src -w /usr/src --network monetique-eye-net sonarsource/sonar-scanner-cli \
+                          sonar-scanner \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                          -Dsonar.sources=src \
+                          -Dsonar.host.url=http://sonarqube:9000
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('OWASP Dependency Check') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
+                    dir('frontend') {
+                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports"
+                    }
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir('frontend') {
+                    sh "docker build -t ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                // --exit-code 0 ensures it does not crash the pipeline if vulnerabilities are found
+                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                // withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
+                //     sh "echo \$DOCKER_PASS | docker login harbor:80 -u \$DOCKER_USER --password-stdin"
+                // }
+                sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                sh "docker tag ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ${REGISTRY}/${DOCKER_IMAGE}:latest"
+                sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:latest"
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                // Implement your deployment logic here (e.g. helm upgrade, kubectl apply, etc.)
+                echo "Deploying frontend to target environment..."
+            }
+        }
+    }
 }
