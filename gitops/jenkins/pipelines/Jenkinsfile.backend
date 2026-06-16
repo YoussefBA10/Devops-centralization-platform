@@ -78,10 +78,10 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
                     sh "echo \$DOCKER_PASS | docker login localhost:8083 -u \$DOCKER_USER --password-stdin"
+                    sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    sh "docker tag ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ${REGISTRY}/${DOCKER_IMAGE}:latest"
+                    sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:latest"
                 }
-                sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-                sh "docker tag ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ${REGISTRY}/${DOCKER_IMAGE}:latest"
-                sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:latest"
             }
         }
 
