@@ -257,7 +257,7 @@ services:
 
 # --- Application Stack ---
   backend:
-    image: localhost:5001/monetique/backend:latest
+    image: localhost:8083/monetique/backend:latest
     container_name: backend
     restart: always
     labels:
@@ -312,7 +312,7 @@ services:
       - monetique-eye-net
 
   frontend:
-    image: localhost:5001/monetique/frontend:latest
+    image: localhost:8083/monetique/frontend:latest
     container_name: frontend
     restart: always
     labels:
@@ -368,22 +368,6 @@ services:
     networks:
       - monetique-eye-net
 
-  harbor:
-    image: registry:2
-    container_name: harbor
-    restart: always
-    labels:
-      app: "monetique-eye"
-      env: "central-node"
-      node: "central-node"
-      com.monetique.environment: "central-node"
-      com.monetique.category: "registry"
-    ports:
-      - "5001:5000"
-    volumes:
-      - harbor_data:/var/lib/registry
-    networks:
-      - monetique-eye-net
 volumes:
   mysql_data:
   prometheus_data:
@@ -391,7 +375,6 @@ volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
-  harbor_data:
 
 networks:
   monetique-eye-net:

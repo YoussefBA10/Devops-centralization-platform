@@ -19,13 +19,14 @@ cp harbor.yml.tmpl harbor.yml
 sed -i 's/hostname: reg.mydomain.com/hostname: harbor.monetique.local/g' harbor.yml
 
 # Disable HTTPS for local testing (optional, comment out if you have certs)
-sed -i 's/https:/#https:/g' harbor.yml
-sed -i 's/port: 443/#port: 443/g' harbor.yml
-sed -i 's/certificate: \/your\/certificate\/path/#certificate: \/your\/certificate\/path/g' harbor.yml
-sed -i 's/private_key: \/your\/private\/key\/path/#private_key: \/your\/private\/key\/path/g' harbor.yml
+sed -i 's/port: 80/port: 8083/g' harbor.yml
+#sed -i 's/https:/#https:/g' harbor.yml
+#sed -i 's/port: 443/#port: 443/g' harbor.yml
+#sed -i 's/certificate: \/your\/certificate\/path/#certificate: \/your\/certificate\/path/g' harbor.yml
+#sed -i 's/private_key: \/your\/private\/key\/path/#private_key: \/your\/private\/key\/path/g' harbor.yml
 
 echo "Starting Harbor Installer..."
 sudo ./install.sh
 
-echo "Harbor is installed and running on port 80!"
+echo "Harbor is installed and running on port 8083!"
 echo "Please add '127.0.0.1 harbor.monetique.local' to your /etc/hosts file."
