@@ -6,6 +6,9 @@ pipeline {
         DOCKER_TAG = "v${env.BUILD_NUMBER}"
         REGISTRY = 'localhost:8083/monetique'
         SONAR_PROJECT_KEY = 'monetique-frontend'
+        SONAR_LOGIN = credentials('sonar-login')
+        SONAR_PASSWORD = credentials('sonar-password')
+        NVD_API_KEY = credentials('nvd-api-key')
     }
 
     stages {
@@ -35,8 +38,8 @@ pipeline {
                           -Dsonar.projectName='Monetique Frontend' \
                           -Dsonar.sources=src \
                           -Dsonar.host.url=http://sonarqube:9000 \
-                          -Dsonar.login=admin \
-                          -Dsonar.password=admin
+                          -Dsonar.login=\$SONAR_LOGIN \
+                          -Dsonar.password=\$SONAR_PASSWORD
                         """
                     }
                 }
@@ -47,7 +50,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('frontend') {
-                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports --nvdApiKey f7c53c62-27d8-4d1b-80b8-7f34c1cf95e1"
+                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports --nvdApiKey \$NVD_API_KEY"
                     }
                 }
             }
