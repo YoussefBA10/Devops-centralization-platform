@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'maven3' // Make sure this matches the Maven name in Jenkins Global Tool Configuration
+    }
+
     environment {
         DOCKER_IMAGE = 'monetique-backend'
         DOCKER_TAG = "v${env.BUILD_NUMBER}"
