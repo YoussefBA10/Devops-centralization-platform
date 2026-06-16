@@ -257,7 +257,7 @@ services:
 
 # --- Application Stack ---
   backend:
-    image: localhost:5000/monetique/backend:latest
+    image: localhost:5001/monetique/backend:latest
     container_name: backend
     restart: always
     labels:
@@ -312,7 +312,7 @@ services:
       - monetique-eye-net
 
   frontend:
-    image: localhost:5000/monetique/frontend:latest
+    image: localhost:5001/monetique/frontend:latest
     container_name: frontend
     restart: always
     labels:
@@ -379,7 +379,7 @@ services:
       com.monetique.environment: "central-node"
       com.monetique.category: "registry"
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - harbor_data:/var/lib/registry
     networks:

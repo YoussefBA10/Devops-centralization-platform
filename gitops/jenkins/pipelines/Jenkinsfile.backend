@@ -4,7 +4,7 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'monetique-backend'
         DOCKER_TAG = "v${env.BUILD_NUMBER}"
-        REGISTRY = 'localhost:5000/monetique'
+        REGISTRY = 'localhost:5001/monetique'
         SONAR_PROJECT_KEY = 'monetique-backend'
     }
 
