@@ -50,7 +50,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('backend') {
-                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports --nvdApiKey D4BF99BB-9A69-F111-836B-129478FCB64D"
+                        sh "docker run --rm -v \${PWD}:/src owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports --nvdApiKey f7c53c62-27d8-4d1b-80b8-7f34c1cf95e1"
                     }
                 }
             }
