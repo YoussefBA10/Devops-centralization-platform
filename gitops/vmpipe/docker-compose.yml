@@ -256,22 +256,6 @@ services:
       - monetique-eye-net
 
 # --- Application Stack ---
-  backend:
-    image: localhost:8083/monetique/backend:latest
-    container_name: backend
-    restart: always
-    labels:
-      app: "monetique-eye"
-      env: "central-node"
-      node: "central-node"
-      com.monetique.environment: "central-node"
-      com.monetique.category: "backend"
-    volumes:
-      - ./../../gitops:/app/gitops
-      - ./prometheus/conf.d:/opt/monitoring/prometheus/conf.d
-      - ./prometheus/rules:/opt/monitoring/prometheus/rules
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
     environment:
       SERVER_PORT: ${SERVER_PORT}
       NODE_NAME: "central-node"
@@ -311,22 +295,6 @@ services:
     networks:
       - monetique-eye-net
 
-  frontend:
-    image: localhost:8083/monetique/frontend:latest
-    container_name: frontend
-    restart: always
-    labels:
-      app: "monetique-eye"
-      env: "central-node"
-      node: "central-node"
-      com.monetique.environment: "central-node"
-      com.monetique.category: "frontend"
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-    networks:
-      - monetique-eye-net
   sonarqube:
     image: sonarqube:9.9-community
     container_name: sonarqube
