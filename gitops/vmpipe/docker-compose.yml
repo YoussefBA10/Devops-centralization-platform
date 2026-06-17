@@ -211,7 +211,7 @@ services:
       app: "monetique-eye"
       env: "central-node"
       node: "central-node"
-    environment:
+    # environment:
       # Note: GRAFANA_ADMIN_PASSWORD must be fetched from Vault
       # - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     ports:
