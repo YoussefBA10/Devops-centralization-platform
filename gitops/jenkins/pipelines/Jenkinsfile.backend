@@ -92,8 +92,10 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh "docker compose pull ${DOCKER_IMAGE}"
-                sh "docker compose up -d --force-recreate ${DOCKER_IMAGE}"
+                sh "docker pull ${REGISTRY}/${DOCKER_IMAGE}:latest"
+                sh "docker stop backend || true"
+                sh "docker rm backend || true"
+                sh "docker run -d --name backend --restart always --network monetique-eye-net -p 8880:8880 ${REGISTRY}/${DOCKER_IMAGE}:latest"
             }
         }
     }
