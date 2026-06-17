@@ -1,0 +1,3 @@
+[submodule "gitops"]
+	path = gitops
+	url = https://github.com/YoussefBA10/monetique-eye-gitops.git
