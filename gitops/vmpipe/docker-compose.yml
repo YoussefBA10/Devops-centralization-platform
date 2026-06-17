@@ -14,7 +14,7 @@ services:
       - "8200:8200"
     volumes:
       - ./vault/config:/vault/config
-      - ./../../data/vault:/vault/file
+      - vault_data:/vault/file
     cap_add:
       - IPC_LOCK
     command: server
@@ -403,6 +403,7 @@ volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
+  vault_data:
 
 networks:
   monetique-eye-net:
