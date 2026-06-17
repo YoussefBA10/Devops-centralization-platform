@@ -93,4 +93,10 @@ pipeline {
             }
         }
     }
+
+    post {
+        always {
+            archiveArtifacts artifacts: '**/odc-reports/dependency-check-report.html', allowEmptyArchive: true
+        }
+    }
 }
