@@ -73,7 +73,7 @@ pipeline {
                         BACKEND_API=\$(grep '^BACKEND_API=' \${ENV_FILE} | cut -d'=' -f2-)
                         
                         mkdir -p \${PWD}/kaniko-docker
-                        echo '{"auths":{"${REGISTRY}":{"username":"'\${DOCKER_USER}'","password":"'\${DOCKER_PASS}'"}}}' > \${PWD}/kaniko-docker/config.json
+                        echo '{"auths":{"localhost:8083":{"username":"'\${DOCKER_USER}'","password":"'\${DOCKER_PASS}'"}}}' > \${PWD}/kaniko-docker/config.json
                         
                         docker run --rm \
                           --volumes-from jenkins \
