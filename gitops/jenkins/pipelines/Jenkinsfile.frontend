@@ -63,35 +63,37 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
+        stage('Kaniko Build & Push') {
+            agent {
+                docker {
+                    image 'localhost:8083/monetique/kaniko-executor:debug'
+                    args '--entrypoint="" --network host'
+                }
+            }
             steps {
-                withCredentials([file(credentialsId: 'env', variable: 'ENV_FILE')]) {
+                withCredentials([
+                    file(credentialsId: 'env', variable: 'ENV_FILE'),
+                    usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')
+                ]) {
                     dir('frontend') {
                         sh """
-                            BACKEND_API=\$(grep '^BACKEND_API=' \${ENV_FILE} | cut -d'=' -f2-)
-                            docker build --build-arg VITE_API_URL=\${BACKEND_API}/api -t ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        BACKEND_API=\$(grep '^BACKEND_API=' \${ENV_FILE} | cut -d'=' -f2-)
+                        
+                        mkdir -p \${PWD}/kaniko-docker
+                        echo '{"auths":{"${REGISTRY}":{"username":"'\${DOCKER_USER}'","password":"'\${DOCKER_PASS}'"}}}' > \${PWD}/kaniko-docker/config.json
+                        
+                        /kaniko/executor \\
+                          --context \${PWD} \\
+                          --dockerfile \${PWD}/Dockerfile \\
+                          --destination ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \\
+                          --destination ${REGISTRY}/${DOCKER_IMAGE}:latest \\
+                          --cache=true \\
+                          --cache-repo=${REGISTRY}/cache \\
+                          --insecure \\
+                          --docker-config \${PWD}/kaniko-docker \\
+                          --build-arg VITE_API_URL=\${BACKEND_API}/api
                         """
                     }
-                }
-            }
-        }
-
-        stage('Trivy Image Scan') {
-            steps {
-                dir('frontend') {
-                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v \${PWD}/trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --timeout 15m --exit-code 0 --severity HIGH,CRITICAL ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-                    sh "docker run --rm --user root --volumes-from jenkins -w \${PWD} -v /var/run/docker.sock:/var/run/docker.sock -v \${PWD}/trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --timeout 15m --exit-code 0 --severity HIGH,CRITICAL --format json --output trivy-report.json ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-                }
-            }
-        }
-
-        stage('Docker Push') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
-                    sh "echo \$DOCKER_PASS | docker login localhost:8083 -u \$DOCKER_USER --password-stdin"
-                    sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-                    sh "docker tag ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ${REGISTRY}/${DOCKER_IMAGE}:latest"
-                    sh "docker push ${REGISTRY}/${DOCKER_IMAGE}:latest"
                 }
             }
         }
