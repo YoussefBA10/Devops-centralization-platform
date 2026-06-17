@@ -93,8 +93,12 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh "docker compose -f gitops/vmpipe/docker-compose.yml pull frontend"
-                sh "docker compose -f gitops/vmpipe/docker-compose.yml up -d --force-recreate --no-deps frontend"
+                withCredentials([file(credentialsId: 'env', variable: 'ENV_FILE')]) {
+                    sh "cp \${ENV_FILE} gitops/vmpipe/.env"
+                    sh "docker compose -f gitops/vmpipe/docker-compose.yml pull frontend"
+                    sh "docker compose -f gitops/vmpipe/docker-compose.yml up -d --force-recreate --no-deps frontend"
+                    sh "rm -f gitops/vmpipe/.env"
+                }
             }
         }
     }
