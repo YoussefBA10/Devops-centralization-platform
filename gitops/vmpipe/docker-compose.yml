@@ -1,7 +1,27 @@
 version: '3.8'
 
 services:
-  #  # --- Infrastructure / Database ---
+  # --- Infrastructure / Database ---
+  vault:
+    image: hashicorp/vault:latest
+    container_name: vault
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "central-node"
+      node: "central-node"
+    ports:
+      - "8200:8200"
+    volumes:
+      - ./vault/config:/vault/config
+      - ./../../data/vault:/vault/file
+    cap_add:
+      - IPC_LOCK
+    command: server
+    networks:
+      - monetique-eye-net
+
+
   mysql:
     image: mysql:8.0
     container_name: mysql

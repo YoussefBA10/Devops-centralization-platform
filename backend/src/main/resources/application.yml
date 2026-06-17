@@ -2,12 +2,28 @@ server:
   port: ${SERVER_PORT:8880}
 
 spring:
+  application:
+    name: monetique-eye
+  config:
+    import: vault://
+  cloud:
+    vault:
+      uri: ${VAULT_URI:http://vault:8200}
+      authentication: APPROLE
+      app-role:
+        role-id: ${VAULT_ROLE_ID}
+        secret-id: ${VAULT_SECRET_ID}
+        app-role-path: approle
+      kv:
+        enabled: true
+        backend: secret
+        default-context: monetique-eye
   codec:
     max-in-memory-size: 10MB
   datasource:
-    url: ${DB_URL:jdbc:mysql://mysql:3306/monetique-eye-db?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false}
-    username: ${DB_USERNAME:youss}
-    password: ${DB_PASSWORD:youss123}
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
   
   jpa:
