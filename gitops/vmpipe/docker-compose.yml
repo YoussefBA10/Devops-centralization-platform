@@ -12,6 +12,8 @@ services:
       node: "central-node"
     ports:
       - "8200:8200"
+    environment:
+      - VAULT_ADDR=http://127.0.0.1:8200
     volumes:
       - ./vault/config:/vault/config
       - vault_data:/vault/file
@@ -30,10 +32,11 @@ services:
       env: "central-node"
       node: "central-node"
     environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: "monetique_eye_db"
+      MYSQL_USER: "youss"
+      # Note: MYSQL_PASSWORD and MYSQL_ROOT_PASSWORD must be fetched from Vault and passed during fresh deployment
+      # MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
@@ -178,7 +181,8 @@ services:
     environment:
       SMTP_FROM: ${SMTP_FROM:-monetique.eye.alerts@gmail.com}
       SMTP_USERNAME: ${SMTP_USERNAME:-monetique.eye.alerts@gmail.com}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-changeme}
+      # Note: SMTP_PASSWORD must be fetched from Vault
+      # SMTP_PASSWORD: ${SMTP_PASSWORD}
       ALERT_RECIPIENT: ${ALERT_RECIPIENT:-ops@monetique.tn}
     entrypoint:
       - /bin/sh
@@ -208,7 +212,8 @@ services:
       env: "central-node"
       node: "central-node"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      # Note: GRAFANA_ADMIN_PASSWORD must be fetched from Vault
+      # - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
     ports:
       - "3000:3000"
     volumes:
@@ -253,8 +258,9 @@ services:
         - "5000:5000"
         - "9600:9600"
     environment:
-      - ELASTIC_USER=${ELASTIC_USER}
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ELASTIC_USER=${ELASTIC_USER:-elastic}
+      # Note: ELASTIC_PASSWORD must be fetched from Vault
+      # - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - LS_JAVA_OPTS=-Xms256m -Xmx512m
     depends_on:
       - elasticsearch
@@ -341,25 +347,14 @@ services:
       - ./prometheus/rules:/opt/monitoring/prometheus/rules
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      SERVER_PORT: ${SERVER_PORT}
+      VAULT_ROLE_ID: ${VAULT_ROLE_ID}
+      VAULT_SECRET_ID: ${VAULT_SECRET_ID}
+      VAULT_URI: "http://vault:8200"
+      SERVER_PORT: "8880"
       NODE_NAME: "central-node"
-      SPRING_DATASOURCE_URL: ${DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
-      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO}
-      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL}
-      SPRING_JPA_DATABASE_PLATFORM: ${SPRING_JPA_DATABASE_PLATFORM}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION}
-      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
-      LOGSTASH_HOST: ${LOGSTASH_HOST}
-      LOGSTASH_PORT: ${LOGSTASH_PORT}
       PROMETHEUS_URL: "http://prometheus:9090"
       MONITORING_PROMETHEUS_RELOAD_URL: "http://prometheus:9090/-/reload"
       MONITORING_BLACKBOX_EXPORTER_URL: "blackbox-exporter:9115"
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL}
       MONETIQUE_GITOPS_PATH: "./gitops"
     ports:
       - "8880:8880"
