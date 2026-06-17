@@ -23,11 +23,6 @@ pipeline {
         }
 
         stage('Build & Test') {
-            agent {
-                docker {
-                    image 'maven:3.9-eclipse-temurin-21'
-                }
-            }
             steps {
                 dir('backend') {
                     sh 'mvn clean package -DskipTests'
@@ -68,12 +63,6 @@ pipeline {
         }
 
         stage('Kaniko Build & Push') {
-            agent {
-                docker {
-                    image 'localhost:8083/monetique/kaniko-executor:debug'
-                    args '--entrypoint="" --network host'
-                }
-            }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'harbor-credentials', passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
                     dir('backend') {
@@ -81,15 +70,19 @@ pipeline {
                         mkdir -p \${PWD}/kaniko-docker
                         echo '{"auths":{"${REGISTRY}":{"username":"'\${DOCKER_USER}'","password":"'\${DOCKER_PASS}'"}}}' > \${PWD}/kaniko-docker/config.json
                         
-                        /kaniko/executor \\
-                          --context \${PWD} \\
-                          --dockerfile \${PWD}/Dockerfile \\
-                          --destination ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \\
-                          --destination ${REGISTRY}/${DOCKER_IMAGE}:latest \\
-                          --cache=true \\
-                          --cache-repo=${REGISTRY}/cache \\
-                          --insecure \\
-                          --docker-config \${PWD}/kaniko-docker
+                        docker run --rm \
+                          --volumes-from jenkins \
+                          -w \${PWD} \
+                          -v \${PWD}/kaniko-docker:/kaniko/.docker \
+                          --network host \
+                          localhost:8083/monetique/kaniko-executor:debug \
+                          --context \${PWD} \
+                          --dockerfile \${PWD}/Dockerfile \
+                          --destination ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \
+                          --destination ${REGISTRY}/${DOCKER_IMAGE}:latest \
+                          --cache=true \
+                          --cache-repo=${REGISTRY}/cache \
+                          --insecure
                         """
                     }
                 }

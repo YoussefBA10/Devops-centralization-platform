@@ -23,15 +23,9 @@ pipeline {
         }
 
         stage('Build') {
-            agent {
-                docker {
-                    image 'node:18'
-                }
-            }
             steps {
                 dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run build'
+                    sh "docker run --rm --volumes-from jenkins -w \${PWD} node:18 sh -c 'npm install && npm run build'"
                 }
             }
         }
@@ -69,12 +63,6 @@ pipeline {
         }
 
         stage('Kaniko Build & Push') {
-            agent {
-                docker {
-                    image 'localhost:8083/monetique/kaniko-executor:debug'
-                    args '--entrypoint="" --network host'
-                }
-            }
             steps {
                 withCredentials([
                     file(credentialsId: 'env', variable: 'ENV_FILE'),
@@ -87,15 +75,19 @@ pipeline {
                         mkdir -p \${PWD}/kaniko-docker
                         echo '{"auths":{"${REGISTRY}":{"username":"'\${DOCKER_USER}'","password":"'\${DOCKER_PASS}'"}}}' > \${PWD}/kaniko-docker/config.json
                         
-                        /kaniko/executor \\
-                          --context \${PWD} \\
-                          --dockerfile \${PWD}/Dockerfile \\
-                          --destination ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \\
-                          --destination ${REGISTRY}/${DOCKER_IMAGE}:latest \\
-                          --cache=true \\
-                          --cache-repo=${REGISTRY}/cache \\
-                          --insecure \\
-                          --docker-config \${PWD}/kaniko-docker \\
+                        docker run --rm \
+                          --volumes-from jenkins \
+                          -w \${PWD} \
+                          -v \${PWD}/kaniko-docker:/kaniko/.docker \
+                          --network host \
+                          localhost:8083/monetique/kaniko-executor:debug \
+                          --context \${PWD} \
+                          --dockerfile \${PWD}/Dockerfile \
+                          --destination ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \
+                          --destination ${REGISTRY}/${DOCKER_IMAGE}:latest \
+                          --cache=true \
+                          --cache-repo=${REGISTRY}/cache \
+                          --insecure \
                           --build-arg VITE_API_URL=\${BACKEND_API}/api
                         """
                     }
