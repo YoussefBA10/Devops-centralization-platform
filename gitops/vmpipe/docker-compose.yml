@@ -21,7 +21,6 @@ services:
     networks:
       - monetique-eye-net
 
-
   mysql:
     image: mysql:8.0
     container_name: mysql
