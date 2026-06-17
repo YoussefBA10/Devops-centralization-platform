@@ -35,7 +35,7 @@ pipeline {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('backend') {
                         sh """
-                        docker run --rm -v \${PWD}:/usr/src -w /usr/src --network vmpipe_monetique-eye-net sonarsource/sonar-scanner-cli \
+                        docker run --rm --volumes-from jenkins -w \${PWD} --network vmpipe_monetique-eye-net sonarsource/sonar-scanner-cli \
                           sonar-scanner \
                           -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                           -Dsonar.projectName='Monetique Backend' \
@@ -53,7 +53,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('backend') {
-                        sh "mkdir -p odc-reports odc-data && docker run --rm --user root -v \${PWD}:/src -v \${PWD}/odc-data:/usr/share/dependency-check/data owasp/dependency-check:latest --scan /src --format HTML --out /src/odc-reports --nvdApiKey \$NVD_API_KEY"
+                        sh "mkdir -p odc-reports && docker run --rm --user root --volumes-from jenkins -w \${PWD} -v owasp-nvd-cache:/usr/share/dependency-check/data owasp/dependency-check:latest --scan \${PWD} --format HTML --out \${PWD}/odc-reports --nvdApiKey \$NVD_API_KEY"
                     }
                 }
             }
