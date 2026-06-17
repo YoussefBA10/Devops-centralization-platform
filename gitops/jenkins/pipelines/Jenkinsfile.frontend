@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'nodejs' 
+    }
+
     environment {
         DOCKER_IMAGE = 'monetique-frontend'
         DOCKER_TAG = "v${env.BUILD_NUMBER}"
