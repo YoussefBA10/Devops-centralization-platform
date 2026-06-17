@@ -92,10 +92,8 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sh "docker pull ${REGISTRY}/${DOCKER_IMAGE}:latest"
-                sh "docker stop backend || true"
-                sh "docker rm backend || true"
-                sh "docker run -d --name backend --restart always --network monetique-eye-net -p 8880:8880 ${REGISTRY}/${DOCKER_IMAGE}:latest"
+                sh "docker compose -f gitops/vmpipe/docker-compose.yml pull backend"
+                sh "docker compose -f gitops/vmpipe/docker-compose.yml up -d --force-recreate backend"
             }
         }
     }
