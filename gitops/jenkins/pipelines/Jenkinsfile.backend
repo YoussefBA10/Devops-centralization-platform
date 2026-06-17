@@ -43,6 +43,9 @@ pipeline {
                           -Dsonar.host.url=http://sonarqube:9000 \
                           -Dsonar.login=\$SONAR_LOGIN \
                           -Dsonar.password=\$SONAR_PASSWORD
+                        
+                        sleep 15
+                        curl -s -u "\$SONAR_LOGIN:\$SONAR_PASSWORD" "http://sonarqube:9000/api/issues/search?componentKeys=${SONAR_PROJECT_KEY}" -o sonar-report.json
                         """
                     }
                 }
@@ -53,7 +56,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('backend') {
-                        sh "mkdir -p odc-reports && docker run --rm --user root --volumes-from jenkins -w \${PWD} -v owasp-nvd-cache:/usr/share/dependency-check/data owasp/dependency-check:latest --scan . --format HTML --out odc-reports --nvdApiKey \$NVD_API_KEY"
+                        sh "mkdir -p odc-reports && docker run --rm --user root --volumes-from jenkins -w \${PWD} -v owasp-nvd-cache:/usr/share/dependency-check/data owasp/dependency-check:latest --scan . --format HTML --format JSON --out odc-reports --nvdApiKey \$NVD_API_KEY"
                     }
                 }
             }
@@ -69,9 +72,10 @@ pipeline {
 
         stage('Trivy Image Scan') {
             steps {
-                // --exit-code 0 ensures it does not crash the pipeline if vulnerabilities are found
-                sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v \${PWD}/trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --timeout 15m --exit-code 0 --severity HIGH,CRITICAL ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-            }
+                dir('backend') {
+                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v \${PWD}/trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --timeout 15m --exit-code 0 --severity HIGH,CRITICAL ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    sh "docker run --rm --user root --volumes-from jenkins -w \${PWD} -v /var/run/docker.sock:/var/run/docker.sock -v \${PWD}/trivy-cache:/root/.cache/trivy aquasec/trivy:latest image --timeout 15m --exit-code 0 --severity HIGH,CRITICAL --format json --output trivy-report.json ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+                }
         }
 
         stage('Docker Push') {
@@ -95,7 +99,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/odc-reports/dependency-check-report.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: '**/odc-reports/*, **/trivy-report.json, **/sonar-report.json', allowEmptyArchive: true
         }
     }
 }
