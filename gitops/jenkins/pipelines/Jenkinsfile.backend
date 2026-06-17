@@ -68,7 +68,8 @@ pipeline {
                     dir('backend') {
                         sh """
                         mkdir -p \${PWD}/kaniko-docker
-                        echo '{"auths":{"localhost:8083":{"username":"'\${DOCKER_USER}'","password":"'\${DOCKER_PASS}'"}}}' > \${PWD}/kaniko-docker/config.json
+                        AUTH=\$(echo -n "\${DOCKER_USER}:\${DOCKER_PASS}" | base64 | tr -d '\\n')
+                        echo '{"auths":{"localhost:8083":{"auth":"'\${AUTH}'"}}}' > \${PWD}/kaniko-docker/config.json
                         
                         docker run --rm \
                           --volumes-from jenkins \
