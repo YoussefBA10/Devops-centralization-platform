@@ -65,8 +65,13 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                dir('frontend') {
-                    sh "docker build -t ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                withCredentials([file(credentialsId: 'env', variable: 'ENV_FILE')]) {
+                    dir('frontend') {
+                        sh """
+                            BACKEND_API=\$(grep '^BACKEND_API=' \${ENV_FILE} | cut -d'=' -f2-)
+                            docker build --build-arg VITE_API_URL=\${BACKEND_API}/api -t ${REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        """
+                    }
                 }
             }
         }
