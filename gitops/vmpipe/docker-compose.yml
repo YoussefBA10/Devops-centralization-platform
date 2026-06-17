@@ -304,6 +304,78 @@ services:
       - JAVA_OPTS=-Xmx512m
     networks:
       - monetique-eye-net
+      
+# --- Application Stack ---
+  backend:
+    image: localhost:8083/monetique/monetique-backend:latest
+    container_name: backend
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "central-node"
+      node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "backend"
+    volumes:
+      - ./../../gitops:/app/gitops
+      - ./prometheus/conf.d:/opt/monitoring/prometheus/conf.d
+      - ./prometheus/rules:/opt/monitoring/prometheus/rules
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      SERVER_PORT: ${SERVER_PORT}
+      NODE_NAME: "central-node"
+      SPRING_DATASOURCE_URL: ${DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL}
+      SPRING_JPA_DATABASE_PLATFORM: ${SPRING_JPA_DATABASE_PLATFORM}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
+      LOGSTASH_HOST: ${LOGSTASH_HOST}
+      LOGSTASH_PORT: ${LOGSTASH_PORT}
+      PROMETHEUS_URL: "http://prometheus:9090"
+      MONITORING_PROMETHEUS_RELOAD_URL: "http://prometheus:9090/-/reload"
+      MONITORING_BLACKBOX_EXPORTER_URL: "blackbox-exporter:9115"
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: ${GROQ_MODEL}
+      MONETIQUE_GITOPS_PATH: "./gitops"
+    ports:
+      - "8880:8880"
+    mem_limit: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8880/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - monetique-eye-net
+
+  frontend:
+    image: localhost:8083/monetique/monetique-frontend:latest
+    container_name: frontend
+    restart: always
+    labels:
+      app: "monetique-eye"
+      env: "central-node"
+      node: "central-node"
+      com.monetique.environment: "central-node"
+      com.monetique.category: "frontend"
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - monetique-eye-net
 
 volumes:
   mysql_data:

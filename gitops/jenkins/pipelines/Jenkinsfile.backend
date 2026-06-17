@@ -91,8 +91,8 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                // Implement your deployment logic here (e.g. helm upgrade, kubectl apply, etc.)
-                echo "Deploying backend to target environment..."
+                sh "docker compose pull ${DOCKER_IMAGE}"
+                sh "docker compose up -d --force-recreate ${DOCKER_IMAGE}"
             }
         }
     }
