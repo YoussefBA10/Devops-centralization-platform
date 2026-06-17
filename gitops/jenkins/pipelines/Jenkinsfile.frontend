@@ -56,7 +56,7 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                     dir('frontend') {
-                        sh "mkdir -p odc-reports && docker run --rm --user root --volumes-from jenkins -w \${PWD} -v owasp-nvd-cache:/usr/share/dependency-check/data owasp/dependency-check:latest --scan . --format HTML --format JSON --out odc-reports --nvdApiKey \$NVD_API_KEY"
+                        sh "mkdir -p odc-reports && docker run --rm --user root --volumes-from jenkins -w \${PWD} -v owasp-nvd-cache:/usr/share/dependency-check/data owasp/dependency-check:latest --scan . --format HTML --format JSON --out odc-reports --noupdate --nvdApiKey \$NVD_API_KEY"
                     }
                 }
             }
