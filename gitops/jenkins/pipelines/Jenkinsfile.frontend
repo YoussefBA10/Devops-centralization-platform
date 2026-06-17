@@ -79,7 +79,7 @@ pipeline {
                         docker run --rm \
                           --volumes-from jenkins \
                           -w \${PWD} \
-                          -v \${PWD}/kaniko-docker:/kaniko/.docker \
+                          -e DOCKER_CONFIG=\${PWD}/kaniko-docker \
                           --network host \
                           localhost:8083/monetique/kaniko-executor:debug \
                           --context \${PWD} \
