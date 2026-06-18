@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getSecuritySummary, getFalcoSummary } from '../services/api';
-import { ShieldCheck, ShieldAlert, Activity } from 'lucide-react';
+import { getSecuritySummary } from '../services/api';
+import { ShieldCheck } from 'lucide-react';
 
 const SecurityDashboardPage: React.FC = () => {
   const [summary, setSummary] = useState<any>(null);
