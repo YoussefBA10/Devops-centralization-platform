@@ -15,8 +15,8 @@ import java.nio.file.Paths;
 import java.util.Properties;
 
 @SpringBootApplication
-@EntityScan("com.monetique.eye.entity")
-@EnableJpaRepositories("com.monetique.eye.repository")
+@EntityScan({"com.monetique.eye.entity", "com.monetique.eye.security.entity"})
+@EnableJpaRepositories({"com.monetique.eye.repository", "com.monetique.eye.security.repository"})
 @EnableScheduling
 @EnableAsync
 public class MonetiqueEyeApplication {
