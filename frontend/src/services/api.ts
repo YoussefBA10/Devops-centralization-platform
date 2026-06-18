@@ -163,4 +163,24 @@ export const prometheusQuery = (query: string) => api.get('/prometheus/query', {
 export const prometheusQueryRange = (query: string, start: number, end: number, step: string) => 
   api.get('/prometheus/query_range', { params: { query, start, end, step } });
 
+// Security Module Endpoints
+export const getSecuritySummary = (applicationId?: number) => {
+  if (applicationId) {
+    return api.get(`/security/dashboard/summary/${applicationId}`);
+  }
+  return api.get('/security/dashboard/summary');
+};
+
+export const getVulnerabilities = (applicationId: number, params?: any) => 
+  api.get(`/security/vulnerabilities/${applicationId}`, { params });
+
+export const updateVulnerabilityStatus = (vulnId: number, status: string) => 
+  api.patch(`/security/vulnerabilities/${vulnId}/status`, { status });
+
+export const getFalcoEvents = (params?: any) => 
+  api.get('/security/falco/events', { params });
+
+export const getFalcoSummary = () => 
+  api.get('/security/falco/summary');
+
 export default api;

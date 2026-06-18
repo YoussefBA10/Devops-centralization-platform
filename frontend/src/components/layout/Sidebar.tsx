@@ -12,7 +12,8 @@ import {
   Box,
   Book,
   Network,
-  BarChart2
+  BarChart2,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import logo from '../../assets/logo.png';
@@ -51,6 +52,12 @@ const Sidebar: React.FC = () => {
       path: '/operational', 
       icon: Activity,
       show: isAdmin || permissions?.monitoring?.observability
+    },
+    { 
+      name: 'Security', 
+      path: '/security', 
+      icon: Shield,
+      show: true // You might want to tie this to a specific permission later
     },
     { 
       name: 'Infrastructure', 

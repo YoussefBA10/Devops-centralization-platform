@@ -51,6 +51,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/version").permitAll() // Allow checking system version without auth
                         .requestMatchers("/api/alerts/ingest").permitAll() // Alertmanager webhook (no JWT)
                         .requestMatchers("/api/alerts/test-ticket").permitAll() // Test endpoint
+                        .requestMatchers("/api/security/reports/upload").permitAll() // Jenkins security scan upload (X-API-Key)
+                        .requestMatchers("/api/security/falco/ingest").permitAll() // Falco HTTP output (X-API-Key)
                         .requestMatchers("/api/v1/test/**").permitAll() // Test endpoint for simulation
                         .requestMatchers("/api/v1/**").authenticated()
                         .requestMatchers("/api/**").authenticated()
@@ -68,7 +70,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("*")); // Adjust for production
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

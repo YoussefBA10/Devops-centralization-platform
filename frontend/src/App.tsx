@@ -24,6 +24,7 @@ import DocumentationPage from './pages/DocumentationPage';
 import ServiceUnavailablePage from './pages/ServiceUnavailablePage';
 import ChatWidget from './components/layout/ChatWidget';
 import NetworkMonitor from './pages/NetworkMonitor';
+import SecurityDashboardPage from './pages/SecurityDashboardPage';
 import { useEnvironment } from './context/EnvironmentContext';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -109,6 +110,7 @@ function App() {
                     <Route path="/operational" element={<OperationalIntelligence />} />
                     <Route path="/network-monitor" element={<NetworkMonitor />} />
                     <Route path="/network-monitor/vm/:vmId" element={<NetworkMonitor />} />
+                    <Route path="/security" element={<SecurityDashboardPage />} />
                     <Route path="/infrastructure" element={<InfrastructureTopologyPage />} />
                     <Route path="/logs" element={<LogsPage />} />
                     <Route path="/analyse" element={<AnalysePage />} />

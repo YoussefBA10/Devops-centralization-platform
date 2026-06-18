@@ -77,6 +77,8 @@ groq:
   model: ${GROQ_MODEL:llama-3.3-70b-versatile}
 
 monetique:
+  security:
+    api-key: ${MONETIQUE_SECURITY_API_KEY:default-dev-key}
   git:
     executable: ${GIT_EXECUTABLE:git}
   gitops:
