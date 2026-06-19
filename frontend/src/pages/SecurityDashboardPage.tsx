@@ -350,8 +350,9 @@ const SecurityDashboardPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {trendChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <AreaChart data={trendChartData}>
+                <div className="h-[220px] min-h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                     <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10, fill: '#888' }} />
@@ -360,7 +361,8 @@ const SecurityDashboardPage: React.FC = () => {
                     <Area type="monotone" dataKey="high" stackId="1" stroke="#f97316" fill="#f9731633" name="High" />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                   </AreaChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm text-center px-4">
                   No scan history found for {clusterLabel}. Upload OWASP or SonarQube reports via CI/CD pipeline.
@@ -374,15 +376,17 @@ const SecurityDashboardPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {trendChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={trendChartData}>
+                <div className="h-[220px] min-h-[220px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={trendChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
                     <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10, fill: '#888' }} />
                     <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #333', fontSize: 12 }} />
                     <Bar dataKey="total" fill="#3b82f6" name="Total Issues" radius={[4, 4, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">No scan data available</div>
               )}

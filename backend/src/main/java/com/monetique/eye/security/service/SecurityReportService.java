@@ -6,6 +6,8 @@ import com.monetique.eye.entity.Environment;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.security.dto.AttackSurfaceDto;
+import com.monetique.eye.security.dto.ReportCountProjection;
+import com.monetique.eye.security.dto.ScanReportTrendProjection;
 import com.monetique.eye.security.dto.SecurityDashboardSummaryDto;
 import com.monetique.eye.security.dto.SecurityReportUploadResponse;
 import com.monetique.eye.security.dto.SecurityTrendPointDto;
@@ -26,6 +28,7 @@ import com.monetique.eye.service.InfrastructureService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -109,28 +112,9 @@ public class SecurityReportService {
 
     @Transactional(readOnly = true)
     public List<SecurityTrendPointDto> getTrends(Long applicationId, int days) {
-        List<SecurityScanReport> reports;
-        if (days > 0) {
-            LocalDateTime since = LocalDateTime.now().minusDays(days);
-            reports = reportRepository.findByApplicationIdAndUploadedAtAfterOrderByUploadedAtAsc(applicationId, since);
-            if (reports.isEmpty()) {
-                reports = reportRepository.findByApplicationIdOrderByUploadedAtAsc(applicationId);
-            }
-        } else {
-            reports = reportRepository.findByApplicationIdOrderByUploadedAtAsc(applicationId);
-        }
-        return reports.stream()
-                .map(r -> SecurityTrendPointDto.builder()
-                        .date(r.getUploadedAt())
-                        .reportType(r.getReportType())
-                        .buildNumber(r.getBuildNumber())
-                        .criticalCount(safeInt(r.getCriticalCount()))
-                        .highCount(safeInt(r.getHighCount()))
-                        .mediumCount(safeInt(r.getMediumCount()))
-                        .lowCount(safeInt(r.getLowCount()))
-                        .totalIssues(resolveTotalIssues(r))
-                        .build())
-                .collect(Collectors.toList());
+        List<ScanReportTrendProjection> projections = reportRepository.findTrendProjectionsByApplicationIds(
+                List.of(applicationId));
+        return mapTrendProjections(projections, days);
     }
 
     @Transactional(readOnly = true)
@@ -274,13 +258,11 @@ public class SecurityReportService {
             for (Application app : apps) {
                 for (ReportComponent component : ReportComponent.values()) {
                     for (ReportType type : ReportType.values()) {
-                        Optional<SecurityScanReport> latest = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
-                                app.getId(), component, type);
+                        Optional<ReportCountProjection> latest = findLatestCountProjection(app.getId(), component, type);
                         if (latest.isPresent()) {
-                            SecurityScanReport current = latest.get();
+                            ReportCountProjection current = latest.get();
                             currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
-                            previousTotal += reportRepository.findFirstByApplicationIdAndComponentAndReportTypeAndIdNotOrderByUploadedAtDesc(
-                                    app.getId(), component, type, current.getId())
+                            previousTotal += findPreviousCountProjection(app.getId(), component, type, current.getId())
                                     .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
                                     .orElse(0);
                         }
@@ -320,22 +302,43 @@ public class SecurityReportService {
 
     @Transactional(readOnly = true)
     public List<SecurityTrendPointDto> getClusterTrends(Long clusterId, int days) {
-        List<SecurityScanReport> reports = loadReportsForCluster(clusterId);
-        if (days > 0 && !reports.isEmpty()) {
+        List<ScanReportTrendProjection> projections = loadTrendProjectionsForCluster(clusterId);
+        return mapTrendProjections(projections, days);
+    }
+
+    private List<ScanReportTrendProjection> loadTrendProjectionsForCluster(Long clusterId) {
+        if (clusterId == null) {
+            return reportRepository.findAllTrendProjections();
+        }
+        List<Long> appIds = resolveClusterApplications(clusterId).stream()
+                .map(Application::getId)
+                .collect(Collectors.toList());
+        if (!appIds.isEmpty()) {
+            List<ScanReportTrendProjection> byApps = reportRepository.findTrendProjectionsByApplicationIds(appIds);
+            if (!byApps.isEmpty()) {
+                return byApps;
+            }
+        }
+        return reportRepository.findTrendProjectionsByClusterId(clusterId);
+    }
+
+    private List<SecurityTrendPointDto> mapTrendProjections(List<ScanReportTrendProjection> projections, int days) {
+        List<ScanReportTrendProjection> rows = projections;
+        if (days > 0 && !rows.isEmpty()) {
             LocalDateTime since = LocalDateTime.now().minusDays(days);
-            List<SecurityScanReport> filtered = reports.stream()
+            List<ScanReportTrendProjection> filtered = rows.stream()
                     .filter(r -> r.getUploadedAt() != null && r.getUploadedAt().isAfter(since))
                     .collect(Collectors.toList());
             if (!filtered.isEmpty()) {
-                reports = filtered;
+                rows = filtered;
             }
         }
-        return reports.stream()
+        return rows.stream()
                 .map(this::toTrendPoint)
                 .collect(Collectors.toList());
     }
 
-    private SecurityTrendPointDto toTrendPoint(SecurityScanReport r) {
+    private SecurityTrendPointDto toTrendPoint(ScanReportTrendProjection r) {
         return SecurityTrendPointDto.builder()
                 .date(r.getUploadedAt())
                 .reportType(r.getReportType())
@@ -345,24 +348,17 @@ public class SecurityReportService {
                 .mediumCount(safeInt(r.getMediumCount()))
                 .lowCount(safeInt(r.getLowCount()))
                 .totalIssues(resolveTotalIssues(r))
-                .applicationName(r.getApplication() != null ? r.getApplication().getName() : null)
+                .applicationName(r.getApplicationName())
                 .build();
     }
 
-    private List<SecurityScanReport> loadReportsForCluster(Long clusterId) {
-        if (clusterId == null) {
-            return reportRepository.findAllByOrderByUploadedAtAsc();
+    private int resolveTotalIssues(ScanReportTrendProjection r) {
+        int total = safeInt(r.getTotalIssues());
+        if (total > 0) {
+            return total;
         }
-        List<Long> appIds = resolveClusterApplications(clusterId).stream()
-                .map(Application::getId)
-                .collect(Collectors.toList());
-        if (!appIds.isEmpty()) {
-            List<SecurityScanReport> byApps = reportRepository.findByApplicationIdInWithApplication(appIds);
-            if (!byApps.isEmpty()) {
-                return byApps;
-            }
-        }
-        return reportRepository.findByClusterIdOrderByUploadedAtAsc(clusterId);
+        return safeInt(r.getCriticalCount()) + safeInt(r.getHighCount())
+                + safeInt(r.getMediumCount()) + safeInt(r.getLowCount());
     }
 
     private List<Environment> resolveClusterEnvironments(Long clusterId) {
@@ -402,6 +398,20 @@ public class SecurityReportService {
         }
         return safeInt(r.getCriticalCount()) + safeInt(r.getHighCount())
                 + safeInt(r.getMediumCount()) + safeInt(r.getLowCount());
+    }
+
+    private Optional<ReportCountProjection> findLatestCountProjection(
+            Long applicationId, ReportComponent component, ReportType type) {
+        List<ReportCountProjection> rows = reportRepository.findLatestCountProjections(
+                applicationId, component, type, PageRequest.of(0, 1));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    private Optional<ReportCountProjection> findPreviousCountProjection(
+            Long applicationId, ReportComponent component, ReportType type, Long excludeId) {
+        List<ReportCountProjection> rows = reportRepository.findPreviousCountProjections(
+                applicationId, component, type, excludeId, PageRequest.of(0, 1));
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
 
     @Transactional(readOnly = true)
@@ -561,8 +571,7 @@ public class SecurityReportService {
         SeverityTotals totals = new SeverityTotals();
         for (ReportComponent component : ReportComponent.values()) {
             for (ReportType type : ReportType.values()) {
-                reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
-                        applicationId, component, type).ifPresent(r -> {
+                findLatestCountProjection(applicationId, component, type).ifPresent(r -> {
                     totals.critical += safeInt(r.getCriticalCount());
                     totals.high += safeInt(r.getHighCount());
                     totals.medium += safeInt(r.getMediumCount());
@@ -578,13 +587,11 @@ public class SecurityReportService {
         int previousTotal = 0;
         for (ReportComponent component : ReportComponent.values()) {
             for (ReportType type : ReportType.values()) {
-                Optional<SecurityScanReport> latest = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
-                        applicationId, component, type);
+                Optional<ReportCountProjection> latest = findLatestCountProjection(applicationId, component, type);
                 if (latest.isPresent()) {
-                    SecurityScanReport current = latest.get();
+                    ReportCountProjection current = latest.get();
                     currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
-                    previousTotal += reportRepository.findFirstByApplicationIdAndComponentAndReportTypeAndIdNotOrderByUploadedAtDesc(
-                            applicationId, component, type, current.getId())
+                    previousTotal += findPreviousCountProjection(applicationId, component, type, current.getId())
                             .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
                             .orElse(0);
                 }
@@ -600,13 +607,11 @@ public class SecurityReportService {
         for (Application app : apps) {
             for (ReportComponent component : ReportComponent.values()) {
                 for (ReportType type : ReportType.values()) {
-                    Optional<SecurityScanReport> latest = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
-                            app.getId(), component, type);
+                    Optional<ReportCountProjection> latest = findLatestCountProjection(app.getId(), component, type);
                     if (latest.isPresent()) {
-                        SecurityScanReport current = latest.get();
+                        ReportCountProjection current = latest.get();
                         currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
-                        previousTotal += reportRepository.findFirstByApplicationIdAndComponentAndReportTypeAndIdNotOrderByUploadedAtDesc(
-                                app.getId(), component, type, current.getId())
+                        previousTotal += findPreviousCountProjection(app.getId(), component, type, current.getId())
                                 .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
                                 .orElse(0);
                     }
