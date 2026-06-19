@@ -8,18 +8,16 @@ import {
   LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
-import { useEnvironment } from '../context/EnvironmentContext';
+import { useCluster } from '../context/ClusterContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
 import AttackSurfaceMap from '../components/security/AttackSurfaceMap';
 import SecurityLoadingScreen from '../components/security/SecurityLoadingScreen';
 import {
-  getApplications, getSecuritySummary, getVulnerabilities,
-  getFalcoEvents, getFalcoSummary, getSecurityTrends, getAttackSurface,
+  getSecuritySummary, getClusterVulnerabilities,
+  getFalcoEvents, getFalcoSummary, getClusterSecurityTrends, getClusterAttackSurface,
   updateVulnerabilityStatus,
 } from '../services/api';
-import type { Application } from '../types/index';
 import type {
   SecurityDashboardSummary, Vulnerability, FalcoEvent, FalcoSummary,
   SecurityTrendPoint, AttackSurfaceData, PaginatedResponse,
@@ -77,9 +75,8 @@ const KpiCard: React.FC<{
 );
 
 const SecurityDashboardPage: React.FC = () => {
-  const { selectedEnvironment } = useEnvironment();
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const { selectedCluster } = useCluster();
+  const clusterId = selectedCluster?.id ?? undefined;
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,50 +90,28 @@ const SecurityDashboardPage: React.FC = () => {
 
   const [vulnFilter, setVulnFilter] = useState({ severity: '', reportType: '', search: '' });
   const [expandedVuln, setExpandedVuln] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!selectedEnvironment) return;
-    setInitialLoadDone(false);
-    getApplications(selectedEnvironment.id).then((res) => {
-      setApplications(res.data);
-      setSelectedAppId((prev) => {
-        if (prev && res.data.some((a: Application) => a.id === prev)) return prev;
-        return res.data.length > 0 ? res.data[0].id : null;
-      });
-    });
-  }, [selectedEnvironment]);
+  const [vulnTotal, setVulnTotal] = useState(0);
 
   const fetchAll = useCallback(async (silent = false) => {
-    if (!selectedEnvironment) return;
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const summaryPromise = selectedAppId
-        ? getSecuritySummary(selectedAppId)
-        : getSecuritySummary();
-
-      const vulnPromise = selectedAppId
-        ? getVulnerabilities(selectedAppId, { size: 50, page: 0 })
-        : Promise.resolve({ data: { content: [] } });
-
-      const trendsPromise = selectedAppId
-        ? getSecurityTrends(selectedAppId, 30)
-        : Promise.resolve({ data: [] });
-
       const results = await Promise.allSettled([
-        summaryPromise,
-        vulnPromise,
+        getSecuritySummary(undefined, clusterId),
+        getClusterVulnerabilities(clusterId, { size: 200, page: 0 }),
         getFalcoEvents({ size: 50, sort: 'timestamp,desc' }),
         getFalcoSummary(),
-        trendsPromise,
-        getAttackSurface(selectedEnvironment.id),
+        getClusterSecurityTrends(clusterId, 30),
+        getClusterAttackSurface(clusterId),
       ]);
 
       const [summaryRes, vulnRes, falcoRes, falcoSumRes, trendsRes, surfaceRes] = results;
 
       if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data);
       if (vulnRes.status === 'fulfilled') {
-        setVulnerabilities((vulnRes.value.data as PaginatedResponse<Vulnerability>).content || []);
+        const page = vulnRes.value.data as PaginatedResponse<Vulnerability>;
+        setVulnerabilities(page.content || []);
+        setVulnTotal(page.totalElements ?? page.content?.length ?? 0);
       }
       if (falcoRes.status === 'fulfilled') {
         setFalcoEvents((falcoRes.value.data as PaginatedResponse<FalcoEvent>).content || []);
@@ -154,15 +129,14 @@ const SecurityDashboardPage: React.FC = () => {
       setRefreshing(false);
       setInitialLoadDone(true);
     }
-  }, [selectedEnvironment, selectedAppId]);
+  }, [clusterId]);
 
   useEffect(() => {
-    if (!selectedEnvironment) return;
-    if (applications.length > 0 && selectedAppId === null) return;
+    setInitialLoadDone(false);
     fetchAll();
     const interval = setInterval(() => fetchAll(true), 60000);
     return () => clearInterval(interval);
-  }, [fetchAll, selectedEnvironment, applications.length, selectedAppId]);
+  }, [fetchAll]);
 
   const handleStatusChange = async (vulnId: number, status: string) => {
     try {
@@ -195,22 +169,33 @@ const SecurityDashboardPage: React.FC = () => {
 
   const severityBreakdownWithData = severityBreakdown.filter((s) => s.value > 0);
 
-  const parseTrendDate = (dateStr: string) => {
+  const parseTrendDate = (dateStr: string | number[] | unknown) => {
     try {
-      return format(parseISO(dateStr), 'MMM d');
+      if (Array.isArray(dateStr) && dateStr.length >= 3) {
+        const [y, m, d] = dateStr;
+        return format(new Date(y, m - 1, d), 'MMM d');
+      }
+      if (typeof dateStr === 'string') {
+        return format(parseISO(dateStr), 'MMM d');
+      }
+      return String(dateStr ?? '').slice(0, 10);
     } catch {
-      return dateStr?.slice(0, 10) ?? '';
+      return String(dateStr ?? '').slice(0, 10);
     }
   };
 
-  const trendChartData = trends.map((t) => ({
+  const trendChartData = trends.map((t, idx) => ({
+    key: `${t.applicationName || 'app'}-${String(t.date)}-${t.reportType}-${idx}`,
     date: parseTrendDate(t.date),
-    critical: t.criticalCount,
-    high: t.highCount,
-    total: t.totalIssues,
+    label: t.applicationName
+      ? `${t.applicationName} · ${parseTrendDate(t.date)} · ${t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'Sonar'}`
+      : `${parseTrendDate(t.date)} · ${t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'Sonar'}`,
+    critical: t.criticalCount ?? 0,
+    high: t.highCount ?? 0,
+    total: t.totalIssues ?? ((t.criticalCount ?? 0) + (t.highCount ?? 0) + (t.mediumCount ?? 0) + (t.lowCount ?? 0)),
     type: t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'SonarQube',
     build: t.buildNumber,
-  }));
+  })).slice(-40);
 
   const falcoPriorityData = falcoSummary
     ? Object.entries(falcoSummary.byPriority).map(([name, value]) => ({ name, value }))
@@ -225,13 +210,11 @@ const SecurityDashboardPage: React.FC = () => {
     ? Math.max(0, Math.min(100, 100 - (summary.criticalCount * 5 + summary.highCount * 2 + (summary.falcoEventsLast24h ?? 0) * 0.5)))
     : 0;
 
-  if (!selectedEnvironment) {
-    return <div className="p-6 text-muted-foreground">Select an environment to view security data.</div>;
-  }
-
   if (loading && !initialLoadDone) {
     return <SecurityLoadingScreen />;
   }
+
+  const clusterLabel = selectedCluster ? selectedCluster.name : 'All Clusters';
 
   return (
     <div className="p-6 space-y-6">
@@ -243,25 +226,13 @@ const SecurityDashboardPage: React.FC = () => {
             Security Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {selectedEnvironment.name} — OWASP, SonarQube & Falco runtime intelligence
+            {clusterLabel} — OWASP, SonarQube & Falco runtime intelligence across all applications
           </p>
         </div>
-        <div className="flex items-end gap-3">
-          <Select
-            label="Application"
-            value={selectedAppId ?? ''}
-            onChange={(e) => setSelectedAppId(e.target.value ? Number(e.target.value) : null)}
-            className="min-w-[180px]"
-          >
-            {applications.map((app) => (
-              <option key={app.id} value={app.id}>{app.name}</option>
-            ))}
-          </Select>
-          <Button variant="outline" onClick={() => fetchAll()} disabled={loading || refreshing}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="outline" onClick={() => fetchAll()} disabled={loading || refreshing}>
+          <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* 1. Executive Security Overview */}
@@ -376,7 +347,7 @@ const SecurityDashboardPage: React.FC = () => {
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart data={trendChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} />
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10, fill: '#888' }} />
                     <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #333', fontSize: 12 }} />
                     <Area type="monotone" dataKey="critical" stackId="1" stroke="#ef4444" fill="#ef444433" name="Critical" />
@@ -385,8 +356,8 @@ const SecurityDashboardPage: React.FC = () => {
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
-                  {selectedAppId ? 'No scan history yet — upload OWASP or SonarQube reports via CI/CD' : 'Select an application to view trends'}
+                <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm text-center px-4">
+                  No scan history found for {clusterLabel}. Upload OWASP or SonarQube reports via CI/CD pipeline.
                 </div>
               )}
             </CardContent>
@@ -400,7 +371,7 @@ const SecurityDashboardPage: React.FC = () => {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={trendChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#888' }} />
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10, fill: '#888' }} />
                     <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #333', fontSize: 12 }} />
                     <Bar dataKey="total" fill="#3b82f6" name="Total Issues" radius={[4, 4, 0, 0]} />
@@ -422,7 +393,10 @@ const SecurityDashboardPage: React.FC = () => {
         <Card>
           <CardHeader className="pb-2">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <CardTitle className="text-sm flex-1">OWASP Dependency-Check & SonarQube Findings</CardTitle>
+              <CardTitle className="text-sm flex-1">
+                OWASP Dependency-Check & SonarQube Findings
+                {vulnTotal > 0 && <span className="ml-2 text-muted-foreground font-normal">({vulnTotal} total)</span>}
+              </CardTitle>
               <div className="flex flex-wrap gap-2">
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -456,11 +430,12 @@ const SecurityDashboardPage: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="max-h-[480px] overflow-y-auto overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 bg-card z-10 shadow-sm">
                   <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
                     <th className="p-3">Severity</th>
+                    <th className="p-3">Application</th>
                     <th className="p-3">Identifier</th>
                     <th className="p-3">Source</th>
                     <th className="p-3">File / Component</th>
@@ -472,11 +447,9 @@ const SecurityDashboardPage: React.FC = () => {
                 <tbody>
                   {filteredVulns.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                      <td colSpan={8} className="p-8 text-center text-muted-foreground">
                         {vulnerabilities.length === 0
-                          ? (selectedAppId
-                            ? 'No vulnerability records in database for this application. Upload OWASP or SonarQube reports via your CI/CD pipeline.'
-                            : 'Select an application to view vulnerabilities')
+                          ? `No vulnerability records for ${clusterLabel}. Upload OWASP or SonarQube reports via CI/CD.`
                           : 'No vulnerabilities match the current filters'}
                       </td>
                     </tr>
@@ -485,6 +458,7 @@ const SecurityDashboardPage: React.FC = () => {
                       <React.Fragment key={v.id}>
                         <tr className="border-b border-border/50 hover:bg-white/5 transition-colors">
                           <td className="p-3"><SeverityBadge severity={v.severity} /></td>
+                          <td className="p-3 text-xs font-medium">{v.applicationName || '—'}</td>
                           <td className="p-3 font-mono text-xs">{v.identifier}</td>
                           <td className="p-3">
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5">
@@ -512,7 +486,7 @@ const SecurityDashboardPage: React.FC = () => {
                         </tr>
                         {expandedVuln === v.id && (
                           <tr className="bg-white/[0.02]">
-                            <td colSpan={7} className="p-3 text-xs text-muted-foreground">
+                            <td colSpan={8} className="p-3 text-xs text-muted-foreground">
                               <strong className="text-white">{v.title}</strong>
                               {v.description && <p className="mt-1">{v.description}</p>}
                             </td>
@@ -637,7 +611,7 @@ const SecurityDashboardPage: React.FC = () => {
               <AlertTriangle className="w-4 h-4 text-amber-400" />
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Services, containers, databases, APIs and network flows — vulnerable assets highlighted in red
+              Docker container topology for {clusterLabel} — hosts, containers, and vulnerable paths highlighted in red
             </p>
           </CardHeader>
           <CardContent>

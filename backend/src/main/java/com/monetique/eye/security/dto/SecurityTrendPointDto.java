@@ -21,4 +21,5 @@ public class SecurityTrendPointDto {
     private int mediumCount;
     private int lowCount;
     private int totalIssues;
+    private String applicationName;
 }

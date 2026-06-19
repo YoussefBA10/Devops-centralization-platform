@@ -125,7 +125,7 @@ public class SecurityReportService {
                         .highCount(safeInt(r.getHighCount()))
                         .mediumCount(safeInt(r.getMediumCount()))
                         .lowCount(safeInt(r.getLowCount()))
-                        .totalIssues(safeInt(r.getTotalIssues()))
+                        .totalIssues(resolveTotalIssues(r))
                         .build())
                 .collect(Collectors.toList());
     }
@@ -249,7 +249,51 @@ public class SecurityReportService {
 
     @Transactional(readOnly = true)
     public SecurityDashboardSummaryDto getGlobalSummary() {
+        return getClusterSummary(null);
+    }
+
+    @Transactional(readOnly = true)
+    public SecurityDashboardSummaryDto getClusterSummary(Long clusterId) {
+        List<Application> apps = applicationRepository.findByClusterId(clusterId);
         int falcoCount = falcoEventRepository.countByTimestampAfter(LocalDateTime.now().minusDays(1));
+
+        if (clusterId != null && !apps.isEmpty()) {
+            SeverityTotals totals = new SeverityTotals();
+            for (Application app : apps) {
+                SeverityTotals appTotals = aggregateLatestReportCounts(app.getId());
+                totals.critical += appTotals.critical;
+                totals.high += appTotals.high;
+                totals.medium += appTotals.medium;
+                totals.low += appTotals.low;
+            }
+            int currentTotal = 0;
+            int previousTotal = 0;
+            for (Application app : apps) {
+                for (ReportComponent component : ReportComponent.values()) {
+                    for (ReportType type : ReportType.values()) {
+                        Optional<SecurityScanReport> latest = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
+                                app.getId(), component, type);
+                        if (latest.isPresent()) {
+                            SecurityScanReport current = latest.get();
+                            currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
+                            previousTotal += reportRepository.findFirstByApplicationIdAndComponentAndReportTypeAndIdNotOrderByUploadedAtDesc(
+                                    app.getId(), component, type, current.getId())
+                                    .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
+                                    .orElse(0);
+                        }
+                    }
+                }
+            }
+            return SecurityDashboardSummaryDto.builder()
+                    .criticalCount(totals.critical)
+                    .highCount(totals.high)
+                    .mediumCount(totals.medium)
+                    .lowCount(totals.low)
+                    .falcoEventsLast24h(falcoCount)
+                    .trend(resolveTrendLabel(currentTotal, previousTotal))
+                    .build();
+        }
+
         long criticalCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.CRITICAL);
         long highCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.HIGH);
         long mediumCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.MEDIUM);
@@ -263,6 +307,170 @@ public class SecurityReportService {
                 .falcoEventsLast24h(falcoCount)
                 .trend(calculateGlobalTrend())
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<VulnerabilityDto> getClusterVulnerabilities(Long clusterId, VulnerabilitySeverity severity,
+            VulnerabilityStatus status, ReportType reportType, Pageable pageable) {
+        return vulnerabilityRepository.findDtosByClusterId(clusterId, severity, status, reportType, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SecurityTrendPointDto> getClusterTrends(Long clusterId, int days) {
+        List<SecurityScanReport> reports = reportRepository.findByClusterIdOrderByUploadedAtAsc(clusterId);
+        if (days > 0 && !reports.isEmpty()) {
+            LocalDateTime since = LocalDateTime.now().minusDays(days);
+            List<SecurityScanReport> filtered = reports.stream()
+                    .filter(r -> r.getUploadedAt() != null && r.getUploadedAt().isAfter(since))
+                    .collect(Collectors.toList());
+            if (!filtered.isEmpty()) {
+                reports = filtered;
+            }
+        }
+        return reports.stream()
+                .map(r -> SecurityTrendPointDto.builder()
+                        .date(r.getUploadedAt())
+                        .reportType(r.getReportType())
+                        .buildNumber(r.getBuildNumber())
+                        .criticalCount(safeInt(r.getCriticalCount()))
+                        .highCount(safeInt(r.getHighCount()))
+                        .mediumCount(safeInt(r.getMediumCount()))
+                        .lowCount(safeInt(r.getLowCount()))
+                        .totalIssues(resolveTotalIssues(r))
+                        .applicationName(r.getApplication() != null ? r.getApplication().getName() : null)
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private int resolveTotalIssues(SecurityScanReport r) {
+        int total = safeInt(r.getTotalIssues());
+        if (total > 0) {
+            return total;
+        }
+        return safeInt(r.getCriticalCount()) + safeInt(r.getHighCount())
+                + safeInt(r.getMediumCount()) + safeInt(r.getLowCount());
+    }
+
+    @Transactional(readOnly = true)
+    public AttackSurfaceDto getClusterAttackSurface(Long clusterId) {
+        List<Application> apps = applicationRepository.findByClusterId(clusterId);
+        Set<Long> envIds = apps.stream()
+                .map(a -> a.getEnvironment().getId())
+                .collect(Collectors.toSet());
+
+        LocalDateTime since24h = LocalDateTime.now().minusDays(1);
+        List<FalcoEvent> recentFalco = falcoEventRepository.findByTimestampAfterOrderByTimestampAsc(since24h);
+        Map<String, Integer> falcoByContainer = countFalcoByContainer(recentFalco);
+
+        Map<Long, int[]> vulnCountsByApp = new HashMap<>();
+        for (Application app : apps) {
+            vulnCountsByApp.put(app.getId(), countVulnsForApp(app.getId()));
+        }
+
+        List<AttackSurfaceDto.AttackSurfaceNode> nodes = new ArrayList<>();
+        List<AttackSurfaceDto.AttackSurfaceEdge> edges = new ArrayList<>();
+        Set<String> edgeKeys = new HashSet<>();
+
+        String gatewayId = "gateway";
+        nodes.add(AttackSurfaceDto.AttackSurfaceNode.builder()
+                .id(gatewayId)
+                .label("External Traffic")
+                .type("API")
+                .status("HEALTHY")
+                .build());
+
+        // Group docker containers by host
+        Map<String, List<ServiceResourceDTO>> containersByHost = new java.util.LinkedHashMap<>();
+        Map<String, String> hostEnvironment = new HashMap<>();
+
+        for (Long envId : envIds) {
+            String envName = apps.stream()
+                    .filter(a -> a.getEnvironment().getId().equals(envId))
+                    .map(a -> a.getEnvironment().getName())
+                    .findFirst().orElse("env-" + envId);
+            for (ServiceResourceDTO resource : infrastructureService.getEnvironmentServiceResources(envId)) {
+                String host = resource.getNodeName() != null && !resource.getNodeName().isBlank()
+                        ? resource.getNodeName() : "unknown-host";
+                containersByHost.computeIfAbsent(host, k -> new ArrayList<>()).add(resource);
+                hostEnvironment.putIfAbsent(host, envName);
+            }
+        }
+
+        for (Map.Entry<String, List<ServiceResourceDTO>> hostEntry : containersByHost.entrySet()) {
+            String hostName = hostEntry.getKey();
+            String hostId = "host-" + sanitizeId(hostName);
+            String envName = hostEnvironment.getOrDefault(hostName, "");
+
+            boolean hostAtRisk = false;
+            for (ServiceResourceDTO r : hostEntry.getValue()) {
+                Long matchedAppId = matchApplication(apps, r.getServiceName());
+                int[] counts = matchedAppId != null ? vulnCountsByApp.getOrDefault(matchedAppId, new int[]{0, 0}) : new int[]{0, 0};
+                int falcoCount = falcoByContainer.getOrDefault(r.getServiceName().toLowerCase(Locale.ROOT), 0);
+                if (counts[0] + counts[1] > 0 || falcoCount > 0) hostAtRisk = true;
+            }
+
+            nodes.add(AttackSurfaceDto.AttackSurfaceNode.builder()
+                    .id(hostId)
+                    .label("Docker Host: " + hostName)
+                    .type("DOCKER_HOST")
+                    .status(hostAtRisk ? "VULNERABLE" : "HEALTHY")
+                    .nodeName(hostName)
+                    .environmentName(envName)
+                    .dockerHost(hostName)
+                    .build());
+            addEdge(edges, edgeKeys, "edge-gw-" + hostId, gatewayId, hostId, "NETWORK", hostAtRisk);
+
+            Set<String> seenContainers = new HashSet<>();
+            for (ServiceResourceDTO resource : hostEntry.getValue()) {
+                String containerKey = resource.getServiceName().toLowerCase(Locale.ROOT);
+                if (!seenContainers.add(containerKey)) continue;
+
+                Long matchedAppId = matchApplication(apps, resource.getServiceName());
+                Application matchedApp = matchedAppId != null
+                        ? apps.stream().filter(a -> a.getId().equals(matchedAppId)).findFirst().orElse(null) : null;
+                int[] counts = matchedAppId != null ? vulnCountsByApp.getOrDefault(matchedAppId, new int[]{0, 0}) : new int[]{0, 0};
+                int falcoCount = falcoByContainer.getOrDefault(containerKey, 0);
+                boolean isDb = isDatabase(resource.getServiceName());
+                String type = isDb ? "DATABASE" : "CONTAINER";
+                String status = resolveAssetStatus(counts[0], counts[1], falcoCount);
+                boolean atRisk = !"HEALTHY".equals(status);
+
+                String containerId = "ctr-" + sanitizeId(hostName + "-" + resource.getServiceName());
+                String shortContainerId = resource.getContainerId() != null && resource.getContainerId().length() > 12
+                        ? resource.getContainerId().substring(0, 12)
+                        : resource.getContainerId();
+                String portSuffix = matchedApp != null && matchedApp.getPort() != null
+                        ? " : " + matchedApp.getPort() : "";
+                String label = matchedApp != null
+                        ? resource.getServiceName() + portSuffix + " → " + matchedApp.getName()
+                        : resource.getServiceName() + portSuffix;
+                if (shortContainerId != null && !shortContainerId.isBlank()) {
+                    label += " [" + shortContainerId + "]";
+                }
+                if (resource.getStatus() != null && !"HEALTHY".equals(resource.getStatus())) {
+                    label += " (" + resource.getStatus() + ")";
+                }
+
+                nodes.add(AttackSurfaceDto.AttackSurfaceNode.builder()
+                        .id(containerId)
+                        .label(label)
+                        .type(type)
+                        .status(status)
+                        .criticalVulns(counts[0])
+                        .highVulns(counts[1])
+                        .falcoEvents24h(falcoCount)
+                        .applicationId(matchedAppId)
+                        .nodeName(hostName)
+                        .port(matchedApp != null ? matchedApp.getPort() : null)
+                        .environmentName(envName)
+                        .parentId(hostId)
+                        .dockerHost(hostName)
+                        .build());
+                addEdge(edges, edgeKeys, "edge-host-" + containerId, hostId, containerId, "DEPLOYMENT", atRisk);
+            }
+        }
+
+        return AttackSurfaceDto.builder().nodes(nodes).edges(edges).build();
     }
 
     private List<Long> getLatestReportIds(Long applicationId, ReportType reportTypeFilter) {

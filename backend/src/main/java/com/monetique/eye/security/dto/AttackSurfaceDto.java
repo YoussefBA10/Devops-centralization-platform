@@ -30,6 +30,9 @@ public class AttackSurfaceDto {
         private Long applicationId;
         private String nodeName;
         private Integer port;
+        private String environmentName;
+        private String parentId;
+        private String dockerHost;
     }
 
     @Data

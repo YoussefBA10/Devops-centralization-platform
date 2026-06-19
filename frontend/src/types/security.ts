@@ -23,6 +23,7 @@ export interface Vulnerability {
   status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'FALSE_POSITIVE';
   reportType?: 'DEPENDENCY_CHECK' | 'SONARQUBE';
   component?: 'BACKEND' | 'FRONTEND';
+  applicationName?: string;
 }
 
 export interface FalcoEvent {
@@ -44,7 +45,7 @@ export interface FalcoSummary {
 }
 
 export interface SecurityTrendPoint {
-  date: string;
+  date: string | number[];
   reportType: 'DEPENDENCY_CHECK' | 'SONARQUBE';
   buildNumber?: string;
   criticalCount: number;
@@ -52,12 +53,13 @@ export interface SecurityTrendPoint {
   mediumCount: number;
   lowCount: number;
   totalIssues: number;
+  applicationName?: string;
 }
 
 export interface AttackSurfaceNode {
   id: string;
   label: string;
-  type: 'SERVICE' | 'CONTAINER' | 'DATABASE' | 'API';
+  type: 'SERVICE' | 'CONTAINER' | 'DATABASE' | 'API' | 'DOCKER_HOST';
   status: 'HEALTHY' | 'VULNERABLE' | 'CRITICAL';
   criticalVulns?: number;
   highVulns?: number;
@@ -65,6 +67,9 @@ export interface AttackSurfaceNode {
   applicationId?: number;
   nodeName?: string;
   port?: number;
+  environmentName?: string;
+  parentId?: string;
+  dockerHost?: string;
 }
 
 export interface AttackSurfaceEdge {

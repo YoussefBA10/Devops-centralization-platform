@@ -110,8 +110,29 @@ public class SecurityReportController {
     }
 
     @GetMapping("/dashboard/summary")
-    public ResponseEntity<SecurityDashboardSummaryDto> getGlobalSummary() {
+    public ResponseEntity<SecurityDashboardSummaryDto> getGlobalSummary(
+            @RequestParam(required = false) Long clusterId) {
+        if (clusterId != null) {
+            return ResponseEntity.ok(securityReportService.getClusterSummary(clusterId));
+        }
         return ResponseEntity.ok(securityReportService.getGlobalSummary());
+    }
+
+    @GetMapping("/dashboard/trends")
+    public ResponseEntity<List<SecurityTrendPointDto>> getClusterTrends(
+            @RequestParam(required = false) Long clusterId,
+            @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(securityReportService.getClusterTrends(clusterId, days));
+    }
+
+    @GetMapping("/vulnerabilities")
+    public ResponseEntity<Page<VulnerabilityDto>> getClusterVulnerabilities(
+            @RequestParam(required = false) Long clusterId,
+            @RequestParam(required = false) VulnerabilitySeverity severity,
+            @RequestParam(required = false) VulnerabilityStatus status,
+            @RequestParam(required = false) ReportType reportType,
+            Pageable pageable) {
+        return ResponseEntity.ok(securityReportService.getClusterVulnerabilities(clusterId, severity, status, reportType, pageable));
     }
 
     @GetMapping("/dashboard/trends/{applicationId}")
@@ -122,7 +143,15 @@ public class SecurityReportController {
     }
 
     @GetMapping("/dashboard/attack-surface")
-    public ResponseEntity<AttackSurfaceDto> getAttackSurface(@RequestParam Long environmentId) {
+    public ResponseEntity<AttackSurfaceDto> getAttackSurface(
+            @RequestParam(required = false) Long environmentId,
+            @RequestParam(required = false) Long clusterId) {
+        if (clusterId != null) {
+            return ResponseEntity.ok(securityReportService.getClusterAttackSurface(clusterId));
+        }
+        if (environmentId == null) {
+            return ResponseEntity.badRequest().build();
+        }
         return ResponseEntity.ok(securityReportService.getAttackSurface(environmentId));
     }
 }

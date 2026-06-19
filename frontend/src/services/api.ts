@@ -169,15 +169,24 @@ const getSecurityBaseURL = () => {
   return base.replace(/\/v1$/, ''); // → http://192.168.126.136:8880/api
 };
 
-export const getSecuritySummary = (applicationId?: number) => {
+export const getSecuritySummary = (applicationId?: number, clusterId?: number) => {
   if (applicationId) {
     return api.get(`/security/dashboard/summary/${applicationId}`, { baseURL: getSecurityBaseURL() });
   }
-  return api.get('/security/dashboard/summary', { baseURL: getSecurityBaseURL() });
+  return api.get('/security/dashboard/summary', {
+    params: clusterId ? { clusterId } : {},
+    baseURL: getSecurityBaseURL(),
+  });
 };
 
 export const getVulnerabilities = (applicationId: number, params?: any) => 
   api.get(`/security/vulnerabilities/${applicationId}`, { params, baseURL: getSecurityBaseURL() });
+
+export const getClusterVulnerabilities = (clusterId?: number, params?: Record<string, unknown>) =>
+  api.get('/security/vulnerabilities', {
+    params: { ...params, ...(clusterId != null ? { clusterId } : {}) },
+    baseURL: getSecurityBaseURL(),
+  });
 
 export const updateVulnerabilityStatus = (vulnId: number, status: string) => 
   api.patch(`/security/vulnerabilities/${vulnId}/status`, { status }, { baseURL: getSecurityBaseURL() });
@@ -194,7 +203,19 @@ export const getSecurityReports = (applicationId: number, params?: Record<string
 export const getSecurityTrends = (applicationId: number, days = 30) =>
   api.get(`/security/dashboard/trends/${applicationId}`, { params: { days }, baseURL: getSecurityBaseURL() });
 
+export const getClusterSecurityTrends = (clusterId?: number, days = 30) =>
+  api.get('/security/dashboard/trends', {
+    params: { days, ...(clusterId != null ? { clusterId } : {}) },
+    baseURL: getSecurityBaseURL(),
+  });
+
 export const getAttackSurface = (environmentId: number) =>
   api.get('/security/dashboard/attack-surface', { params: { environmentId }, baseURL: getSecurityBaseURL() });
+
+export const getClusterAttackSurface = (clusterId?: number) =>
+  api.get('/security/dashboard/attack-surface', {
+    params: clusterId != null ? { clusterId } : {},
+    baseURL: getSecurityBaseURL(),
+  });
 
 export default api;
