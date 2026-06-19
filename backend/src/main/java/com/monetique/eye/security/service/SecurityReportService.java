@@ -33,8 +33,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -333,15 +336,37 @@ public class SecurityReportService {
                 rows = filtered;
             }
         }
-        return rows.stream()
+        return dedupeTrendProjections(rows).stream()
                 .map(this::toTrendPoint)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Keep only the latest scan per application + report type + component + calendar day.
+     * Prevents duplicate points when CI uploads multiple reports on the same day.
+     */
+    private List<ScanReportTrendProjection> dedupeTrendProjections(List<ScanReportTrendProjection> rows) {
+        Map<String, ScanReportTrendProjection> latest = new LinkedHashMap<>();
+        for (ScanReportTrendProjection row : rows) {
+            if (row.getUploadedAt() == null || row.getApplicationId() == null) {
+                continue;
+            }
+            LocalDate day = row.getUploadedAt().toLocalDate();
+            String key = row.getApplicationId() + "|" + row.getReportType() + "|" + row.getComponent() + "|" + day;
+            latest.merge(key, row, (existing, incoming) ->
+                    incoming.getUploadedAt().isAfter(existing.getUploadedAt()) ? incoming : existing);
+        }
+        return latest.values().stream()
+                .sorted(Comparator.comparing(ScanReportTrendProjection::getUploadedAt))
                 .collect(Collectors.toList());
     }
 
     private SecurityTrendPointDto toTrendPoint(ScanReportTrendProjection r) {
         return SecurityTrendPointDto.builder()
                 .date(r.getUploadedAt())
+                .applicationId(r.getApplicationId())
                 .reportType(r.getReportType())
+                .component(r.getComponent())
                 .buildNumber(r.getBuildNumber())
                 .criticalCount(safeInt(r.getCriticalCount()))
                 .highCount(safeInt(r.getHighCount()))

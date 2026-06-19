@@ -23,14 +23,16 @@ public interface SecurityScanReportRepository extends JpaRepository<SecurityScan
 
     List<SecurityScanReport> findByApplicationIdOrderByUploadedAtAsc(Long applicationId);
 
-    @Query("SELECT r.uploadedAt AS uploadedAt, r.reportType AS reportType, r.buildNumber AS buildNumber, " +
+    @Query("SELECT a.id AS applicationId, r.uploadedAt AS uploadedAt, r.reportType AS reportType, " +
+           "r.component AS component, r.buildNumber AS buildNumber, " +
            "r.criticalCount AS criticalCount, r.highCount AS highCount, r.mediumCount AS mediumCount, " +
            "r.lowCount AS lowCount, r.totalIssues AS totalIssues, a.name AS applicationName " +
            "FROM SecurityScanReport r JOIN r.application a " +
            "ORDER BY r.uploadedAt ASC")
     List<ScanReportTrendProjection> findAllTrendProjections();
 
-    @Query("SELECT r.uploadedAt AS uploadedAt, r.reportType AS reportType, r.buildNumber AS buildNumber, " +
+    @Query("SELECT a.id AS applicationId, r.uploadedAt AS uploadedAt, r.reportType AS reportType, " +
+           "r.component AS component, r.buildNumber AS buildNumber, " +
            "r.criticalCount AS criticalCount, r.highCount AS highCount, r.mediumCount AS mediumCount, " +
            "r.lowCount AS lowCount, r.totalIssues AS totalIssues, a.name AS applicationName " +
            "FROM SecurityScanReport r JOIN r.application a " +
@@ -39,7 +41,8 @@ public interface SecurityScanReportRepository extends JpaRepository<SecurityScan
     List<ScanReportTrendProjection> findTrendProjectionsByApplicationIds(
             @Param("applicationIds") List<Long> applicationIds);
 
-    @Query("SELECT r.uploadedAt AS uploadedAt, r.reportType AS reportType, r.buildNumber AS buildNumber, " +
+    @Query("SELECT a.id AS applicationId, r.uploadedAt AS uploadedAt, r.reportType AS reportType, " +
+           "r.component AS component, r.buildNumber AS buildNumber, " +
            "r.criticalCount AS criticalCount, r.highCount AS highCount, r.mediumCount AS mediumCount, " +
            "r.lowCount AS lowCount, r.totalIssues AS totalIssues, a.name AS applicationName " +
            "FROM SecurityScanReport r JOIN r.application a JOIN a.environment e " +

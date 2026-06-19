@@ -1,27 +1,26 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
   Controls,
   Handle,
   Position,
+  useReactFlow,
   type Node,
   type Edge,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Server, Database, Box, Globe, AlertTriangle, HardDrive } from 'lucide-react';
 import type { AttackSurfaceData, AttackSurfaceNode } from '../../types/security';
 
-const VIEW_W = 920;
-const VIEW_H = 440;
-const GATEWAY_X = 0;
-const HOST_X = 260;
-const CONTAINER_X = 520;
-const ROW_H = 64;
-const COL_W = 210;
-const CONTAINER_COLS = 3;
-const NODE_W = 190;
+/** Fixed node dimensions — layout uses these constants; badges must not change them. */
 const NODE_H = 72;
+const HOST_W = 200;
+const GATEWAY_W = 175;
+const COL_W = 200;
+const V_GAP = 14;
+const H_GAP = 72;
 
 const statusBorder: Record<string, string> = {
   CRITICAL: 'border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]',
@@ -47,11 +46,13 @@ const SecurityNode = ({ data }: { data: Record<string, unknown> }) => {
   const isHost = type === 'DOCKER_HOST';
 
   return (
-    <div className={`px-3 py-2 rounded-lg bg-card/90 border-2 ${isHost ? 'min-w-[200px]' : 'min-w-[170px] max-w-[200px]'} ${statusBorder[status] || statusBorder.HEALTHY}`}>
+    <div
+      className={`h-[72px] w-[188px] box-border px-3 py-2 rounded-lg bg-card/90 border-2 overflow-hidden ${isHost ? '!w-[200px]' : ''} ${statusBorder[status] || statusBorder.HEALTHY}`}
+    >
       <Handle type="target" position={Position.Left} className="w-2 h-2" />
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2 h-full">
         {typeIcon[type]}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className={`font-bold text-white truncate ${isHost ? 'text-sm' : 'text-xs'}`}>{data.label as string}</div>
           <div className="text-[9px] text-muted-foreground uppercase">{type.replace('_', ' ')}</div>
           {typeof data.port === 'number' && data.port > 0 ? (
@@ -61,9 +62,9 @@ const SecurityNode = ({ data }: { data: Record<string, unknown> }) => {
             <div className="text-[9px] text-blue-300/80 truncate">{data.environmentName}</div>
           ) : null}
           {hasIssue && (
-            <div className="flex items-center gap-1 mt-1">
+            <div className="flex items-center gap-1 mt-0.5">
               <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-              <span className="text-[9px] text-amber-300">
+              <span className="text-[9px] text-amber-300 truncate">
                 {critical > 0 && `${critical}C `}
                 {high > 0 && `${high}H `}
                 {falco > 0 && `${falco} Falco`}
@@ -93,86 +94,100 @@ function sortContainers(containers: AttackSurfaceNode[]): AttackSurfaceNode[] {
   });
 }
 
-function centerNodes(nodes: Node[]): Node[] {
-  if (nodes.length === 0) return nodes;
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  nodes.forEach((n) => {
-    minX = Math.min(minX, n.position.x);
-    maxX = Math.max(maxX, n.position.x + NODE_W);
-    minY = Math.min(minY, n.position.y);
-    maxY = Math.max(maxY, n.position.y + NODE_H);
-  });
-  const graphW = maxX - minX;
-  const graphH = maxY - minY;
-  const offsetX = Math.max(16, (VIEW_W - graphW) / 2 - minX);
-  const offsetY = Math.max(16, (VIEW_H - graphH) / 2 - minY);
-  return nodes.map((n) => ({
-    ...n,
-    position: { x: n.position.x + offsetX, y: n.position.y + offsetY },
-  }));
+/** How many rows fit in one half of the canvas (above or below host). */
+function maxRowsPerHalf(canvasH: number): number {
+  const halfH = canvasH / 2 - NODE_H - V_GAP * 2;
+  return Math.max(2, Math.floor(halfH / (NODE_H + V_GAP)));
 }
 
-function layoutDockerTopology(data: AttackSurfaceData): { nodes: Node[]; edges: Edge[] } {
+function layoutSection(
+  items: AttackSurfaceNode[],
+  baseX: number,
+  anchorY: number,
+  direction: 'above' | 'below',
+  maxRows: number,
+): Array<{ node: AttackSurfaceNode; x: number; y: number }> {
+  if (items.length === 0) return [];
+  return items.map((node, idx) => {
+    const col = Math.floor(idx / maxRows);
+    const row = idx % maxRows;
+    const x = baseX + col * COL_W;
+    const y = direction === 'above'
+      ? anchorY - V_GAP - NODE_H - row * (NODE_H + V_GAP)
+      : anchorY + V_GAP + row * (NODE_H + V_GAP);
+    return { node, x, y };
+  });
+}
+
+/**
+ * Hub layout (matches reference diagram):
+ *   [Internet] — [Docker Host @ center] — containers above/below on the right
+ */
+function layoutDockerTopology(
+  data: AttackSurfaceData,
+  canvasW: number,
+  canvasH: number,
+): { nodes: Node[]; edges: Edge[] } {
   const gateway = data.nodes.find((n) => n.id === 'gateway' || (n.type === 'API' && n.id.startsWith('gateway')));
   const hosts = data.nodes.filter((n) => n.type === 'DOCKER_HOST');
   const containers = data.nodes.filter((n) => n.type === 'CONTAINER' || n.type === 'DATABASE');
 
+  const centerX = canvasW / 2;
+  const centerY = canvasH / 2;
+  const hostX = centerX - HOST_W / 2;
+  const gatewayX = hostX - H_GAP - GATEWAY_W;
+  const containerBaseX = centerX + HOST_W / 2 + H_GAP;
+
   const flowNodes: Node[] = [];
-  let blockOffsetY = 0;
+  const maxRows = maxRowsPerHalf(canvasH);
 
-  hosts.forEach((host) => {
-    const hostContainers = sortContainers(
-      containers.filter((c) => c.parentId === host.id || c.dockerHost === host.dockerHost)
-    );
-    const rows = Math.max(1, Math.ceil(hostContainers.length / CONTAINER_COLS));
-    const blockHeight = rows * ROW_H;
-    const laneCenterY = blockOffsetY + blockHeight / 2;
-
-    if (gateway) {
-      const gatewayNode = flowNodes.find((n) => n.id === gateway.id);
-      if (!gatewayNode) {
-        flowNodes.push({
-          id: gateway.id,
-          type: 'security',
-          data: { ...gateway },
-          position: { x: GATEWAY_X, y: laneCenterY - NODE_H / 2 },
-        });
-      }
-    }
-
-    flowNodes.push({
-      id: host.id,
-      type: 'security',
-      data: { ...host },
-      position: { x: HOST_X, y: laneCenterY - NODE_H / 2 },
-    });
-
-    hostContainers.forEach((ctr, idx) => {
-      const col = idx % CONTAINER_COLS;
-      const row = Math.floor(idx / CONTAINER_COLS);
-      flowNodes.push({
-        id: ctr.id,
-        type: 'security',
-        data: { ...ctr },
-        position: {
-          x: CONTAINER_X + col * COL_W,
-          y: blockOffsetY + row * ROW_H,
-        },
-      });
-    });
-
-    blockOffsetY += blockHeight + 48;
-  });
-
-  if (!hosts.length && gateway) {
+  if (hosts.length === 0 && gateway) {
     flowNodes.push({
       id: gateway.id,
       type: 'security',
-      data: { ...gateway },
-      position: { x: VIEW_W / 2 - 100, y: VIEW_H / 2 - 36 },
+      data: { ...gateway, label: gateway.label || 'External Traffic' },
+      position: { x: centerX - GATEWAY_W / 2, y: centerY - NODE_H / 2 },
+    });
+  } else {
+    hosts.forEach((host, hostIdx) => {
+      const hostContainers = sortContainers(
+        containers.filter((c) => c.parentId === host.id || c.dockerHost === host.dockerHost),
+      );
+
+      const hostCenterY = hosts.length === 1
+        ? centerY
+        : centerY + (hostIdx - (hosts.length - 1) / 2) * (canvasH * 0.6 / hosts.length);
+
+      const splitAt = Math.ceil(hostContainers.length / 2);
+      const topContainers = hostContainers.slice(0, splitAt);
+      const bottomContainers = hostContainers.slice(splitAt);
+
+      if (gateway && hostIdx === 0) {
+        flowNodes.push({
+          id: gateway.id,
+          type: 'security',
+          data: { ...gateway, label: gateway.label || 'External Traffic' },
+          position: { x: gatewayX, y: hostCenterY - NODE_H / 2 },
+        });
+      }
+
+      flowNodes.push({
+        id: host.id,
+        type: 'security',
+        data: { ...host },
+        position: { x: hostX, y: hostCenterY - NODE_H / 2 },
+      });
+
+      const hostTop = hostCenterY - NODE_H / 2;
+      const hostBottom = hostCenterY + NODE_H / 2;
+
+      layoutSection(topContainers, containerBaseX, hostTop, 'above', maxRows).forEach(({ node, x, y }) => {
+        flowNodes.push({ id: node.id, type: 'security', data: { ...node }, position: { x, y } });
+      });
+
+      layoutSection(bottomContainers, containerBaseX, hostBottom, 'below', maxRows).forEach(({ node, x, y }) => {
+        flowNodes.push({ id: node.id, type: 'security', data: { ...node }, position: { x, y } });
+      });
     });
   }
 
@@ -188,7 +203,18 @@ function layoutDockerTopology(data: AttackSurfaceData): { nodes: Node[]; edges: 
     },
   }));
 
-  return { nodes: centerNodes(flowNodes), edges: flowEdges };
+  return { nodes: flowNodes, edges: flowEdges };
+}
+
+function FitViewOnLoad({ dep }: { dep: unknown }) {
+  const { fitView } = useReactFlow();
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      fitView({ padding: 0.12, duration: 250, minZoom: 0.4, maxZoom: 1.1 });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [dep, fitView]);
+  return null;
 }
 
 interface Props {
@@ -197,10 +223,19 @@ interface Props {
 }
 
 const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
+  const canvasW = 960;
+  const canvasH = 480;
+
   const { nodes, edges } = useMemo(() => {
     if (!data?.nodes?.length) return { nodes: [], edges: [] };
-    return layoutDockerTopology(data);
-  }, [data]);
+    return layoutDockerTopology(data, canvasW, canvasH);
+  }, [data, canvasW, canvasH]);
+
+  const onInit = useCallback((instance: ReactFlowInstance) => {
+    window.setTimeout(() => {
+      instance.fitView({ padding: 0.12, duration: 200, minZoom: 0.4, maxZoom: 1.1 });
+    }, 100);
+  }, []);
 
   if (loading) {
     return <div className="h-[480px] flex items-center justify-center text-muted-foreground">Loading attack surface...</div>;
@@ -237,23 +272,28 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
           {hostCount} Docker hosts · {containerCount} containers · <span className="text-amber-400">{vulnerableCount} at-risk</span>
         </span>
       </div>
-      <div className="h-[480px] rounded-lg border border-border overflow-hidden bg-background/50">
+      <div className="h-[480px] w-full rounded-lg border border-border overflow-hidden bg-background/50">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
+          onInit={onInit}
           fitView
-          fitViewOptions={{ padding: 0.2, minZoom: 0.45, maxZoom: 1 }}
-          minZoom={0.35}
-          maxZoom={1.2}
+          fitViewOptions={{ padding: 0.12, minZoom: 0.4, maxZoom: 1.1 }}
+          minZoom={0.25}
+          maxZoom={1.4}
           proOptions={{ hideAttribution: true }}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
         >
+          <FitViewOnLoad dep={nodes.length} />
           <Background gap={24} color="#ffffff08" />
           <Controls showInteractive={false} className="!bg-card/90 !border-border !shadow-md" />
         </ReactFlow>
       </div>
       <p className="text-[10px] text-muted-foreground text-center">
-        Docker topology: External Traffic → Docker Hosts → Containers (red edges = vulnerable path). At-risk containers shown first.
+        Hub topology: External Traffic → Docker Host (center) → containers distributed above &amp; below (red edges = vulnerable path)
       </p>
     </div>
   );

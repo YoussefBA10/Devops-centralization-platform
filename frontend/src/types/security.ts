@@ -46,7 +46,9 @@ export interface FalcoSummary {
 
 export interface SecurityTrendPoint {
   date: string | number[];
+  applicationId?: number;
   reportType: 'DEPENDENCY_CHECK' | 'SONARQUBE';
+  component?: 'BACKEND' | 'FRONTEND';
   buildNumber?: string;
   criticalCount: number;
   highCount: number;

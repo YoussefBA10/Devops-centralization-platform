@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, AlertTriangle, TrendingUp, TrendingDown, Minus,
   RefreshCw, Bug, Activity, Radar, Search, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area,
+  LineChart, Line, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { useCluster } from '../context/ClusterContext';
@@ -190,18 +190,50 @@ const SecurityDashboardPage: React.FC = () => {
     }
   };
 
-  const trendChartData = trends.map((t, idx) => ({
-    key: `${t.applicationName || 'app'}-${String(t.date)}-${t.reportType}-${idx}`,
-    date: parseTrendDate(t.date),
-    label: t.applicationName
-      ? `${t.applicationName} · ${parseTrendDate(t.date)} · ${t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'Sonar'}`
-      : `${parseTrendDate(t.date)} · ${t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'Sonar'}`,
+  const toDaySortKey = (dateStr: string | number[] | unknown): string => {
+    if (Array.isArray(dateStr) && dateStr.length >= 3) {
+      const [y, m, d] = dateStr;
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+    if (typeof dateStr === 'string' && dateStr.length >= 10) {
+      return dateStr.slice(0, 10);
+    }
+    return String(dateStr ?? '');
+  };
+
+  const buildScanLabel = (t: SecurityTrendPoint) => {
+    const day = parseTrendDate(t.date);
+    const src = t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'Sonar';
+    const comp = t.component ? ` ${t.component.charAt(0)}` : '';
+    const app = t.applicationName ? `${t.applicationName} · ` : '';
+    const build = t.buildNumber ? ` #${t.buildNumber}` : '';
+    return `${app}${day} · ${src}${comp}${build}`;
+  };
+
+  /** One point per calendar day — sums critical/high across deduplicated scans. */
+  const dailyTrendChartData = useMemo(() => {
+    const byDay = new Map<string, { sortKey: string; label: string; critical: number; high: number }>();
+    trends.forEach((t) => {
+      const sortKey = toDaySortKey(t.date);
+      if (!sortKey) return;
+      const label = parseTrendDate(t.date);
+      const entry = byDay.get(sortKey) ?? { sortKey, label, critical: 0, high: 0 };
+      entry.critical += t.criticalCount ?? 0;
+      entry.high += t.highCount ?? 0;
+      byDay.set(sortKey, entry);
+    });
+    return Array.from(byDay.values()).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  }, [trends]);
+
+  /** One bar per deduplicated scan upload. */
+  const perScanChartData = useMemo(() => trends.map((t, idx) => ({
+    key: `${t.applicationId ?? 'app'}-${toDaySortKey(t.date)}-${t.reportType}-${t.component ?? 'c'}-${idx}`,
+    label: buildScanLabel(t),
+    total: t.totalIssues ?? ((t.criticalCount ?? 0) + (t.highCount ?? 0) + (t.mediumCount ?? 0) + (t.lowCount ?? 0)),
     critical: t.criticalCount ?? 0,
     high: t.highCount ?? 0,
-    total: t.totalIssues ?? ((t.criticalCount ?? 0) + (t.highCount ?? 0) + (t.mediumCount ?? 0) + (t.lowCount ?? 0)),
     type: t.reportType === 'DEPENDENCY_CHECK' ? 'OWASP' : 'SonarQube',
-    build: t.buildNumber,
-  })).slice(-40);
+  })).slice(-30), [trends]);
 
   const falcoPriorityData = falcoSummary
     ? Object.entries(falcoSummary.byPriority).map(([name, value]) => ({ name, value }))
@@ -349,18 +381,18 @@ const SecurityDashboardPage: React.FC = () => {
               <CardTitle className="text-sm">Vulnerability Trend (30 days)</CardTitle>
             </CardHeader>
             <CardContent>
-              {trendChartData.length > 0 ? (
+              {dailyTrendChartData.length > 0 ? (
                 <div className="h-[220px] min-h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendChartData}>
+                    <LineChart data={dailyTrendChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 10, fill: '#888' }} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#888' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#888' }} allowDecimals={false} />
                     <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #333', fontSize: 12 }} />
-                    <Area type="monotone" dataKey="critical" stackId="1" stroke="#ef4444" fill="#ef444433" name="Critical" />
-                    <Area type="monotone" dataKey="high" stackId="1" stroke="#f97316" fill="#f9731633" name="High" />
+                    <Line type="monotone" dataKey="critical" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} name="Critical" />
+                    <Line type="monotone" dataKey="high" stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} name="High" />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </AreaChart>
+                  </LineChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
@@ -375,12 +407,12 @@ const SecurityDashboardPage: React.FC = () => {
               <CardTitle className="text-sm">Total Issues per Scan</CardTitle>
             </CardHeader>
             <CardContent>
-              {trendChartData.length > 0 ? (
+              {perScanChartData.length > 0 ? (
                 <div className="h-[220px] min-h-[220px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={trendChartData}>
+                    <BarChart data={perScanChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#888' }} interval="preserveStartEnd" />
+                    <XAxis dataKey="label" tick={{ fontSize: 8, fill: '#888' }} interval={0} angle={-25} textAnchor="end" height={56} />
                     <YAxis tick={{ fontSize: 10, fill: '#888' }} />
                     <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #333', fontSize: 12 }} />
                     <Bar dataKey="total" fill="#3b82f6" name="Total Issues" radius={[4, 4, 0, 0]} />
