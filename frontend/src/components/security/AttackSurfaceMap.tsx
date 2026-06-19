@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   Handle,
   Position,
   type Node,
@@ -16,8 +15,8 @@ import type { AttackSurfaceData } from '../../types/security';
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
-const NODE_W = 180;
-const NODE_H = 72;
+const NODE_W = 200;
+const NODE_H = 80;
 
 const statusBorder: Record<string, string> = {
   CRITICAL: 'border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.4)]',
@@ -41,7 +40,7 @@ const SecurityNode = ({ data }: { data: Record<string, unknown> }) => {
   const hasIssue = critical + high > 0 || falco > 0;
 
   return (
-    <div className={`px-3 py-2 rounded-lg bg-card/90 border-2 min-w-[160px] ${statusBorder[status] || statusBorder.HEALTHY}`}>
+    <div className={`px-3 py-2 rounded-lg bg-card/90 border-2 min-w-[180px] ${statusBorder[status] || statusBorder.HEALTHY}`}>
       <Handle type="target" position={Position.Left} className="w-2 h-2" />
       <div className="flex items-start gap-2">
         {typeIcon[type]}
@@ -50,7 +49,7 @@ const SecurityNode = ({ data }: { data: Record<string, unknown> }) => {
           <div className="text-[9px] text-muted-foreground uppercase">{type}</div>
           {hasIssue && (
             <div className="flex items-center gap-1 mt-1">
-              <AlertTriangle className="w-3 h-3 text-amber-400" />
+              <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
               <span className="text-[9px] text-amber-300">
                 {critical > 0 && `${critical}C `}
                 {high > 0 && `${high}H `}
@@ -68,7 +67,7 @@ const SecurityNode = ({ data }: { data: Record<string, unknown> }) => {
 const nodeTypes = { security: SecurityNode };
 
 function layoutElements(nodes: Node[], edges: Edge[]) {
-  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 60, ranksep: 80 });
+  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 80, ranksep: 120 });
   nodes.forEach((n) => dagreGraph.setNode(n.id, { width: NODE_W, height: NODE_H }));
   edges.forEach((e) => dagreGraph.setEdge(e.source, e.target));
   dagre.layout(dagreGraph);
@@ -105,9 +104,9 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
       target: e.target,
       animated: e.vulnerable,
       style: {
-        stroke: e.vulnerable ? '#ef4444' : '#3b82f6',
-        strokeWidth: e.vulnerable ? 2.5 : 1.5,
-        opacity: e.vulnerable ? 0.9 : 0.4,
+        stroke: e.vulnerable ? '#ef4444' : '#64748b',
+        strokeWidth: e.vulnerable ? 2 : 1.5,
+        opacity: e.vulnerable ? 1 : 0.6,
       },
     }));
 
@@ -115,12 +114,12 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
   }, [data]);
 
   if (loading) {
-    return <div className="h-[420px] flex items-center justify-center text-muted-foreground">Loading attack surface...</div>;
+    return <div className="h-[360px] flex items-center justify-center text-muted-foreground">Loading attack surface...</div>;
   }
 
   if (!nodes.length) {
     return (
-      <div className="h-[420px] flex items-center justify-center text-muted-foreground">
+      <div className="h-[360px] flex items-center justify-center text-muted-foreground">
         No infrastructure assets found for this environment.
       </div>
     );
@@ -136,18 +135,24 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-500" /> Critical</span>
         <span className="ml-auto text-amber-400 font-medium">{vulnerableCount} at-risk assets</span>
       </div>
-      <div className="h-[420px] rounded-lg border border-border overflow-hidden bg-background/50">
-        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView minZoom={0.3} maxZoom={1.5} proOptions={{ hideAttribution: true }}>
-          <Background gap={20} color="#ffffff08" />
+      <div className="h-[360px] rounded-lg border border-border overflow-hidden bg-background/50">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.2 }}
+          minZoom={0.4}
+          maxZoom={1.2}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background gap={24} color="#ffffff08" />
           <Controls showInteractive={false} />
-          <MiniMap nodeColor={(n) => {
-            const s = (n.data as { status?: string }).status;
-            if (s === 'CRITICAL') return '#ef4444';
-            if (s === 'VULNERABLE') return '#f59e0b';
-            return '#10b981';
-          }} />
         </ReactFlow>
       </div>
+      <p className="text-[10px] text-muted-foreground text-center">
+        Simplified view: Gateway → Applications → Containers / Databases (at-risk assets only)
+      </p>
     </div>
   );
 };

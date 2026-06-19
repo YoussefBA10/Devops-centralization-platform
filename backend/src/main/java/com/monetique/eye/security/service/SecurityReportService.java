@@ -93,11 +93,7 @@ public class SecurityReportService {
     @Transactional(readOnly = true)
     public Page<VulnerabilityDto> getVulnerabilities(Long applicationId, VulnerabilitySeverity severity,
             VulnerabilityStatus status, ReportType reportType, Pageable pageable) {
-        List<Long> latestReportIds = getLatestReportIds(applicationId, reportType);
-        if (latestReportIds.isEmpty()) {
-            return Page.empty(pageable);
-        }
-        return vulnerabilityRepository.findDtosByLatestReports(latestReportIds, severity, status, reportType, pageable);
+        return vulnerabilityRepository.findDtosByApplicationId(applicationId, severity, status, reportType, pageable);
     }
 
     @Transactional
@@ -110,9 +106,17 @@ public class SecurityReportService {
 
     @Transactional(readOnly = true)
     public List<SecurityTrendPointDto> getTrends(Long applicationId, int days) {
-        LocalDateTime since = LocalDateTime.now().minusDays(days);
-        return reportRepository.findByApplicationIdAndUploadedAtAfterOrderByUploadedAtAsc(applicationId, since)
-                .stream()
+        List<SecurityScanReport> reports;
+        if (days > 0) {
+            LocalDateTime since = LocalDateTime.now().minusDays(days);
+            reports = reportRepository.findByApplicationIdAndUploadedAtAfterOrderByUploadedAtAsc(applicationId, since);
+            if (reports.isEmpty()) {
+                reports = reportRepository.findByApplicationIdOrderByUploadedAtAsc(applicationId);
+            }
+        } else {
+            reports = reportRepository.findByApplicationIdOrderByUploadedAtAsc(applicationId);
+        }
+        return reports.stream()
                 .map(r -> SecurityTrendPointDto.builder()
                         .date(r.getUploadedAt())
                         .reportType(r.getReportType())
@@ -136,6 +140,7 @@ public class SecurityReportService {
         List<AttackSurfaceDto.AttackSurfaceNode> nodes = new ArrayList<>();
         List<AttackSurfaceDto.AttackSurfaceEdge> edges = new ArrayList<>();
         Set<String> edgeKeys = new HashSet<>();
+        Set<String> addedContainerKeys = new HashSet<>();
 
         String gatewayId = "gateway-" + environmentId;
         nodes.add(AttackSurfaceDto.AttackSurfaceNode.builder()
@@ -147,8 +152,7 @@ public class SecurityReportService {
 
         Map<Long, int[]> vulnCountsByApp = new HashMap<>();
         for (Application app : apps) {
-            int[] counts = countVulnsForApp(app.getId());
-            vulnCountsByApp.put(app.getId(), counts);
+            vulnCountsByApp.put(app.getId(), countVulnsForApp(app.getId()));
         }
 
         Map<String, Integer> falcoByContainer = countFalcoByContainer(recentFalco);
@@ -171,35 +175,27 @@ public class SecurityReportService {
                     .build());
 
             addEdge(edges, edgeKeys, "edge-gw-" + serviceId, gatewayId, serviceId, "API_CALL", counts[0] + counts[1] > 0);
-
-            String apiId = "api-" + app.getId();
-            nodes.add(AttackSurfaceDto.AttackSurfaceNode.builder()
-                    .id(apiId)
-                    .label(app.getName() + " API :"+ app.getPort())
-                    .type("API")
-                    .status(status)
-                    .criticalVulns(counts[0])
-                    .highVulns(counts[1])
-                    .applicationId(app.getId())
-                    .nodeName(app.getTargetNode())
-                    .port(app.getPort())
-                    .build());
-            addEdge(edges, edgeKeys, "edge-svc-api-" + app.getId(), serviceId, apiId, "API_CALL", counts[0] + counts[1] > 0);
         }
 
         for (ServiceResourceDTO resource : resources) {
-            String containerId = "container-" + sanitizeId(resource.getContainerId() + "-" + resource.getServiceName());
-            int falcoCount = falcoByContainer.getOrDefault(resource.getServiceName().toLowerCase(Locale.ROOT), 0);
-            boolean isDb = isDatabase(resource.getServiceName());
-            String type = isDb ? "DATABASE" : "CONTAINER";
-            String status = falcoCount > 5 ? "CRITICAL" : falcoCount > 0 ? "VULNERABLE" : resource.getStatus();
+            String serviceKey = resource.getServiceName().toLowerCase(Locale.ROOT);
+            if (!addedContainerKeys.add(serviceKey)) {
+                continue;
+            }
 
             Long matchedAppId = matchApplication(apps, resource.getServiceName());
             int[] counts = matchedAppId != null ? vulnCountsByApp.getOrDefault(matchedAppId, new int[]{0, 0}) : new int[]{0, 0};
-            if (counts[0] + counts[1] > 0) {
-                status = resolveAssetStatus(counts[0], counts[1], falcoCount);
+            int falcoCount = falcoByContainer.getOrDefault(serviceKey, 0);
+            boolean isDb = isDatabase(resource.getServiceName());
+            String type = isDb ? "DATABASE" : "CONTAINER";
+            String status = resolveAssetStatus(counts[0], counts[1], falcoCount);
+            boolean atRisk = !"HEALTHY".equals(status);
+
+            if (!atRisk && matchedAppId == null && !isDb) {
+                continue;
             }
 
+            String containerId = "container-" + sanitizeId(resource.getServiceName());
             nodes.add(AttackSurfaceDto.AttackSurfaceNode.builder()
                     .id(containerId)
                     .label(resource.getServiceName())
@@ -213,23 +209,11 @@ public class SecurityReportService {
                     .build());
 
             if (matchedAppId != null) {
-                String serviceId = "service-" + matchedAppId;
-                addEdge(edges, edgeKeys, "edge-deploy-" + containerId, serviceId, containerId, "DEPLOYMENT",
-                        counts[0] + counts[1] > 0 || falcoCount > 0);
-            }
-        }
-
-        for (int i = 0; i < nodes.size(); i++) {
-            for (int j = i + 1; j < nodes.size(); j++) {
-                AttackSurfaceDto.AttackSurfaceNode a = nodes.get(i);
-                AttackSurfaceDto.AttackSurfaceNode b = nodes.get(j);
-                if (a.getNodeName() != null && a.getNodeName().equals(b.getNodeName())
-                        && !a.getId().equals(b.getId())
-                        && !"API".equals(a.getType()) && !"API".equals(b.getType())) {
-                    boolean vulnerable = a.getCriticalVulns() + a.getHighVulns() + b.getCriticalVulns() + b.getHighVulns() > 0
-                            || a.getFalcoEvents24h() + b.getFalcoEvents24h() > 0;
-                    addEdge(edges, edgeKeys, "edge-net-" + a.getId() + "-" + b.getId(), a.getId(), b.getId(), "NETWORK", vulnerable);
-                }
+                addEdge(edges, edgeKeys, "edge-deploy-" + containerId,
+                        "service-" + matchedAppId, containerId, "DEPLOYMENT", atRisk);
+            } else if (isDb || falcoCount > 0) {
+                addEdge(edges, edgeKeys, "edge-gw-db-" + containerId,
+                        gatewayId, containerId, "NETWORK", atRisk);
             }
         }
 

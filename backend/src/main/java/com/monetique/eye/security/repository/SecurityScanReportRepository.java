@@ -16,6 +16,8 @@ public interface SecurityScanReportRepository extends JpaRepository<SecurityScan
 
     List<SecurityScanReport> findByApplicationIdAndUploadedAtAfterOrderByUploadedAtAsc(
             Long applicationId, LocalDateTime since);
+
+    List<SecurityScanReport> findByApplicationIdOrderByUploadedAtAsc(Long applicationId);
     
     Optional<SecurityScanReport> findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
             Long applicationId, ReportComponent component, ReportType reportType);

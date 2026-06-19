@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import AttackSurfaceMap from '../components/security/AttackSurfaceMap';
+import SecurityLoadingScreen from '../components/security/SecurityLoadingScreen';
 import {
   getApplications, getSecuritySummary, getVulnerabilities,
   getFalcoEvents, getFalcoSummary, getSecurityTrends, getAttackSurface,
@@ -79,6 +80,7 @@ const SecurityDashboardPage: React.FC = () => {
   const { selectedEnvironment } = useEnvironment();
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -94,6 +96,7 @@ const SecurityDashboardPage: React.FC = () => {
 
   useEffect(() => {
     if (!selectedEnvironment) return;
+    setInitialLoadDone(false);
     getApplications(selectedEnvironment.id).then((res) => {
       setApplications(res.data);
       setSelectedAppId((prev) => {
@@ -113,7 +116,7 @@ const SecurityDashboardPage: React.FC = () => {
         : getSecuritySummary();
 
       const vulnPromise = selectedAppId
-        ? getVulnerabilities(selectedAppId, { size: 50, sort: 'severity,asc' })
+        ? getVulnerabilities(selectedAppId, { size: 50, page: 0 })
         : Promise.resolve({ data: { content: [] } });
 
       const trendsPromise = selectedAppId
@@ -149,14 +152,17 @@ const SecurityDashboardPage: React.FC = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setInitialLoadDone(true);
     }
   }, [selectedEnvironment, selectedAppId]);
 
   useEffect(() => {
+    if (!selectedEnvironment) return;
+    if (applications.length > 0 && selectedAppId === null) return;
     fetchAll();
     const interval = setInterval(() => fetchAll(true), 60000);
     return () => clearInterval(interval);
-  }, [fetchAll]);
+  }, [fetchAll, selectedEnvironment, applications.length, selectedAppId]);
 
   const handleStatusChange = async (vulnId: number, status: string) => {
     try {
@@ -185,10 +191,20 @@ const SecurityDashboardPage: React.FC = () => {
     { name: 'High', value: summary?.highCount ?? 0, color: SEVERITY_COLORS.HIGH },
     { name: 'Medium', value: summary?.mediumCount ?? 0, color: SEVERITY_COLORS.MEDIUM },
     { name: 'Low', value: summary?.lowCount ?? 0, color: SEVERITY_COLORS.LOW },
-  ].filter((s) => s.value > 0);
+  ];
+
+  const severityBreakdownWithData = severityBreakdown.filter((s) => s.value > 0);
+
+  const parseTrendDate = (dateStr: string) => {
+    try {
+      return format(parseISO(dateStr), 'MMM d');
+    } catch {
+      return dateStr?.slice(0, 10) ?? '';
+    }
+  };
 
   const trendChartData = trends.map((t) => ({
-    date: format(parseISO(t.date), 'MMM d'),
+    date: parseTrendDate(t.date),
     critical: t.criticalCount,
     high: t.highCount,
     total: t.totalIssues,
@@ -213,8 +229,8 @@ const SecurityDashboardPage: React.FC = () => {
     return <div className="p-6 text-muted-foreground">Select an environment to view security data.</div>;
   }
 
-  if (loading && !summary) {
-    return <div className="p-6 text-muted-foreground">Loading security data...</div>;
+  if (loading && !initialLoadDone) {
+    return <SecurityLoadingScreen />;
   }
 
   return (
@@ -241,7 +257,7 @@ const SecurityDashboardPage: React.FC = () => {
               <option key={app.id} value={app.id}>{app.name}</option>
             ))}
           </Select>
-          <Button variant="outline" onClick={() => fetchAll(true)} disabled={refreshing}>
+          <Button variant="outline" onClick={() => fetchAll()} disabled={loading || refreshing}>
             <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -292,17 +308,39 @@ const SecurityDashboardPage: React.FC = () => {
           <Card>
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground mb-2">Severity Distribution</p>
-              {severityBreakdown.length > 0 ? (
-                <div className="h-20 w-full min-h-[80px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={severityBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={20} outerRadius={35} paddingAngle={2}>
-                      {severityBreakdown.map((entry) => (
-                        <Cell key={entry.name} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                  </ResponsiveContainer>
+              {severityBreakdownWithData.length > 0 ? (
+                <div className="flex items-center gap-4">
+                  <div className="h-24 w-24 shrink-0 min-h-[96px] min-w-[96px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={severityBreakdownWithData}
+                          dataKey="value"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={22}
+                          outerRadius={40}
+                          paddingAngle={2}
+                        >
+                          {severityBreakdownWithData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ background: '#1a1a2e', border: '1px solid #333', fontSize: 11 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    {severityBreakdown.map((entry) => (
+                      <div key={entry.name} className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                          {entry.name}
+                        </span>
+                        <span className="font-mono font-bold text-white">{entry.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No vulnerability data</p>
@@ -435,7 +473,11 @@ const SecurityDashboardPage: React.FC = () => {
                   {filteredVulns.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                        {selectedAppId ? 'No vulnerabilities found for current filters' : 'Select an application to view vulnerabilities'}
+                        {vulnerabilities.length === 0
+                          ? (selectedAppId
+                            ? 'No vulnerability records in database for this application. Upload OWASP or SonarQube reports via your CI/CD pipeline.'
+                            : 'Select an application to view vulnerabilities')
+                          : 'No vulnerabilities match the current filters'}
                       </td>
                     </tr>
                   ) : (
@@ -549,12 +591,12 @@ const SecurityDashboardPage: React.FC = () => {
             <CardHeader className="pb-2"><CardTitle className="text-sm">Recent Falco Events</CardTitle></CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto max-h-[280px] overflow-y-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs table-fixed">
                   <thead className="sticky top-0 bg-card">
                     <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <th className="p-2">Time</th>
-                      <th className="p-2">Priority</th>
-                      <th className="p-2">Rule</th>
+                      <th className="p-2 w-20">Time</th>
+                      <th className="p-2 w-24">Priority</th>
+                      <th className="p-2 w-48">Rule</th>
                       <th className="p-2">Output</th>
                     </tr>
                   </thead>
@@ -563,15 +605,15 @@ const SecurityDashboardPage: React.FC = () => {
                       <tr><td colSpan={4} className="p-6 text-center text-muted-foreground">No Falco events recorded</td></tr>
                     ) : (
                       falcoEvents.map((e) => (
-                        <tr key={e.id} className="border-b border-border/30 hover:bg-white/5">
+                        <tr key={e.id} className="border-b border-border/30 hover:bg-white/5 align-top">
                           <td className="p-2 whitespace-nowrap text-muted-foreground">
                             {format(parseISO(e.timestamp), 'HH:mm:ss')}
                           </td>
                           <td className="p-2">
                             <SeverityBadge severity={['CRITICAL', 'ALERT', 'EMERGENCY'].includes(e.priority) ? 'CRITICAL' : e.priority === 'WARNING' ? 'HIGH' : 'MEDIUM'} />
                           </td>
-                          <td className="p-2 font-medium">{e.ruleName}</td>
-                          <td className="p-2 text-muted-foreground max-w-[300px] truncate">{e.output}</td>
+                          <td className="p-2 font-medium break-words">{e.ruleName}</td>
+                          <td className="p-2 text-muted-foreground whitespace-normal break-words leading-relaxed">{e.output}</td>
                         </tr>
                       ))
                     )}
@@ -599,7 +641,7 @@ const SecurityDashboardPage: React.FC = () => {
             </p>
           </CardHeader>
           <CardContent>
-            <AttackSurfaceMap data={attackSurface} loading={loading && !attackSurface} />
+            <AttackSurfaceMap data={attackSurface} loading={false} />
           </CardContent>
         </Card>
       </section>
