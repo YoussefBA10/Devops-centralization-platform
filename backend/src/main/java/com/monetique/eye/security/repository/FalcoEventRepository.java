@@ -9,9 +9,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public interface FalcoEventRepository extends JpaRepository<FalcoEvent, Long>, JpaSpecificationExecutor<FalcoEvent> {
     int countByTimestampAfter(LocalDateTime timestamp);
+
+    List<FalcoEvent> findByTimestampAfterOrderByTimestampAsc(LocalDateTime timestamp);
     
     @Query("SELECT COUNT(f) FROM FalcoEvent f WHERE f.node.id IN " +
            "(SELECT n.id FROM ManagedNode n WHERE n.ip IN " +

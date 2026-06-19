@@ -7,10 +7,15 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface SecurityScanReportRepository extends JpaRepository<SecurityScanReport, Long> {
     Page<SecurityScanReport> findByApplicationId(Long applicationId, Pageable pageable);
+
+    List<SecurityScanReport> findByApplicationIdAndUploadedAtAfterOrderByUploadedAtAsc(
+            Long applicationId, LocalDateTime since);
     
     Optional<SecurityScanReport> findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
             Long applicationId, ReportComponent component, ReportType reportType);

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monetique.eye.entity.Incident;
 import com.monetique.eye.entity.enums.IncidentSeverity;
+import com.monetique.eye.security.dto.FalcoSummaryDto;
 import com.monetique.eye.security.entity.FalcoEvent;
 import com.monetique.eye.security.entity.enums.FalcoPriority;
 import com.monetique.eye.security.repository.FalcoEventRepository;
@@ -21,8 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -121,6 +126,44 @@ public class FalcoEventService {
 
     public Page<FalcoEvent> getEvents(Pageable pageable) {
         return falcoEventRepository.findAll(pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public FalcoSummaryDto getSummary() {
+        LocalDateTime since = LocalDateTime.now().minusDays(1);
+        List<FalcoEvent> events = falcoEventRepository.findByTimestampAfterOrderByTimestampAsc(since);
+
+        Map<String, Integer> byPriority = new LinkedHashMap<>();
+        Map<String, Integer> ruleCounts = new HashMap<>();
+        Map<String, Integer> hourly = new LinkedHashMap<>();
+
+        DateTimeFormatter hourFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:00");
+
+        for (FalcoEvent event : events) {
+            String priority = event.getPriority() != null ? event.getPriority().name() : "UNKNOWN";
+            byPriority.merge(priority, 1, Integer::sum);
+            ruleCounts.merge(event.getRuleName(), 1, Integer::sum);
+            String hour = event.getTimestamp().format(hourFmt);
+            hourly.merge(hour, 1, Integer::sum);
+        }
+
+        List<FalcoSummaryDto.RuleCount> topRules = ruleCounts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(10)
+                .map(e -> FalcoSummaryDto.RuleCount.builder().ruleName(e.getKey()).count(e.getValue()).build())
+                .collect(Collectors.toList());
+
+        List<FalcoSummaryDto.HourlyCount> timeline = hourly.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> FalcoSummaryDto.HourlyCount.builder().hour(e.getKey()).count(e.getValue()).build())
+                .collect(Collectors.toList());
+
+        return FalcoSummaryDto.builder()
+                .totalLast24h(events.size())
+                .byPriority(byPriority)
+                .topRules(topRules)
+                .hourlyTimeline(timeline)
+                .build();
     }
 
     private FalcoPriority parsePriority(String priority) {

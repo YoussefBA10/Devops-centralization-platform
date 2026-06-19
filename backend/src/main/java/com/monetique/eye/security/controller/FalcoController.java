@@ -1,5 +1,6 @@
 package com.monetique.eye.security.controller;
 
+import com.monetique.eye.security.dto.FalcoSummaryDto;
 import com.monetique.eye.security.entity.FalcoEvent;
 import com.monetique.eye.security.service.FalcoEventService;
 import lombok.RequiredArgsConstructor;
@@ -45,5 +46,10 @@ public class FalcoController {
     @GetMapping("/events")
     public ResponseEntity<Page<FalcoEvent>> getEvents(Pageable pageable) {
         return ResponseEntity.ok(falcoEventService.getEvents(pageable));
+    }
+
+    @GetMapping("/summary")
+    public ResponseEntity<FalcoSummaryDto> getSummary() {
+        return ResponseEntity.ok(falcoEventService.getSummary());
     }
 }

@@ -1,12 +1,15 @@
 package com.monetique.eye.security.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.monetique.eye.security.dto.AttackSurfaceDto;
 import com.monetique.eye.security.dto.SecurityDashboardSummaryDto;
 import com.monetique.eye.security.dto.SecurityReportUploadResponse;
+import com.monetique.eye.security.dto.SecurityTrendPointDto;
 import com.monetique.eye.security.dto.VulnerabilityDto;
 import com.monetique.eye.security.entity.SecurityScanReport;
 import com.monetique.eye.security.entity.enums.ReportComponent;
 import com.monetique.eye.security.entity.enums.ReportType;
+import com.monetique.eye.security.entity.enums.VulnerabilitySeverity;
 import com.monetique.eye.security.entity.enums.VulnerabilityStatus;
 import com.monetique.eye.security.service.SecurityReportService;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -82,8 +86,11 @@ public class SecurityReportController {
     @GetMapping("/vulnerabilities/{applicationId}")
     public ResponseEntity<Page<VulnerabilityDto>> getVulnerabilities(
             @PathVariable Long applicationId,
+            @RequestParam(required = false) VulnerabilitySeverity severity,
+            @RequestParam(required = false) VulnerabilityStatus status,
+            @RequestParam(required = false) ReportType reportType,
             Pageable pageable) {
-        return ResponseEntity.ok(securityReportService.getVulnerabilities(applicationId, pageable));
+        return ResponseEntity.ok(securityReportService.getVulnerabilities(applicationId, severity, status, reportType, pageable));
     }
 
     @PatchMapping("/vulnerabilities/{vulnId}/status")
@@ -105,5 +112,17 @@ public class SecurityReportController {
     @GetMapping("/dashboard/summary")
     public ResponseEntity<SecurityDashboardSummaryDto> getGlobalSummary() {
         return ResponseEntity.ok(securityReportService.getGlobalSummary());
+    }
+
+    @GetMapping("/dashboard/trends/{applicationId}")
+    public ResponseEntity<List<SecurityTrendPointDto>> getTrends(
+            @PathVariable Long applicationId,
+            @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(securityReportService.getTrends(applicationId, days));
+    }
+
+    @GetMapping("/dashboard/attack-surface")
+    public ResponseEntity<AttackSurfaceDto> getAttackSurface(@RequestParam Long environmentId) {
+        return ResponseEntity.ok(securityReportService.getAttackSurface(environmentId));
     }
 }

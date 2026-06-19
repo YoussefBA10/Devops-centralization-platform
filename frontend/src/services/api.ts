@@ -188,4 +188,13 @@ export const getFalcoEvents = (params?: any) =>
 export const getFalcoSummary = () => 
   api.get('/security/falco/summary', { baseURL: getSecurityBaseURL() });
 
+export const getSecurityReports = (applicationId: number, params?: Record<string, unknown>) =>
+  api.get(`/security/reports/${applicationId}`, { params, baseURL: getSecurityBaseURL() });
+
+export const getSecurityTrends = (applicationId: number, days = 30) =>
+  api.get(`/security/dashboard/trends/${applicationId}`, { params: { days }, baseURL: getSecurityBaseURL() });
+
+export const getAttackSurface = (environmentId: number) =>
+  api.get('/security/dashboard/attack-surface', { params: { environmentId }, baseURL: getSecurityBaseURL() });
+
 export default api;
