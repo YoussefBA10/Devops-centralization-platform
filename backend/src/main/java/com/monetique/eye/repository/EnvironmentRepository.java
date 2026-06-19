@@ -8,4 +8,5 @@ import org.springframework.stereotype.Repository;
 public interface EnvironmentRepository extends JpaRepository<Environment, Long> {
     java.util.Optional<Environment> findByName(String name);
     java.util.Optional<Environment> findByPrometheusLabel(String prometheusLabel);
+    java.util.List<Environment> findByCluster_Id(Long clusterId);
 }

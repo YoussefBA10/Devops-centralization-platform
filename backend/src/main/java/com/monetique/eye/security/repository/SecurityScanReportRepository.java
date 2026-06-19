@@ -24,6 +24,12 @@ public interface SecurityScanReportRepository extends JpaRepository<SecurityScan
     @Query("SELECT r FROM SecurityScanReport r JOIN FETCH r.application a JOIN a.environment e " +
            "WHERE (:clusterId IS NULL OR e.cluster.id = :clusterId) ORDER BY r.uploadedAt ASC")
     List<SecurityScanReport> findByClusterIdOrderByUploadedAtAsc(@Param("clusterId") Long clusterId);
+
+    List<SecurityScanReport> findAllByOrderByUploadedAtAsc();
+
+    @Query("SELECT r FROM SecurityScanReport r JOIN FETCH r.application a " +
+           "WHERE a.id IN :applicationIds ORDER BY r.uploadedAt ASC")
+    List<SecurityScanReport> findByApplicationIdInWithApplication(@Param("applicationIds") List<Long> applicationIds);
     
     Optional<SecurityScanReport> findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
             Long applicationId, ReportComponent component, ReportType reportType);

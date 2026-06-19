@@ -2,7 +2,9 @@ package com.monetique.eye.security.service;
 
 import com.monetique.eye.dto.ServiceResourceDTO;
 import com.monetique.eye.entity.Application;
+import com.monetique.eye.entity.Environment;
 import com.monetique.eye.repository.ApplicationRepository;
+import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.security.dto.AttackSurfaceDto;
 import com.monetique.eye.security.dto.SecurityDashboardSummaryDto;
 import com.monetique.eye.security.dto.SecurityReportUploadResponse;
@@ -47,6 +49,7 @@ public class SecurityReportService {
     private final SecurityScanReportRepository reportRepository;
     private final SecurityVulnerabilityRepository vulnerabilityRepository;
     private final ApplicationRepository applicationRepository;
+    private final EnvironmentRepository environmentRepository;
     private final FalcoEventRepository falcoEventRepository;
     private final DependencyCheckReportParser dependencyCheckParser;
     private final SonarReportParser sonarParser;
@@ -317,7 +320,7 @@ public class SecurityReportService {
 
     @Transactional(readOnly = true)
     public List<SecurityTrendPointDto> getClusterTrends(Long clusterId, int days) {
-        List<SecurityScanReport> reports = reportRepository.findByClusterIdOrderByUploadedAtAsc(clusterId);
+        List<SecurityScanReport> reports = loadReportsForCluster(clusterId);
         if (days > 0 && !reports.isEmpty()) {
             LocalDateTime since = LocalDateTime.now().minusDays(days);
             List<SecurityScanReport> filtered = reports.stream()
@@ -328,18 +331,68 @@ public class SecurityReportService {
             }
         }
         return reports.stream()
-                .map(r -> SecurityTrendPointDto.builder()
-                        .date(r.getUploadedAt())
-                        .reportType(r.getReportType())
-                        .buildNumber(r.getBuildNumber())
-                        .criticalCount(safeInt(r.getCriticalCount()))
-                        .highCount(safeInt(r.getHighCount()))
-                        .mediumCount(safeInt(r.getMediumCount()))
-                        .lowCount(safeInt(r.getLowCount()))
-                        .totalIssues(resolveTotalIssues(r))
-                        .applicationName(r.getApplication() != null ? r.getApplication().getName() : null)
-                        .build())
+                .map(this::toTrendPoint)
                 .collect(Collectors.toList());
+    }
+
+    private SecurityTrendPointDto toTrendPoint(SecurityScanReport r) {
+        return SecurityTrendPointDto.builder()
+                .date(r.getUploadedAt())
+                .reportType(r.getReportType())
+                .buildNumber(r.getBuildNumber())
+                .criticalCount(safeInt(r.getCriticalCount()))
+                .highCount(safeInt(r.getHighCount()))
+                .mediumCount(safeInt(r.getMediumCount()))
+                .lowCount(safeInt(r.getLowCount()))
+                .totalIssues(resolveTotalIssues(r))
+                .applicationName(r.getApplication() != null ? r.getApplication().getName() : null)
+                .build();
+    }
+
+    private List<SecurityScanReport> loadReportsForCluster(Long clusterId) {
+        if (clusterId == null) {
+            return reportRepository.findAllByOrderByUploadedAtAsc();
+        }
+        List<Long> appIds = resolveClusterApplications(clusterId).stream()
+                .map(Application::getId)
+                .collect(Collectors.toList());
+        if (!appIds.isEmpty()) {
+            List<SecurityScanReport> byApps = reportRepository.findByApplicationIdInWithApplication(appIds);
+            if (!byApps.isEmpty()) {
+                return byApps;
+            }
+        }
+        return reportRepository.findByClusterIdOrderByUploadedAtAsc(clusterId);
+    }
+
+    private List<Environment> resolveClusterEnvironments(Long clusterId) {
+        if (clusterId == null) {
+            return environmentRepository.findAll();
+        }
+        List<Environment> envs = environmentRepository.findByCluster_Id(clusterId);
+        if (!envs.isEmpty()) {
+            return envs;
+        }
+        return applicationRepository.findByClusterId(clusterId).stream()
+                .map(Application::getEnvironment)
+                .filter(env -> env != null)
+                .collect(Collectors.toMap(Environment::getId, e -> e, (a, b) -> a))
+                .values().stream()
+                .collect(Collectors.toList());
+    }
+
+    private List<Application> resolveClusterApplications(Long clusterId) {
+        if (clusterId == null) {
+            return applicationRepository.findAll();
+        }
+        List<Application> apps = new ArrayList<>();
+        for (Environment env : resolveClusterEnvironments(clusterId)) {
+            apps.addAll(applicationRepository.findByEnvironmentId(env.getId()));
+        }
+        if (!apps.isEmpty()) {
+            return apps;
+        }
+        return applicationRepository.findByClusterId(clusterId);
     }
 
     private int resolveTotalIssues(SecurityScanReport r) {
@@ -353,10 +406,8 @@ public class SecurityReportService {
 
     @Transactional(readOnly = true)
     public AttackSurfaceDto getClusterAttackSurface(Long clusterId) {
-        List<Application> apps = applicationRepository.findByClusterId(clusterId);
-        Set<Long> envIds = apps.stream()
-                .map(a -> a.getEnvironment().getId())
-                .collect(Collectors.toSet());
+        List<Environment> environments = resolveClusterEnvironments(clusterId);
+        List<Application> apps = resolveClusterApplications(clusterId);
 
         LocalDateTime since24h = LocalDateTime.now().minusDays(1);
         List<FalcoEvent> recentFalco = falcoEventRepository.findByTimestampAfterOrderByTimestampAsc(since24h);
@@ -379,20 +430,39 @@ public class SecurityReportService {
                 .status("HEALTHY")
                 .build());
 
-        // Group docker containers by host
         Map<String, List<ServiceResourceDTO>> containersByHost = new java.util.LinkedHashMap<>();
         Map<String, String> hostEnvironment = new HashMap<>();
 
-        for (Long envId : envIds) {
-            String envName = apps.stream()
-                    .filter(a -> a.getEnvironment().getId().equals(envId))
-                    .map(a -> a.getEnvironment().getName())
-                    .findFirst().orElse("env-" + envId);
-            for (ServiceResourceDTO resource : infrastructureService.getEnvironmentServiceResources(envId)) {
-                String host = resource.getNodeName() != null && !resource.getNodeName().isBlank()
-                        ? resource.getNodeName() : "unknown-host";
-                containersByHost.computeIfAbsent(host, k -> new ArrayList<>()).add(resource);
-                hostEnvironment.putIfAbsent(host, envName);
+        for (Environment env : environments) {
+            String envName = env.getName();
+            try {
+                for (ServiceResourceDTO resource : infrastructureService.getEnvironmentServiceResources(env.getId())) {
+                    String host = resource.getNodeName() != null && !resource.getNodeName().isBlank()
+                            ? resource.getNodeName() : envName;
+                    containersByHost.computeIfAbsent(host, k -> new ArrayList<>()).add(resource);
+                    hostEnvironment.putIfAbsent(host, envName);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to load Prometheus containers for environment {}: {}", envName, e.getMessage());
+            }
+        }
+
+        if (containersByHost.isEmpty() && !apps.isEmpty()) {
+            for (Application app : apps) {
+                String host = app.getTargetNode() != null && !app.getTargetNode().isBlank()
+                        ? app.getTargetNode()
+                        : (app.getEnvironment() != null ? app.getEnvironment().getName() : "docker-host");
+                String serviceName = app.getServiceNameKeyword() != null && !app.getServiceNameKeyword().isBlank()
+                        ? app.getServiceNameKeyword() : app.getName();
+                ServiceResourceDTO synthetic = ServiceResourceDTO.builder()
+                        .serviceName(serviceName)
+                        .nodeName(host)
+                        .status(app.getStatus() != null ? app.getStatus() : "HEALTHY")
+                        .build();
+                containersByHost.computeIfAbsent(host, k -> new ArrayList<>()).add(synthetic);
+                if (app.getEnvironment() != null) {
+                    hostEnvironment.putIfAbsent(host, app.getEnvironment().getName());
+                }
             }
         }
 
@@ -583,8 +653,11 @@ public class SecurityReportService {
     private Long matchApplication(List<Application> apps, String serviceName) {
         String lower = serviceName.toLowerCase(Locale.ROOT);
         for (Application app : apps) {
-            if (lower.contains(app.getName().toLowerCase(Locale.ROOT))
-                    || lower.contains(app.getServiceNameKeyword().toLowerCase(Locale.ROOT))) {
+            if (lower.contains(app.getName().toLowerCase(Locale.ROOT))) {
+                return app.getId();
+            }
+            if (app.getServiceNameKeyword() != null
+                    && lower.contains(app.getServiceNameKeyword().toLowerCase(Locale.ROOT))) {
                 return app.getId();
             }
         }

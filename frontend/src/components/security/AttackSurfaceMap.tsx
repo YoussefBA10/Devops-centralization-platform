@@ -173,9 +173,18 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
     );
   }
 
-  const vulnerableCount = data?.nodes.filter((n) => n.status !== 'HEALTHY').length ?? 0;
   const hostCount = data?.nodes.filter((n) => n.type === 'DOCKER_HOST').length ?? 0;
   const containerCount = data?.nodes.filter((n) => n.type === 'CONTAINER' || n.type === 'DATABASE').length ?? 0;
+
+  if (hostCount === 0 && containerCount === 0) {
+    return (
+      <div className="h-[400px] flex items-center justify-center text-muted-foreground text-center px-6">
+        No Docker hosts or containers mapped for this cluster. Ensure environments are linked to the cluster and Prometheus is scraping cAdvisor.
+      </div>
+    );
+  }
+
+  const vulnerableCount = data?.nodes.filter((n) => n.status !== 'HEALTHY').length ?? 0;
 
   return (
     <div className="space-y-2">

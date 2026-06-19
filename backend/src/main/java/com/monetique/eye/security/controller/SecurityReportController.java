@@ -146,12 +146,9 @@ public class SecurityReportController {
     public ResponseEntity<AttackSurfaceDto> getAttackSurface(
             @RequestParam(required = false) Long environmentId,
             @RequestParam(required = false) Long clusterId) {
-        if (clusterId != null) {
-            return ResponseEntity.ok(securityReportService.getClusterAttackSurface(clusterId));
+        if (environmentId != null) {
+            return ResponseEntity.ok(securityReportService.getAttackSurface(environmentId));
         }
-        if (environmentId == null) {
-            return ResponseEntity.badRequest().build();
-        }
-        return ResponseEntity.ok(securityReportService.getAttackSurface(environmentId));
+        return ResponseEntity.ok(securityReportService.getClusterAttackSurface(clusterId));
     }
 }

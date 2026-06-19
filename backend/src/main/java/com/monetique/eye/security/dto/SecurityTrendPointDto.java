@@ -1,5 +1,6 @@
 package com.monetique.eye.security.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.monetique.eye.security.entity.enums.ReportType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SecurityTrendPointDto {
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime date;
     private ReportType reportType;
     private String buildNumber;

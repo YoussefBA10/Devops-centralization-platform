@@ -117,8 +117,14 @@ const SecurityDashboardPage: React.FC = () => {
         setFalcoEvents((falcoRes.value.data as PaginatedResponse<FalcoEvent>).content || []);
       }
       if (falcoSumRes.status === 'fulfilled') setFalcoSummary(falcoSumRes.value.data);
-      if (trendsRes.status === 'fulfilled') setTrends(trendsRes.value.data);
+      if (trendsRes.status === 'fulfilled') {
+        const raw = trendsRes.value.data;
+        setTrends(Array.isArray(raw) ? raw : []);
+      } else {
+        console.error('Trends API failed', trendsRes);
+      }
       if (surfaceRes.status === 'fulfilled') setAttackSurface(surfaceRes.value.data);
+      else console.error('Attack surface API failed', surfaceRes);
 
       const failed = results.filter((r) => r.status === 'rejected');
       if (failed.length > 0) {
