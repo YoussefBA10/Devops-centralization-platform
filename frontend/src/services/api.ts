@@ -163,24 +163,29 @@ export const prometheusQuery = (query: string) => api.get('/prometheus/query', {
 export const prometheusQueryRange = (query: string, start: number, end: number, step: string) => 
   api.get('/prometheus/query_range', { params: { query, start, end, step } });
 
-// Security Module Endpoints
+// Security Module Endpoints — backend maps to /api/security (no /v1 prefix)
+const getSecurityBaseURL = () => {
+  const base = getBaseURL(); // e.g. http://192.168.126.136:8880/api/v1
+  return base.replace(/\/v1$/, ''); // → http://192.168.126.136:8880/api
+};
+
 export const getSecuritySummary = (applicationId?: number) => {
   if (applicationId) {
-    return api.get(`/api/security/dashboard/summary/${applicationId}`, { baseURL: '/' });
+    return api.get(`/security/dashboard/summary/${applicationId}`, { baseURL: getSecurityBaseURL() });
   }
-  return api.get('/api/security/dashboard/summary', { baseURL: '/' });
+  return api.get('/security/dashboard/summary', { baseURL: getSecurityBaseURL() });
 };
 
 export const getVulnerabilities = (applicationId: number, params?: any) => 
-  api.get(`/api/security/vulnerabilities/${applicationId}`, { params, baseURL: '/' });
+  api.get(`/security/vulnerabilities/${applicationId}`, { params, baseURL: getSecurityBaseURL() });
 
 export const updateVulnerabilityStatus = (vulnId: number, status: string) => 
-  api.patch(`/api/security/vulnerabilities/${vulnId}/status`, { status }, { baseURL: '/' });
+  api.patch(`/security/vulnerabilities/${vulnId}/status`, { status }, { baseURL: getSecurityBaseURL() });
 
 export const getFalcoEvents = (params?: any) => 
-  api.get('/api/security/falco/events', { params, baseURL: '/' });
+  api.get('/security/falco/events', { params, baseURL: getSecurityBaseURL() });
 
 export const getFalcoSummary = () => 
-  api.get('/api/security/falco/summary', { baseURL: '/' });
+  api.get('/security/falco/summary', { baseURL: getSecurityBaseURL() });
 
 export default api;
