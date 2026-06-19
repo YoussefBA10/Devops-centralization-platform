@@ -113,14 +113,14 @@ const SecurityDashboardPage: React.FC = () => {
         : getSecuritySummary();
 
       const vulnPromise = selectedAppId
-        ? getVulnerabilities(selectedAppId, { size: 100, sort: 'severity,asc' })
+        ? getVulnerabilities(selectedAppId, { size: 50, sort: 'severity,asc' })
         : Promise.resolve({ data: { content: [] } });
 
       const trendsPromise = selectedAppId
         ? getSecurityTrends(selectedAppId, 30)
         : Promise.resolve({ data: [] });
 
-      const [summaryRes, vulnRes, falcoRes, falcoSumRes, trendsRes, surfaceRes] = await Promise.all([
+      const results = await Promise.allSettled([
         summaryPromise,
         vulnPromise,
         getFalcoEvents({ size: 50, sort: 'timestamp,desc' }),
@@ -129,14 +129,23 @@ const SecurityDashboardPage: React.FC = () => {
         getAttackSurface(selectedEnvironment.id),
       ]);
 
-      setSummary(summaryRes.data);
-      setVulnerabilities((vulnRes.data as PaginatedResponse<Vulnerability>).content || []);
-      setFalcoEvents((falcoRes.data as PaginatedResponse<FalcoEvent>).content || []);
-      setFalcoSummary(falcoSumRes.data);
-      setTrends(trendsRes.data);
-      setAttackSurface(surfaceRes.data);
-    } catch (error) {
-      console.error('Failed to fetch security data', error);
+      const [summaryRes, vulnRes, falcoRes, falcoSumRes, trendsRes, surfaceRes] = results;
+
+      if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.data);
+      if (vulnRes.status === 'fulfilled') {
+        setVulnerabilities((vulnRes.value.data as PaginatedResponse<Vulnerability>).content || []);
+      }
+      if (falcoRes.status === 'fulfilled') {
+        setFalcoEvents((falcoRes.value.data as PaginatedResponse<FalcoEvent>).content || []);
+      }
+      if (falcoSumRes.status === 'fulfilled') setFalcoSummary(falcoSumRes.value.data);
+      if (trendsRes.status === 'fulfilled') setTrends(trendsRes.value.data);
+      if (surfaceRes.status === 'fulfilled') setAttackSurface(surfaceRes.value.data);
+
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length > 0) {
+        console.error('Some security API calls failed', failed);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -284,7 +293,8 @@ const SecurityDashboardPage: React.FC = () => {
             <CardContent className="p-4">
               <p className="text-xs text-muted-foreground mb-2">Severity Distribution</p>
               {severityBreakdown.length > 0 ? (
-                <ResponsiveContainer width="100%" height={80}>
+                <div className="h-20 w-full min-h-[80px]">
+                  <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={severityBreakdown} dataKey="value" cx="50%" cy="50%" innerRadius={20} outerRadius={35} paddingAngle={2}>
                       {severityBreakdown.map((entry) => (
@@ -292,7 +302,8 @@ const SecurityDashboardPage: React.FC = () => {
                       ))}
                     </Pie>
                   </PieChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">No vulnerability data</p>
               )}

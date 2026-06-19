@@ -1,5 +1,6 @@
 package com.monetique.eye.security.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.monetique.eye.entity.Application;
 import com.monetique.eye.security.entity.enums.ReportComponent;
 import com.monetique.eye.security.entity.enums.ReportType;
@@ -35,7 +36,10 @@ public class SecurityScanReport {
 
     private String buildNumber;
 
+    @Basic(fetch = FetchType.LAZY)
     @Column(columnDefinition = "LONGTEXT")
+    @ToString.Exclude
+    @JsonIgnore
     private String rawJson;
 
     private Integer criticalCount;

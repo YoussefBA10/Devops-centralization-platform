@@ -97,8 +97,7 @@ public class SecurityReportService {
         if (latestReportIds.isEmpty()) {
             return Page.empty(pageable);
         }
-        return vulnerabilityRepository.findByLatestReports(latestReportIds, severity, status, reportType, pageable)
-                .map(this::toDto);
+        return vulnerabilityRepository.findDtosByLatestReports(latestReportIds, severity, status, reportType, pageable);
     }
 
     @Transactional
@@ -366,18 +365,8 @@ public class SecurityReportService {
     }
 
     private int[] countVulnsForApp(Long applicationId) {
-        int critical = 0;
-        int high = 0;
-        List<Long> latestIds = getLatestReportIds(applicationId, null);
-        if (!latestIds.isEmpty()) {
-            List<SecurityVulnerability> latestVulns = vulnerabilityRepository.findByLatestReports(
-                    latestIds, null, VulnerabilityStatus.OPEN, null, Pageable.unpaged()).getContent();
-            for (SecurityVulnerability v : latestVulns) {
-                if (v.getSeverity() == VulnerabilitySeverity.CRITICAL) critical++;
-                else if (v.getSeverity() == VulnerabilitySeverity.HIGH) high++;
-            }
-        }
-        return new int[]{critical, high};
+        SeverityTotals totals = aggregateLatestReportCounts(applicationId);
+        return new int[]{totals.critical, totals.high};
     }
 
     private Map<String, Integer> countFalcoByContainer(List<FalcoEvent> events) {
@@ -434,22 +423,6 @@ public class SecurityReportService {
 
     private String sanitizeId(String raw) {
         return raw.replaceAll("[^a-zA-Z0-9_-]", "-");
-    }
-
-    private VulnerabilityDto toDto(SecurityVulnerability v) {
-        return VulnerabilityDto.builder()
-                .id(v.getId())
-                .reportId(v.getReport().getId())
-                .identifier(v.getIdentifier())
-                .title(v.getTitle())
-                .severity(v.getSeverity())
-                .description(v.getDescription())
-                .filePath(v.getFilePath())
-                .cvssScore(v.getCvssScore())
-                .status(v.getStatus())
-                .reportType(v.getReport().getReportType())
-                .component(v.getReport().getComponent())
-                .build();
     }
 
     private int safeInt(Integer value) {
