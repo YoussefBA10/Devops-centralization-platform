@@ -132,10 +132,12 @@ public class SecurityReportService {
     @Transactional(readOnly = true)
     public SecurityDashboardSummaryDto getGlobalSummary() {
         int falcoCount = falcoEventRepository.countByTimestampAfter(LocalDateTime.now().minusDays(1));
-        // A real implementation would aggregate across all applications
+        long criticalCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.CRITICAL);
+        long highCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.HIGH);
+        
         return SecurityDashboardSummaryDto.builder()
-                .criticalCount(0)
-                .highCount(0)
+                .criticalCount((int) criticalCount)
+                .highCount((int) highCount)
                 .falcoEventsLast24h(falcoCount)
                 .trend("STABLE")
                 .build();
