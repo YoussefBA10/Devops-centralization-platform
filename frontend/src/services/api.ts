@@ -218,4 +218,10 @@ export const getClusterAttackSurface = (clusterId?: number) =>
     baseURL: getSecurityBaseURL(),
   });
 
+export const getAttackSurfaceNodeDetail = (nodeId: string, clusterId?: number) =>
+  api.get(`/security/dashboard/attack-surface/nodes/${encodeURIComponent(nodeId)}`, {
+    params: clusterId != null ? { clusterId } : {},
+    baseURL: getSecurityBaseURL(),
+  });
+
 export default api;

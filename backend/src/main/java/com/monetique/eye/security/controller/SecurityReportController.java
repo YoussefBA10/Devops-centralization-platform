@@ -2,6 +2,7 @@ package com.monetique.eye.security.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monetique.eye.security.dto.AttackSurfaceDto;
+import com.monetique.eye.security.dto.AttackSurfaceNodeDetailDto;
 import com.monetique.eye.security.dto.SecurityDashboardSummaryDto;
 import com.monetique.eye.security.dto.SecurityReportUploadResponse;
 import com.monetique.eye.security.dto.SecurityTrendPointDto;
@@ -140,6 +141,17 @@ public class SecurityReportController {
             @PathVariable Long applicationId,
             @RequestParam(defaultValue = "30") int days) {
         return ResponseEntity.ok(securityReportService.getTrends(applicationId, days));
+    }
+
+    @GetMapping("/dashboard/attack-surface/nodes/{nodeId}")
+    public ResponseEntity<?> getAttackSurfaceNodeDetail(
+            @PathVariable String nodeId,
+            @RequestParam(required = false) Long clusterId) {
+        try {
+            return ResponseEntity.ok(securityReportService.getAttackSurfaceNodeDetail(nodeId, clusterId));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/dashboard/attack-surface")

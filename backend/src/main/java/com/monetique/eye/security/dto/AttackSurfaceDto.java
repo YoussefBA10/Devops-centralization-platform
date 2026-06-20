@@ -33,6 +33,8 @@ public class AttackSurfaceDto {
         private String environmentName;
         private String parentId;
         private String dockerHost;
+        private String serviceName;
+        private String applicationName;
     }
 
     @Data

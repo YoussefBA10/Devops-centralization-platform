@@ -72,6 +72,27 @@ export interface AttackSurfaceNode {
   environmentName?: string;
   parentId?: string;
   dockerHost?: string;
+  serviceName?: string;
+  applicationName?: string;
+}
+
+export interface AttackSurfaceNodeDetail {
+  node: AttackSurfaceNode;
+  serviceName?: string;
+  applicationName?: string;
+  riskReasons: string[];
+  vulnerabilities: Vulnerability[];
+  falcoEvents: FalcoEventBrief[];
+  atRiskChildren: AttackSurfaceNode[];
+  remediationHints: string[];
+}
+
+export interface FalcoEventBrief {
+  id: number;
+  ruleName: string;
+  priority: string;
+  output: string;
+  timestamp: string;
 }
 
 export interface AttackSurfaceEdge {

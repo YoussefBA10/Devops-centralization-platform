@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,10 +9,12 @@ import {
   type Node,
   type Edge,
   type ReactFlowInstance,
+  type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Server, Database, Box, Globe, AlertTriangle, HardDrive } from 'lucide-react';
 import type { AttackSurfaceData, AttackSurfaceNode } from '../../types/security';
+import AttackSurfaceNodeDrawer from './AttackSurfaceNodeDrawer';
 
 /** Fixed node dimensions — layout uses these constants; badges must not change them. */
 const NODE_H = 72;
@@ -47,7 +49,7 @@ const SecurityNode = ({ data }: { data: Record<string, unknown> }) => {
 
   return (
     <div
-      className={`h-[72px] w-[188px] box-border px-3 py-2 rounded-lg bg-card/90 border-2 overflow-hidden ${isHost ? '!w-[200px]' : ''} ${statusBorder[status] || statusBorder.HEALTHY}`}
+      className={`h-[72px] w-[188px] box-border px-3 py-2 rounded-lg bg-card/90 border-2 overflow-hidden cursor-pointer hover:brightness-110 transition-all ${isHost ? '!w-[200px]' : ''} ${statusBorder[status] || statusBorder.HEALTHY}`}
     >
       <Handle type="target" position={Position.Left} className="w-2 h-2" />
       <div className="flex items-start gap-2 h-full">
@@ -220,11 +222,13 @@ function FitViewOnLoad({ dep }: { dep: unknown }) {
 interface Props {
   data: AttackSurfaceData | null;
   loading?: boolean;
+  clusterId?: number;
 }
 
-const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
+const AttackSurfaceMap: React.FC<Props> = ({ data, loading, clusterId }) => {
   const canvasW = 960;
   const canvasH = 480;
+  const [selectedNode, setSelectedNode] = useState<AttackSurfaceNode | null>(null);
 
   const { nodes, edges } = useMemo(() => {
     if (!data?.nodes?.length) return { nodes: [], edges: [] };
@@ -236,6 +240,11 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
       instance.fitView({ padding: 0.12, duration: 200, minZoom: 0.4, maxZoom: 1.1 });
     }, 100);
   }, []);
+
+  const onNodeClick: NodeMouseHandler = useCallback((_event, flowNode) => {
+    const node = data?.nodes.find((n) => n.id === flowNode.id);
+    if (node) setSelectedNode(node);
+  }, [data]);
 
   if (loading) {
     return <div className="h-[480px] flex items-center justify-center text-muted-foreground">Loading attack surface...</div>;
@@ -263,39 +272,48 @@ const AttackSurfaceMap: React.FC<Props> = ({ data, loading }) => {
   const vulnerableCount = data?.nodes.filter((n) => n.status !== 'HEALTHY').length ?? 0;
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-emerald-500/40" /> Healthy</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-amber-500" /> Vulnerable</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-500" /> Critical</span>
-        <span className="ml-auto text-muted-foreground">
-          {hostCount} Docker hosts · {containerCount} containers · <span className="text-amber-400">{vulnerableCount} at-risk</span>
-        </span>
+    <>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-emerald-500/40" /> Healthy</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-amber-500" /> Vulnerable</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-500" /> Critical</span>
+          <span className="ml-auto text-muted-foreground">
+            {hostCount} Docker hosts · {containerCount} containers · <span className="text-amber-400">{vulnerableCount} at-risk</span>
+            <span className="ml-2 text-primary/80">· Click a node for details</span>
+          </span>
+        </div>
+        <div className="h-[480px] w-full rounded-lg border border-border overflow-hidden bg-background/50">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onInit={onInit}
+            onNodeClick={onNodeClick}
+            fitView
+            fitViewOptions={{ padding: 0.12, minZoom: 0.4, maxZoom: 1.1 }}
+            minZoom={0.25}
+            maxZoom={1.4}
+            proOptions={{ hideAttribution: true }}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable
+          >
+            <FitViewOnLoad dep={nodes.length} />
+            <Background gap={24} color="#ffffff08" />
+            <Controls showInteractive={false} className="!bg-card/90 !border-border !shadow-md" />
+          </ReactFlow>
+        </div>
+        <p className="text-[10px] text-muted-foreground text-center">
+          Hub topology: External Traffic → Docker Host (center) → containers distributed above &amp; below (red edges = vulnerable path)
+        </p>
       </div>
-      <div className="h-[480px] w-full rounded-lg border border-border overflow-hidden bg-background/50">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onInit={onInit}
-          fitView
-          fitViewOptions={{ padding: 0.12, minZoom: 0.4, maxZoom: 1.1 }}
-          minZoom={0.25}
-          maxZoom={1.4}
-          proOptions={{ hideAttribution: true }}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-        >
-          <FitViewOnLoad dep={nodes.length} />
-          <Background gap={24} color="#ffffff08" />
-          <Controls showInteractive={false} className="!bg-card/90 !border-border !shadow-md" />
-        </ReactFlow>
-      </div>
-      <p className="text-[10px] text-muted-foreground text-center">
-        Hub topology: External Traffic → Docker Host (center) → containers distributed above &amp; below (red edges = vulnerable path)
-      </p>
-    </div>
+      <AttackSurfaceNodeDrawer
+        node={selectedNode}
+        clusterId={clusterId}
+        onClose={() => setSelectedNode(null)}
+      />
+    </>
   );
 };
 

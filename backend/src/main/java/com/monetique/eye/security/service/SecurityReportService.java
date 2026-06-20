@@ -5,7 +5,9 @@ import com.monetique.eye.entity.Application;
 import com.monetique.eye.entity.Environment;
 import com.monetique.eye.repository.ApplicationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
+import com.monetique.eye.security.dto.AttackSurfaceNodeDetailDto;
 import com.monetique.eye.security.dto.AttackSurfaceDto;
+import com.monetique.eye.security.dto.FalcoEventBriefDto;
 import com.monetique.eye.security.dto.ReportCountProjection;
 import com.monetique.eye.security.dto.ScanReportTrendProjection;
 import com.monetique.eye.security.dto.SecurityDashboardSummaryDto;
@@ -565,6 +567,8 @@ public class SecurityReportService {
                         .highVulns(counts[1])
                         .falcoEvents24h(falcoCount)
                         .applicationId(matchedAppId)
+                        .applicationName(matchedApp != null ? matchedApp.getName() : null)
+                        .serviceName(resource.getServiceName())
                         .nodeName(hostName)
                         .port(matchedApp != null ? matchedApp.getPort() : null)
                         .environmentName(envName)
@@ -576,6 +580,122 @@ public class SecurityReportService {
         }
 
         return AttackSurfaceDto.builder().nodes(nodes).edges(edges).build();
+    }
+
+    @Transactional(readOnly = true)
+    public AttackSurfaceNodeDetailDto getAttackSurfaceNodeDetail(String nodeId, Long clusterId) {
+        AttackSurfaceDto surface = getClusterAttackSurface(clusterId);
+        AttackSurfaceDto.AttackSurfaceNode node = surface.getNodes().stream()
+                .filter(n -> nodeId.equals(n.getId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Attack surface node not found: " + nodeId));
+
+        String serviceName = node.getServiceName();
+        String applicationName = node.getApplicationName();
+        List<String> riskReasons = new ArrayList<>();
+        List<String> remediationHints = new ArrayList<>();
+        List<VulnerabilityDto> vulnerabilities = new ArrayList<>();
+        List<FalcoEventBriefDto> falcoEvents = new ArrayList<>();
+        List<AttackSurfaceDto.AttackSurfaceNode> atRiskChildren = new ArrayList<>();
+
+        if ("DOCKER_HOST".equals(node.getType())) {
+            atRiskChildren = surface.getNodes().stream()
+                    .filter(n -> node.getId().equals(n.getParentId()) && !"HEALTHY".equals(n.getStatus()))
+                    .sorted(Comparator.comparing(AttackSurfaceDto.AttackSurfaceNode::getStatus).reversed())
+                    .collect(Collectors.toList());
+            if (!atRiskChildren.isEmpty()) {
+                riskReasons.add(atRiskChildren.size() + " container(s) on this host have security or runtime alerts.");
+            } else {
+                riskReasons.add("No at-risk containers detected on this host.");
+            }
+        } else if ("API".equals(node.getType())) {
+            long atRisk = surface.getNodes().stream().filter(n -> !"HEALTHY".equals(n.getStatus())).count();
+            riskReasons.add("Entry point for external traffic into the cluster.");
+            if (atRisk > 0) {
+                riskReasons.add(atRisk + " downstream asset(s) flagged as vulnerable or critical.");
+            }
+        } else {
+            buildContainerRiskContext(node, riskReasons, remediationHints, vulnerabilities, falcoEvents);
+        }
+
+        return AttackSurfaceNodeDetailDto.builder()
+                .node(node)
+                .serviceName(serviceName)
+                .applicationName(applicationName)
+                .riskReasons(riskReasons)
+                .vulnerabilities(vulnerabilities)
+                .falcoEvents(falcoEvents)
+                .atRiskChildren(atRiskChildren)
+                .remediationHints(remediationHints)
+                .build();
+    }
+
+    private void buildContainerRiskContext(
+            AttackSurfaceDto.AttackSurfaceNode node,
+            List<String> riskReasons,
+            List<String> remediationHints,
+            List<VulnerabilityDto> vulnerabilities,
+            List<FalcoEventBriefDto> falcoEvents) {
+        if (node.getCriticalVulns() > 0) {
+            riskReasons.add(node.getCriticalVulns() + " critical finding(s) from latest OWASP / SonarQube scans.");
+            remediationHints.add("Review critical CVEs and SonarQube rules — patch dependencies or fix code paths first.");
+        }
+        if (node.getHighVulns() > 0) {
+            riskReasons.add(node.getHighVulns() + " high-severity finding(s) from latest scans.");
+            remediationHints.add("Schedule upgrades for high-severity dependencies and address SonarQube hotspots.");
+        }
+        if (node.getFalcoEvents24h() > 0) {
+            riskReasons.add(node.getFalcoEvents24h() + " Falco runtime alert(s) in the last 24 hours.");
+            remediationHints.add("Investigate Falco events below — unexpected shells, file writes, or network connections may indicate compromise.");
+        }
+        if ("CRITICAL".equals(node.getStatus()) && riskReasons.isEmpty()) {
+            riskReasons.add("Container marked critical based on combined scan and runtime signals.");
+        }
+        if ("HEALTHY".equals(node.getStatus())) {
+            riskReasons.add("No critical/high scan findings and no Falco alerts in the last 24 hours.");
+        }
+        if (node.getApplicationId() == null) {
+            riskReasons.add("Container is not linked to an application — vulnerability mapping is unavailable.");
+            remediationHints.add("Set serviceNameKeyword on an application to match this container name for scan correlation.");
+        } else {
+            List<VulnerabilityDto> vulns = vulnerabilityRepository.findDtosByApplicationId(
+                    node.getApplicationId(), null, VulnerabilityStatus.OPEN, null, PageRequest.of(0, 100))
+                    .stream()
+                    .filter(v -> v.getSeverity() == VulnerabilitySeverity.CRITICAL
+                            || v.getSeverity() == VulnerabilitySeverity.HIGH)
+                    .sorted(Comparator.comparing(VulnerabilityDto::getSeverity))
+                    .limit(20)
+                    .collect(Collectors.toList());
+            vulnerabilities.addAll(vulns);
+        }
+
+        String containerKey = node.getServiceName() != null
+                ? node.getServiceName().toLowerCase(Locale.ROOT) : null;
+        if (containerKey != null) {
+            LocalDateTime since24h = LocalDateTime.now().minusDays(1);
+            List<FalcoEventBriefDto> events = falcoEventRepository.findByTimestampAfterOrderByTimestampAsc(since24h).stream()
+                    .filter(e -> matchesContainer(e, containerKey))
+                    .sorted(Comparator.comparing(FalcoEvent::getTimestamp).reversed())
+                    .limit(15)
+                    .map(e -> FalcoEventBriefDto.builder()
+                            .id(e.getId())
+                            .ruleName(e.getRuleName())
+                            .priority(e.getPriority())
+                            .output(e.getOutput())
+                            .timestamp(e.getTimestamp())
+                            .build())
+                    .collect(Collectors.toList());
+            falcoEvents.addAll(events);
+        }
+    }
+
+    private boolean matchesContainer(FalcoEvent event, String containerKey) {
+        String fromFields = extractContainerName(event);
+        if (fromFields != null && fromFields.toLowerCase(Locale.ROOT).contains(containerKey)) {
+            return true;
+        }
+        return event.getOutput() != null
+                && event.getOutput().toLowerCase(Locale.ROOT).contains(containerKey);
     }
 
     private List<Long> getLatestReportIds(Long applicationId, ReportType reportTypeFilter) {

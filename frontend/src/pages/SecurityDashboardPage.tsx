@@ -657,7 +657,7 @@ const SecurityDashboardPage: React.FC = () => {
             </p>
           </CardHeader>
           <CardContent>
-            <AttackSurfaceMap data={attackSurface} loading={false} />
+            <AttackSurfaceMap data={attackSurface} loading={false} clusterId={clusterId} />
           </CardContent>
         </Card>
       </section>
