@@ -78,4 +78,11 @@ public interface SecurityScanReportRepository extends JpaRepository<SecurityScan
 
     Optional<SecurityScanReport> findFirstByApplicationIdAndComponentAndReportTypeAndIdNotOrderByUploadedAtDesc(
             Long applicationId, ReportComponent component, ReportType reportType, Long id);
+
+    @Query("SELECT r FROM SecurityScanReport r JOIN FETCH r.application a JOIN FETCH a.environment " +
+           "WHERE (r.component = :frontendComponent AND (a.type IS NULL OR UPPER(a.type) NOT LIKE '%FRONTEND%')) " +
+           "OR (r.component = :backendComponent AND a.type IS NOT NULL AND UPPER(a.type) LIKE '%FRONTEND%')")
+    List<SecurityScanReport> findMisplacedReports(
+            @Param("frontendComponent") ReportComponent frontendComponent,
+            @Param("backendComponent") ReportComponent backendComponent);
 }

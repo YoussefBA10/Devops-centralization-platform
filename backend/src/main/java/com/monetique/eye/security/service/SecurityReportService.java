@@ -67,6 +67,7 @@ public class SecurityReportService {
     public SecurityReportUploadResponse uploadReport(Long applicationId, ReportType reportType, ReportComponent component, String buildNumber, String rawJson) {
         Application application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found with ID: " + applicationId));
+        application = resolveApplicationForReport(application, component);
 
         SecurityScanReport report = SecurityScanReport.builder()
                 .application(application)
@@ -96,6 +97,33 @@ public class SecurityReportService {
                 .build();
     }
 
+    /**
+     * Reassigns scan reports whose component (FRONTEND/BACKEND) does not match the linked application type.
+     * Runs once at startup via {@link com.monetique.eye.security.config.SecurityReportMigrationRunner}.
+     */
+    @Transactional
+    public int reassignMisplacedReports() {
+        List<SecurityScanReport> misplaced = reportRepository.findMisplacedReports(
+                ReportComponent.FRONTEND, ReportComponent.BACKEND);
+        if (misplaced.isEmpty()) {
+            return 0;
+        }
+        int reassigned = 0;
+        for (SecurityScanReport report : misplaced) {
+            Application current = report.getApplication();
+            Application correct = resolveApplicationForReport(current, report.getComponent());
+            if (!correct.getId().equals(current.getId())) {
+                report.setApplication(correct);
+                reassigned++;
+            }
+        }
+        if (reassigned > 0) {
+            reportRepository.saveAll(misplaced);
+            log.info("Reassigned {} misplaced security scan report(s) to the correct application", reassigned);
+        }
+        return reassigned;
+    }
+
     @Transactional(readOnly = true)
     public Page<SecurityScanReport> getReports(Long applicationId, Pageable pageable) {
         return reportRepository.findByApplicationId(applicationId, pageable);
@@ -104,7 +132,13 @@ public class SecurityReportService {
     @Transactional(readOnly = true)
     public Page<VulnerabilityDto> getVulnerabilities(Long applicationId, VulnerabilitySeverity severity,
             VulnerabilityStatus status, ReportType reportType, Pageable pageable) {
-        return vulnerabilityRepository.findDtosByApplicationId(applicationId, severity, status, reportType, pageable);
+        Application app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found: " + applicationId));
+        ReportComponent component = resolveReportComponent(app);
+        Map<ReportComponent, String> appNames = Map.of(component, app.getName());
+        return vulnerabilityRepository.findDtosByApplicationIdAndComponent(
+                applicationId, component, severity, status, reportType, pageable)
+                .map(v -> normalizeVulnerabilityApplication(v, appNames));
     }
 
     @Transactional
@@ -305,7 +339,10 @@ public class SecurityReportService {
     @Transactional(readOnly = true)
     public Page<VulnerabilityDto> getClusterVulnerabilities(Long clusterId, VulnerabilitySeverity severity,
             VulnerabilityStatus status, ReportType reportType, Pageable pageable) {
-        return vulnerabilityRepository.findDtosByClusterId(clusterId, severity, status, reportType, pageable);
+        Map<ReportComponent, String> componentAppNames = buildComponentAppNameMap(
+                clusterId != null ? resolveClusterApplications(clusterId) : applicationRepository.findAll());
+        return vulnerabilityRepository.findDtosByClusterId(clusterId, null, severity, status, reportType, pageable)
+                .map(v -> normalizeVulnerabilityApplication(v, componentAppNames));
     }
 
     @Transactional(readOnly = true)
@@ -854,6 +891,40 @@ public class SecurityReportService {
             return ReportComponent.FRONTEND;
         }
         return ReportComponent.BACKEND;
+    }
+
+    private Application resolveApplicationForReport(Application requested, ReportComponent component) {
+        if (resolveReportComponent(requested) == component) {
+            return requested;
+        }
+        if (requested.getEnvironment() == null) {
+            return requested;
+        }
+        List<Application> envApps = applicationRepository.findByEnvironmentId(requested.getEnvironment().getId());
+        for (Application candidate : envApps) {
+            if (resolveReportComponent(candidate) == component) {
+                log.info("Reassigning {} report from app '{}' (id {}) to app '{}' (id {})",
+                        component, requested.getName(), requested.getId(), candidate.getName(), candidate.getId());
+                return candidate;
+            }
+        }
+        return requested;
+    }
+
+    private Map<ReportComponent, String> buildComponentAppNameMap(List<Application> apps) {
+        Map<ReportComponent, String> map = new HashMap<>();
+        for (Application app : apps) {
+            map.put(resolveReportComponent(app), app.getName());
+        }
+        return map;
+    }
+
+    private VulnerabilityDto normalizeVulnerabilityApplication(VulnerabilityDto vuln,
+            Map<ReportComponent, String> componentAppNames) {
+        if (vuln.getComponent() != null && componentAppNames.containsKey(vuln.getComponent())) {
+            vuln.setApplicationName(componentAppNames.get(vuln.getComponent()));
+        }
+        return vuln;
     }
 
     private Map<String, Integer> countFalcoByContainer(List<FalcoEvent> events, Set<String> containerKeys) {
