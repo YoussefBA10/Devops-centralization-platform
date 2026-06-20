@@ -663,6 +663,17 @@ public class SecurityReportService {
             }
         } else {
             buildContainerRiskContext(node, riskReasons, remediationHints, vulnerabilities, falcoEvents);
+            if (node.getApplicationId() != null) {
+                applicationRepository.findById(node.getApplicationId()).ifPresent(app -> {
+                    int[] counts = countVulnsForApp(app);
+                    node.setCriticalVulns(counts[0]);
+                    node.setHighVulns(counts[1]);
+                    if (node.getStatus() == null || "HEALTHY".equals(node.getStatus())) {
+                        node.setStatus(resolveAssetStatus(counts[0], counts[1], falcoEvents.size()));
+                    }
+                });
+            }
+            node.setFalcoEvents24h(falcoEvents.size());
         }
 
         return AttackSurfaceNodeDetailDto.builder()
@@ -683,23 +694,12 @@ public class SecurityReportService {
             List<String> remediationHints,
             List<VulnerabilityDto> vulnerabilities,
             List<FalcoEventBriefDto> falcoEvents) {
-        ReportComponent reportComponent = null;
-        if (node.getApplicationId() != null) {
-            Application app = applicationRepository.findById(node.getApplicationId()).orElse(null);
-            if (app != null) {
-                reportComponent = resolveReportComponent(app);
-                final ReportComponent componentFilter = reportComponent;
-                List<VulnerabilityDto> vulns = vulnerabilityRepository.findDtosByApplicationId(
-                        node.getApplicationId(), null, VulnerabilityStatus.OPEN, null, PageRequest.of(0, 100))
-                        .stream()
-                        .filter(v -> v.getComponent() == componentFilter)
-                        .filter(v -> v.getSeverity() == VulnerabilitySeverity.CRITICAL
-                                || v.getSeverity() == VulnerabilitySeverity.HIGH)
-                        .sorted(Comparator.comparing(VulnerabilityDto::getSeverity))
-                        .limit(20)
-                        .collect(Collectors.toList());
-                vulnerabilities.addAll(vulns);
-            }
+        Application app = node.getApplicationId() != null
+                ? applicationRepository.findById(node.getApplicationId()).orElse(null) : null;
+
+        if (app != null) {
+            ReportComponent component = resolveReportComponent(app);
+            vulnerabilities.addAll(loadCriticalHighFindings(app, component, 20));
         }
 
         String containerKey = node.getServiceName() != null
@@ -721,15 +721,23 @@ public class SecurityReportService {
             falcoEvents.addAll(events);
         }
 
+        int criticalCount = node.getCriticalVulns();
+        int highCount = node.getHighVulns();
+        if (app != null && criticalCount + highCount == 0) {
+            int[] counts = countVulnsForApp(app);
+            criticalCount = counts[0];
+            highCount = counts[1];
+        }
+
         if (node.getApplicationId() == null) {
             riskReasons.add("Container is not linked to an application — vulnerability mapping is unavailable.");
             remediationHints.add("Set serviceNameKeyword on an application to match this container name for scan correlation.");
-        } else if (node.getCriticalVulns() > 0) {
-            riskReasons.add(node.getCriticalVulns() + " critical finding(s) from latest OWASP / SonarQube scans.");
+        } else if (criticalCount > 0) {
+            riskReasons.add(criticalCount + " critical finding(s) from latest OWASP / SonarQube scans.");
             remediationHints.add("Review critical CVEs and SonarQube rules — patch dependencies or fix code paths first.");
         }
-        if (node.getHighVulns() > 0) {
-            riskReasons.add(node.getHighVulns() + " high-severity finding(s) from latest scans.");
+        if (highCount > 0) {
+            riskReasons.add(highCount + " high-severity finding(s) from latest scans.");
             remediationHints.add("Schedule upgrades for high-severity dependencies and address SonarQube hotspots.");
         }
         if (!falcoEvents.isEmpty()) {
@@ -742,6 +750,59 @@ public class SecurityReportService {
         if (riskReasons.isEmpty() && "HEALTHY".equals(node.getStatus())) {
             riskReasons.add("No critical/high scan findings and no Falco alerts in the last 24 hours.");
         }
+    }
+
+    private List<VulnerabilityDto> loadCriticalHighFindings(Application app, ReportComponent component, int limit) {
+        List<Long> reportIds = resolveLatestReportIdsForComponent(app, component);
+        if (reportIds.isEmpty()) {
+            return List.of();
+        }
+        return vulnerabilityRepository.findDtosByLatestReports(
+                        reportIds, null, VulnerabilityStatus.OPEN, null, PageRequest.of(0, 500))
+                .stream()
+                .filter(v -> v.getSeverity() == VulnerabilitySeverity.CRITICAL
+                        || v.getSeverity() == VulnerabilitySeverity.HIGH)
+                .sorted(Comparator.comparing(VulnerabilityDto::getSeverity))
+                .limit(limit)
+                .peek(v -> v.setApplicationName(app.getName()))
+                .collect(Collectors.toList());
+    }
+
+    private List<Long> resolveLatestReportIdsForComponent(Application app, ReportComponent component) {
+        List<Application> candidates = resolveEnvironmentApplications(app);
+        List<Long> ids = new ArrayList<>();
+        for (ReportType type : ReportType.values()) {
+            SecurityScanReport latest = null;
+            for (Application candidate : candidates) {
+                Optional<SecurityScanReport> report = reportRepository
+                        .findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
+                                candidate.getId(), component, type);
+                if (report.isPresent()) {
+                    SecurityScanReport candidateReport = report.get();
+                    if (latest == null || isAfter(candidateReport.getUploadedAt(), latest.getUploadedAt())) {
+                        latest = candidateReport;
+                    }
+                }
+            }
+            if (latest != null) {
+                ids.add(latest.getId());
+            }
+        }
+        return ids;
+    }
+
+    private List<Application> resolveEnvironmentApplications(Application app) {
+        if (app.getEnvironment() == null) {
+            return List.of(app);
+        }
+        List<Application> envApps = applicationRepository.findByEnvironmentId(app.getEnvironment().getId());
+        return envApps.isEmpty() ? List.of(app) : envApps;
+    }
+
+    private boolean isAfter(LocalDateTime a, LocalDateTime b) {
+        if (a == null) return false;
+        if (b == null) return true;
+        return a.isAfter(b);
     }
 
     private boolean matchesRuntimeContainer(FalcoEvent event, String containerKey) {
@@ -868,15 +929,38 @@ public class SecurityReportService {
     }
 
     private int[] countVulnsForApp(Application app) {
-        SeverityTotals totals = aggregateLatestReportCountsForApplication(app);
-        return new int[]{totals.critical, totals.high};
+        ReportComponent component = resolveReportComponent(app);
+        List<Long> reportIds = resolveLatestReportIdsForComponent(app, component);
+        if (reportIds.isEmpty()) {
+            return new int[]{0, 0};
+        }
+
+        long critical = vulnerabilityRepository.countByReportIdsAndSeverity(
+                reportIds, VulnerabilitySeverity.CRITICAL, VulnerabilityStatus.OPEN);
+        long high = vulnerabilityRepository.countByReportIdsAndSeverity(
+                reportIds, VulnerabilitySeverity.HIGH, VulnerabilityStatus.OPEN);
+        if (critical + high > 0) {
+            return new int[]{(int) critical, (int) high};
+        }
+
+        int criticalFromReports = 0;
+        int highFromReports = 0;
+        for (Long reportId : reportIds) {
+            Optional<SecurityScanReport> report = reportRepository.findById(reportId);
+            if (report.isPresent()) {
+                criticalFromReports += safeInt(report.get().getCriticalCount());
+                highFromReports += safeInt(report.get().getHighCount());
+            }
+        }
+        return new int[]{criticalFromReports, highFromReports};
     }
 
     private SeverityTotals aggregateLatestReportCountsForApplication(Application app) {
         ReportComponent component = resolveReportComponent(app);
+        List<Long> reportIds = resolveLatestReportIdsForComponent(app, component);
         SeverityTotals totals = new SeverityTotals();
-        for (ReportType type : ReportType.values()) {
-            findLatestCountProjection(app.getId(), component, type).ifPresent(r -> {
+        for (Long reportId : reportIds) {
+            reportRepository.findById(reportId).ifPresent(r -> {
                 totals.critical += safeInt(r.getCriticalCount());
                 totals.high += safeInt(r.getHighCount());
                 totals.medium += safeInt(r.getMediumCount());

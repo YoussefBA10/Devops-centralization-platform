@@ -231,6 +231,12 @@ const AttackSurfaceNodeDrawer: React.FC<Props> = ({ node, clusterId, onClose }) 
                     && displayNode.status === 'HEALTHY' && (
                     <p className="text-sm text-muted-foreground text-center py-8">No open critical/high findings or runtime alerts for this asset.</p>
                   )}
+
+                  {detail.vulnerabilities.length === 0 && (displayNode.criticalVulns ?? 0) + (displayNode.highVulns ?? 0) > 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Scan summary shows open findings — expand the OWASP &amp; SonarQube table below for the full list.
+                    </p>
+                  )}
                 </>
               )}
             </div>
