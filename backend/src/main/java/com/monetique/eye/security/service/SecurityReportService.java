@@ -144,10 +144,13 @@ public class SecurityReportService {
 
         Map<Long, int[]> vulnCountsByApp = new HashMap<>();
         for (Application app : apps) {
-            vulnCountsByApp.put(app.getId(), countVulnsForApp(app.getId()));
+            vulnCountsByApp.put(app.getId(), countVulnsForApp(app));
         }
 
-        Map<String, Integer> falcoByContainer = countFalcoByContainer(recentFalco);
+        Set<String> containerKeys = resources.stream()
+                .map(r -> r.getServiceName().toLowerCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        Map<String, Integer> falcoByContainer = countFalcoByContainer(recentFalco, containerKeys);
 
         for (Application app : apps) {
             int[] counts = vulnCountsByApp.getOrDefault(app.getId(), new int[]{0, 0});
@@ -217,13 +220,14 @@ public class SecurityReportService {
         Application app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found: " + applicationId));
 
-        SeverityTotals totals = aggregateLatestReportCounts(applicationId);
+        SeverityTotals totals = aggregateLatestReportCountsForApplication(app);
         int falcoCount = falcoEventRepository.countByApplicationIdAndTimestampAfter(applicationId, LocalDateTime.now().minusDays(1));
 
+        ReportComponent component = resolveReportComponent(app);
         Optional<SecurityScanReport> latestDepCheck = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
-                applicationId, ReportComponent.BACKEND, ReportType.DEPENDENCY_CHECK);
+                applicationId, component, ReportType.DEPENDENCY_CHECK);
         Optional<SecurityScanReport> latestSonar = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
-                applicationId, ReportComponent.BACKEND, ReportType.SONARQUBE);
+                applicationId, component, ReportType.SONARQUBE);
 
         return SecurityDashboardSummaryDto.builder()
                 .applicationId(app.getId())
@@ -252,7 +256,7 @@ public class SecurityReportService {
         if (clusterId != null && !apps.isEmpty()) {
             SeverityTotals totals = new SeverityTotals();
             for (Application app : apps) {
-                SeverityTotals appTotals = aggregateLatestReportCounts(app.getId());
+                SeverityTotals appTotals = aggregateLatestReportCountsForApplication(app);
                 totals.critical += appTotals.critical;
                 totals.high += appTotals.high;
                 totals.medium += appTotals.medium;
@@ -261,16 +265,15 @@ public class SecurityReportService {
             int currentTotal = 0;
             int previousTotal = 0;
             for (Application app : apps) {
-                for (ReportComponent component : ReportComponent.values()) {
-                    for (ReportType type : ReportType.values()) {
-                        Optional<ReportCountProjection> latest = findLatestCountProjection(app.getId(), component, type);
-                        if (latest.isPresent()) {
-                            ReportCountProjection current = latest.get();
-                            currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
-                            previousTotal += findPreviousCountProjection(app.getId(), component, type, current.getId())
-                                    .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
-                                    .orElse(0);
-                        }
+                ReportComponent component = resolveReportComponent(app);
+                for (ReportType type : ReportType.values()) {
+                    Optional<ReportCountProjection> latest = findLatestCountProjection(app.getId(), component, type);
+                    if (latest.isPresent()) {
+                        ReportCountProjection current = latest.get();
+                        currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
+                        previousTotal += findPreviousCountProjection(app.getId(), component, type, current.getId())
+                                .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
+                                .orElse(0);
                     }
                 }
             }
@@ -448,11 +451,10 @@ public class SecurityReportService {
 
         LocalDateTime since24h = LocalDateTime.now().minusDays(1);
         List<FalcoEvent> recentFalco = falcoEventRepository.findByTimestampAfterOrderByTimestampAsc(since24h);
-        Map<String, Integer> falcoByContainer = countFalcoByContainer(recentFalco);
 
         Map<Long, int[]> vulnCountsByApp = new HashMap<>();
         for (Application app : apps) {
-            vulnCountsByApp.put(app.getId(), countVulnsForApp(app.getId()));
+            vulnCountsByApp.put(app.getId(), countVulnsForApp(app));
         }
 
         List<AttackSurfaceDto.AttackSurfaceNode> nodes = new ArrayList<>();
@@ -502,6 +504,14 @@ public class SecurityReportService {
                 }
             }
         }
+
+        Set<String> containerKeys = new HashSet<>();
+        for (List<ServiceResourceDTO> hostContainers : containersByHost.values()) {
+            for (ServiceResourceDTO resource : hostContainers) {
+                containerKeys.add(resource.getServiceName().toLowerCase(Locale.ROOT));
+            }
+        }
+        Map<String, Integer> falcoByContainer = countFalcoByContainer(recentFalco, containerKeys);
 
         for (Map.Entry<String, List<ServiceResourceDTO>> hostEntry : containersByHost.entrySet()) {
             String hostName = hostEntry.getKey();
@@ -636,37 +646,23 @@ public class SecurityReportService {
             List<String> remediationHints,
             List<VulnerabilityDto> vulnerabilities,
             List<FalcoEventBriefDto> falcoEvents) {
-        if (node.getCriticalVulns() > 0) {
-            riskReasons.add(node.getCriticalVulns() + " critical finding(s) from latest OWASP / SonarQube scans.");
-            remediationHints.add("Review critical CVEs and SonarQube rules — patch dependencies or fix code paths first.");
-        }
-        if (node.getHighVulns() > 0) {
-            riskReasons.add(node.getHighVulns() + " high-severity finding(s) from latest scans.");
-            remediationHints.add("Schedule upgrades for high-severity dependencies and address SonarQube hotspots.");
-        }
-        if (node.getFalcoEvents24h() > 0) {
-            riskReasons.add(node.getFalcoEvents24h() + " Falco runtime alert(s) in the last 24 hours.");
-            remediationHints.add("Investigate Falco events below — unexpected shells, file writes, or network connections may indicate compromise.");
-        }
-        if ("CRITICAL".equals(node.getStatus()) && riskReasons.isEmpty()) {
-            riskReasons.add("Container marked critical based on combined scan and runtime signals.");
-        }
-        if ("HEALTHY".equals(node.getStatus())) {
-            riskReasons.add("No critical/high scan findings and no Falco alerts in the last 24 hours.");
-        }
-        if (node.getApplicationId() == null) {
-            riskReasons.add("Container is not linked to an application — vulnerability mapping is unavailable.");
-            remediationHints.add("Set serviceNameKeyword on an application to match this container name for scan correlation.");
-        } else {
-            List<VulnerabilityDto> vulns = vulnerabilityRepository.findDtosByApplicationId(
-                    node.getApplicationId(), null, VulnerabilityStatus.OPEN, null, PageRequest.of(0, 100))
-                    .stream()
-                    .filter(v -> v.getSeverity() == VulnerabilitySeverity.CRITICAL
-                            || v.getSeverity() == VulnerabilitySeverity.HIGH)
-                    .sorted(Comparator.comparing(VulnerabilityDto::getSeverity))
-                    .limit(20)
-                    .collect(Collectors.toList());
-            vulnerabilities.addAll(vulns);
+        ReportComponent reportComponent = null;
+        if (node.getApplicationId() != null) {
+            Application app = applicationRepository.findById(node.getApplicationId()).orElse(null);
+            if (app != null) {
+                reportComponent = resolveReportComponent(app);
+                final ReportComponent componentFilter = reportComponent;
+                List<VulnerabilityDto> vulns = vulnerabilityRepository.findDtosByApplicationId(
+                        node.getApplicationId(), null, VulnerabilityStatus.OPEN, null, PageRequest.of(0, 100))
+                        .stream()
+                        .filter(v -> v.getComponent() == componentFilter)
+                        .filter(v -> v.getSeverity() == VulnerabilitySeverity.CRITICAL
+                                || v.getSeverity() == VulnerabilitySeverity.HIGH)
+                        .sorted(Comparator.comparing(VulnerabilityDto::getSeverity))
+                        .limit(20)
+                        .collect(Collectors.toList());
+                vulnerabilities.addAll(vulns);
+            }
         }
 
         String containerKey = node.getServiceName() != null
@@ -674,7 +670,7 @@ public class SecurityReportService {
         if (containerKey != null) {
             LocalDateTime since24h = LocalDateTime.now().minusDays(1);
             List<FalcoEventBriefDto> events = falcoEventRepository.findByTimestampAfterOrderByTimestampAsc(since24h).stream()
-                    .filter(e -> matchesContainer(e, containerKey))
+                    .filter(e -> matchesRuntimeContainer(e, containerKey))
                     .sorted(Comparator.comparing(FalcoEvent::getTimestamp).reversed())
                     .limit(15)
                     .map(e -> FalcoEventBriefDto.builder()
@@ -687,15 +683,70 @@ public class SecurityReportService {
                     .collect(Collectors.toList());
             falcoEvents.addAll(events);
         }
+
+        if (node.getApplicationId() == null) {
+            riskReasons.add("Container is not linked to an application — vulnerability mapping is unavailable.");
+            remediationHints.add("Set serviceNameKeyword on an application to match this container name for scan correlation.");
+        } else if (node.getCriticalVulns() > 0) {
+            riskReasons.add(node.getCriticalVulns() + " critical finding(s) from latest OWASP / SonarQube scans.");
+            remediationHints.add("Review critical CVEs and SonarQube rules — patch dependencies or fix code paths first.");
+        }
+        if (node.getHighVulns() > 0) {
+            riskReasons.add(node.getHighVulns() + " high-severity finding(s) from latest scans.");
+            remediationHints.add("Schedule upgrades for high-severity dependencies and address SonarQube hotspots.");
+        }
+        if (!falcoEvents.isEmpty()) {
+            riskReasons.add(falcoEvents.size() + " Falco runtime alert(s) in the last 24 hours.");
+            remediationHints.add("Investigate Falco events below — unexpected shells, file writes, or network connections may indicate compromise.");
+        }
+        if ("CRITICAL".equals(node.getStatus()) && riskReasons.isEmpty()) {
+            riskReasons.add("Container marked critical based on combined scan and runtime signals.");
+        }
+        if (riskReasons.isEmpty() && "HEALTHY".equals(node.getStatus())) {
+            riskReasons.add("No critical/high scan findings and no Falco alerts in the last 24 hours.");
+        }
     }
 
-    private boolean matchesContainer(FalcoEvent event, String containerKey) {
-        String fromFields = extractContainerName(event);
-        if (fromFields != null && fromFields.toLowerCase(Locale.ROOT).contains(containerKey)) {
+    private boolean matchesRuntimeContainer(FalcoEvent event, String containerKey) {
+        if (containerKey == null || containerKey.isBlank() || isBuildOrCiEvent(event)) {
+            return false;
+        }
+        String eventContainer = extractContainerName(event);
+        if (eventContainer == null) {
+            return false;
+        }
+        return matchesContainerToken(eventContainer.toLowerCase(Locale.ROOT), containerKey.toLowerCase(Locale.ROOT));
+    }
+
+    private boolean isBuildOrCiEvent(FalcoEvent event) {
+        String container = extractContainerName(event);
+        if (container != null) {
+            String c = container.toLowerCase(Locale.ROOT);
+            if (c.contains("kaniko") || c.contains("jenkins") || c.contains("executor")
+                    || c.contains("builder") || c.startsWith("build-")) {
+                return true;
+            }
+        }
+        String output = event.getOutput();
+        if (output != null) {
+            String o = output.toLowerCase(Locale.ROOT);
+            if (o.contains("kaniko/executor") || o.contains("jenkins_home/workspace")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesContainerToken(String eventContainer, String keyword) {
+        if (eventContainer.equals(keyword)) {
             return true;
         }
-        return event.getOutput() != null
-                && event.getOutput().toLowerCase(Locale.ROOT).contains(containerKey);
+        return eventContainer.startsWith(keyword + "-")
+                || eventContainer.startsWith(keyword + "_")
+                || eventContainer.endsWith("-" + keyword)
+                || eventContainer.endsWith("_" + keyword)
+                || eventContainer.contains("-" + keyword + "-")
+                || eventContainer.contains("_" + keyword + "_");
     }
 
     private List<Long> getLatestReportIds(Long applicationId, ReportType reportTypeFilter) {
@@ -728,18 +779,21 @@ public class SecurityReportService {
     }
 
     private String calculateTrend(Long applicationId) {
+        Application app = applicationRepository.findById(applicationId).orElse(null);
+        if (app == null) {
+            return "STABLE";
+        }
+        ReportComponent component = resolveReportComponent(app);
         int currentTotal = 0;
         int previousTotal = 0;
-        for (ReportComponent component : ReportComponent.values()) {
-            for (ReportType type : ReportType.values()) {
-                Optional<ReportCountProjection> latest = findLatestCountProjection(applicationId, component, type);
-                if (latest.isPresent()) {
-                    ReportCountProjection current = latest.get();
-                    currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
-                    previousTotal += findPreviousCountProjection(applicationId, component, type, current.getId())
-                            .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
-                            .orElse(0);
-                }
+        for (ReportType type : ReportType.values()) {
+            Optional<ReportCountProjection> latest = findLatestCountProjection(applicationId, component, type);
+            if (latest.isPresent()) {
+                ReportCountProjection current = latest.get();
+                currentTotal += safeInt(current.getCriticalCount()) + safeInt(current.getHighCount());
+                previousTotal += findPreviousCountProjection(applicationId, component, type, current.getId())
+                        .map(r -> safeInt(r.getCriticalCount()) + safeInt(r.getHighCount()))
+                        .orElse(0);
             }
         }
         return resolveTrendLabel(currentTotal, previousTotal);
@@ -776,17 +830,43 @@ public class SecurityReportService {
         return "STABLE";
     }
 
-    private int[] countVulnsForApp(Long applicationId) {
-        SeverityTotals totals = aggregateLatestReportCounts(applicationId);
+    private int[] countVulnsForApp(Application app) {
+        SeverityTotals totals = aggregateLatestReportCountsForApplication(app);
         return new int[]{totals.critical, totals.high};
     }
 
-    private Map<String, Integer> countFalcoByContainer(List<FalcoEvent> events) {
+    private SeverityTotals aggregateLatestReportCountsForApplication(Application app) {
+        ReportComponent component = resolveReportComponent(app);
+        SeverityTotals totals = new SeverityTotals();
+        for (ReportType type : ReportType.values()) {
+            findLatestCountProjection(app.getId(), component, type).ifPresent(r -> {
+                totals.critical += safeInt(r.getCriticalCount());
+                totals.high += safeInt(r.getHighCount());
+                totals.medium += safeInt(r.getMediumCount());
+                totals.low += safeInt(r.getLowCount());
+            });
+        }
+        return totals;
+    }
+
+    private ReportComponent resolveReportComponent(Application app) {
+        if (app.getType() != null && app.getType().toUpperCase(Locale.ROOT).contains("FRONTEND")) {
+            return ReportComponent.FRONTEND;
+        }
+        return ReportComponent.BACKEND;
+    }
+
+    private Map<String, Integer> countFalcoByContainer(List<FalcoEvent> events, Set<String> containerKeys) {
         Map<String, Integer> counts = new HashMap<>();
+        for (String key : containerKeys) {
+            counts.put(key.toLowerCase(Locale.ROOT), 0);
+        }
         for (FalcoEvent event : events) {
-            String key = extractContainerName(event);
-            if (key != null) {
-                counts.merge(key.toLowerCase(Locale.ROOT), 1, Integer::sum);
+            for (String key : containerKeys) {
+                if (matchesRuntimeContainer(event, key)) {
+                    counts.merge(key.toLowerCase(Locale.ROOT), 1, Integer::sum);
+                    break;
+                }
             }
         }
         return counts;
@@ -801,17 +881,51 @@ public class SecurityReportService {
     }
 
     private Long matchApplication(List<Application> apps, String serviceName) {
+        if (serviceName == null || serviceName.isBlank()) {
+            return null;
+        }
         String lower = serviceName.toLowerCase(Locale.ROOT);
+
         for (Application app : apps) {
-            if (lower.contains(app.getName().toLowerCase(Locale.ROOT))) {
-                return app.getId();
-            }
             if (app.getServiceNameKeyword() != null
-                    && lower.contains(app.getServiceNameKeyword().toLowerCase(Locale.ROOT))) {
+                    && lower.equals(app.getServiceNameKeyword().toLowerCase(Locale.ROOT))) {
                 return app.getId();
             }
         }
-        return null;
+
+        Long bestMatch = null;
+        int bestLen = 0;
+        for (Application app : apps) {
+            if (app.getServiceNameKeyword() != null
+                    && matchesContainerToken(lower, app.getServiceNameKeyword().toLowerCase(Locale.ROOT))) {
+                int len = app.getServiceNameKeyword().length();
+                if (len > bestLen) {
+                    bestMatch = app.getId();
+                    bestLen = len;
+                }
+            }
+        }
+        if (bestMatch != null) {
+            return bestMatch;
+        }
+
+        for (Application app : apps) {
+            if (lower.equals(app.getName().toLowerCase(Locale.ROOT))) {
+                return app.getId();
+            }
+        }
+
+        bestLen = 0;
+        for (Application app : apps) {
+            String name = app.getName().toLowerCase(Locale.ROOT);
+            if (matchesContainerToken(lower, name)) {
+                if (name.length() > bestLen) {
+                    bestMatch = app.getId();
+                    bestLen = name.length();
+                }
+            }
+        }
+        return bestMatch;
     }
 
     private boolean isDatabase(String serviceName) {
