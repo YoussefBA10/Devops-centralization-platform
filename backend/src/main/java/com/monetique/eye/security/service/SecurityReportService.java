@@ -248,15 +248,15 @@ public class SecurityReportService {
 
         return AttackSurfaceDto.builder().nodes(nodes).edges(edges).build();
     }
-
+    
     @Transactional(readOnly = true)
     public SecurityDashboardSummaryDto getSummaryForApplication(Long applicationId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found: " + applicationId));
-
+                
         SeverityTotals totals = aggregateLatestReportCountsForApplication(app);
         int falcoCount = falcoEventRepository.countByApplicationIdAndTimestampAfter(applicationId, LocalDateTime.now().minusDays(1));
-
+        
         ReportComponent component = resolveReportComponent(app);
         Optional<SecurityScanReport> latestDepCheck = reportRepository.findFirstByApplicationIdAndComponentAndReportTypeOrderByUploadedAtDesc(
                 applicationId, component, ReportType.DEPENDENCY_CHECK);
@@ -325,7 +325,7 @@ public class SecurityReportService {
         long highCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.HIGH);
         long mediumCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.MEDIUM);
         long lowCount = vulnerabilityRepository.countBySeverity(VulnerabilitySeverity.LOW);
-
+        
         return SecurityDashboardSummaryDto.builder()
                 .criticalCount((int) criticalCount)
                 .highCount((int) highCount)
