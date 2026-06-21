@@ -155,6 +155,30 @@ public class AiChatService {
             return fallback;
         }
         
+        if (intent == Intent.CONVERSATIONAL) {
+            String lowercaseQuery = query.toLowerCase();
+            String responseText;
+            if (lowercaseQuery.contains("help") || lowercaseQuery.contains("what can you do") || lowercaseQuery.contains("features") || lowercaseQuery.contains("commands") || lowercaseQuery.contains("how to use")) {
+                responseText = """
+                        Hello! I am **Monetique Eye AI**, your enterprise observability and AI ops assistant. 
+                        
+                        Here is what I can help you with:
+                        - **Infrastructure Status**: Ask me about active environments, managed nodes, or application topology (e.g., *"Show me staging topology"*).
+                        - **Metrics Analysis**: Ask for CPU/memory metrics (e.g., *"What is the CPU usage on production?"*).
+                        - **Log Searches**: Search Elasticsearch application logs (e.g., *"Search for Exception logs in staging"*).
+                        - **Security Posture**: Review vulnerabilities or runtime Falco events (e.g., *"Show security summary for production"* or *"Any vulnerabilities on staging?"*).
+                        - **Deployment Monitoring**: Check recent deployment events and history (e.g., *"What deployments occurred recently?"*).
+                        - **Actions**: Trigger actions like restarting applications directly (e.g., *"Restart frontend in production"*).
+                        
+                        How can I help you today?
+                        """;
+            } else {
+                responseText = "Hello! I am **Monetique Eye AI**, your observability assistant. How can I help you today? You can ask me about system topology, logs, metrics, deployments, or security posture.";
+            }
+            updateHistory(conversation, history, query, responseText);
+            return responseText;
+        }
+        
         // Handle Actions
         if (intent == Intent.ACTION_REQUEST) {
             String targetApp = intentClassifier.extractApplication(query);
@@ -206,6 +230,19 @@ public class AiChatService {
 
         // 6. Call Groq
         String response = groqService.generateSummary(prompt);
+
+        // Fallback: If Groq failed or was rate limited, we can still present the gathered context
+        if (response != null && (response.contains("rate limit reached") || response.contains("unavailable") || response.contains("Error:"))) {
+            if (context != null && !context.isBlank()) {
+                response = String.format("""
+                        *Note: The AI summarization service is currently busy or rate-limited. To ensure you aren't blocked, here is the raw infrastructure data retrieved for your request:*
+                        
+                        %s
+                        
+                        *Please try again in a few seconds for an AI-generated summary.*
+                        """, context);
+            }
+        }
 
         // 7. Update History
         updateHistory(conversation, history, query, response);

@@ -18,6 +18,7 @@ public class IntentClassifier {
     private static final Pattern ANALYTICAL_PATTERN = Pattern.compile("(?i)\\b(compare|trend|least stable|most resources|improving)\\b");
     
     private static final Pattern OUT_OF_SCOPE_PATTERN = Pattern.compile("(?i)\\b(weather|joke|fix my code|python script|write code)\\b");
+    private static final Pattern CONVERSATIONAL_PATTERN = Pattern.compile("(?i)\\b(hello|hi|hey|greetings|good morning|good afternoon|good evening|who are you|what is your name|help|commands|features|how to use|what can you do)\\b");
 
     public Intent classifyIntent(String query) {
         if (query == null || query.isBlank()) {
@@ -26,6 +27,10 @@ public class IntentClassifier {
 
         if (OUT_OF_SCOPE_PATTERN.matcher(query).find()) {
             return Intent.OUT_OF_SCOPE;
+        }
+
+        if (CONVERSATIONAL_PATTERN.matcher(query).find()) {
+            return Intent.CONVERSATIONAL;
         }
 
         if (ACTION_PATTERN.matcher(query).find()) {

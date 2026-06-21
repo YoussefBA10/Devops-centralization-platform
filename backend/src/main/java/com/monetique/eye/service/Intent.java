@@ -12,5 +12,6 @@ public enum Intent {
     ANALYTICAL,
     AMBIGUOUS_CLARIFY,
     OUT_OF_SCOPE,
+    CONVERSATIONAL,
     GENERAL_QUERY
 }
