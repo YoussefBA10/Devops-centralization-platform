@@ -79,8 +79,8 @@ public class OperationalScheduler {
                 // 4. Save window
                 aggregationService.saveWindow(app, errorCount, stabilityIndex);
 
-                // 5. Generate AI Digest (throttled to every 10 minutes)
-                if (runAiDigest) {
+                // 5. Generate AI Digest (throttled to every 10 minutes, only for the representative app queried by the controller)
+                if (runAiDigest && !apps.isEmpty() && app.getId().equals(apps.get(0).getId())) {
                     try {
                         aiDigestService.generateApplicationDigest(app, stabilityIndex, errorCount);
                     } catch (Exception e) {

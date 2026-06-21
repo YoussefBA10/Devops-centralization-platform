@@ -13,6 +13,15 @@ import com.monetique.eye.repository.ConversationRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.repository.TicketRepository;
 import com.monetique.eye.repository.DeploymentLogRepository;
+import com.monetique.eye.repository.DeploymentEventRepository;
+import com.monetique.eye.repository.ManagedNodeRepository;
+import com.monetique.eye.repository.UserRepository;
+import com.monetique.eye.repository.ActivityLogRepository;
+import com.monetique.eye.security.service.SecurityReportService;
+import com.monetique.eye.security.entity.enums.VulnerabilityStatus;
+import com.monetique.eye.entity.ManagedNode;
+import com.monetique.eye.entity.ActivityLog;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -31,6 +40,11 @@ public class AiChatService {
     private final ApplicationRepository applicationRepository;
     private final TicketRepository ticketRepository;
     private final DeploymentLogRepository deploymentLogRepository;
+    private final DeploymentEventRepository deploymentEventRepository;
+    private final ManagedNodeRepository managedNodeRepository;
+    private final UserRepository userRepository;
+    private final ActivityLogRepository activityLogRepository;
+    private final SecurityReportService securityReportService;
     private final AnomalyService anomalyService;
     private final PrometheusClient prometheusClient;
     private final ElasticsearchLogService esLogService;
@@ -46,6 +60,11 @@ public class AiChatService {
                         ApplicationRepository applicationRepository,
                         TicketRepository ticketRepository,
                         DeploymentLogRepository deploymentLogRepository,
+                        DeploymentEventRepository deploymentEventRepository,
+                        ManagedNodeRepository managedNodeRepository,
+                        UserRepository userRepository,
+                        ActivityLogRepository activityLogRepository,
+                        SecurityReportService securityReportService,
                         AnomalyService anomalyService,
                         PrometheusClient prometheusClient,
                         ElasticsearchLogService esLogService,
@@ -57,6 +76,11 @@ public class AiChatService {
         this.applicationRepository = applicationRepository;
         this.ticketRepository = ticketRepository;
         this.deploymentLogRepository = deploymentLogRepository;
+        this.deploymentEventRepository = deploymentEventRepository;
+        this.managedNodeRepository = managedNodeRepository;
+        this.userRepository = userRepository;
+        this.activityLogRepository = activityLogRepository;
+        this.securityReportService = securityReportService;
         this.anomalyService = anomalyService;
         this.prometheusClient = prometheusClient;
         this.esLogService = esLogService;
@@ -247,22 +271,211 @@ public class AiChatService {
                 
             case SECURITY_QUERY:
                 sb.append("[Security Posture]\n");
-                sb.append("- SecurityService endpoints pending full integration. Note: Acknowledge that you are searching for security metrics.\n");
+                if (targetApp != null) {
+                    Application app = applicationRepository.findAll().stream().filter(a -> a.getName().equalsIgnoreCase(targetApp)).findFirst().orElse(null);
+                    if (app != null) {
+                        try {
+                            var summary = securityReportService.getSummaryForApplication(app.getId());
+                            sb.append(String.format("- App: %s\n", app.getName()));
+                            sb.append(String.format("  - Critical Vulns: %d, High Vulns: %d, Medium Vulns: %d, Low Vulns: %d\n",
+                                    summary.getCriticalCount(), summary.getHighCount(), summary.getMediumCount(), summary.getLowCount()));
+                            sb.append(String.format("  - Falco Events (24h): %d\n", summary.getFalcoEventsLast24h()));
+                            if (summary.getLatestDependencyScan() != null) {
+                                sb.append(String.format("  - Latest Dependency Scan: %s\n", summary.getLatestDependencyScan()));
+                            }
+                            if (summary.getLatestSonarScan() != null) {
+                                sb.append(String.format("  - Latest SonarQube Scan: %s\n", summary.getLatestSonarScan()));
+                            }
+                            
+                            var vulns = securityReportService.getVulnerabilities(app.getId(), null, VulnerabilityStatus.OPEN, null, PageRequest.of(0, 5));
+                            if (vulns != null && !vulns.isEmpty()) {
+                                sb.append("  - Top Open Vulnerabilities:\n");
+                                for (var v : vulns.getContent()) {
+                                    sb.append(String.format("    * [%s] %s: %s (Status: %s)\n", v.getSeverity(), v.getIdentifier(), v.getTitle(), v.getStatus()));
+                                }
+                            }
+                        } catch (Exception e) {
+                            sb.append("  - Error fetching app security summary: ").append(e.getMessage()).append("\n");
+                        }
+                    } else {
+                        sb.append(String.format("- Application '%s' not found.\n", targetApp));
+                    }
+                } else if (targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
+                    if (env != null) {
+                        try {
+                            var attackSurface = securityReportService.getAttackSurface(env.getId());
+                            sb.append(String.format("- Environment: %s\n", env.getName()));
+                            long totalCritical = attackSurface.getNodes().stream().mapToInt(n -> n.getCriticalVulns()).sum();
+                            long totalHigh = attackSurface.getNodes().stream().mapToInt(n -> n.getHighVulns()).sum();
+                            long totalFalco = attackSurface.getNodes().stream().mapToInt(n -> n.getFalcoEvents24h()).sum();
+                            sb.append(String.format("  - Total Critical Vulns: %d, High Vulns: %d\n", totalCritical, totalHigh));
+                            sb.append(String.format("  - Total Falco Runtime Alerts (24h): %d\n", totalFalco));
+                            
+                            var atRiskNodes = attackSurface.getNodes().stream()
+                                    .filter(n -> !"HEALTHY".equals(n.getStatus()))
+                                    .limit(5)
+                                    .toList();
+                            if (!atRiskNodes.isEmpty()) {
+                                sb.append("  - At-Risk Components:\n");
+                                for (var n : atRiskNodes) {
+                                    sb.append(String.format("    * Node: %s (%s) - Status: %s, Critical Vulns: %d, High Vulns: %d, Falco Events: %d\n",
+                                            n.getLabel(), n.getType(), n.getStatus(), n.getCriticalVulns(), n.getHighVulns(), n.getFalcoEvents24h()));
+                                }
+                            }
+                        } catch (Exception e) {
+                            sb.append("  - Error fetching environment security attack surface: ").append(e.getMessage()).append("\n");
+                        }
+                    } else {
+                        sb.append(String.format("- Environment '%s' not found.\n", targetEnv));
+                    }
+                } else {
+                    try {
+                        var global = securityReportService.getGlobalSummary();
+                        sb.append("- Global Security Posture:\n");
+                        sb.append(String.format("  - Critical Vulns: %d, High Vulns: %d, Medium Vulns: %d, Low Vulns: %d\n",
+                                global.getCriticalCount(), global.getHighCount(), global.getMediumCount(), global.getLowCount()));
+                        sb.append(String.format("  - Falco Events (24h): %d\n", global.getFalcoEventsLast24h()));
+                    } catch (Exception e) {
+                        sb.append("  - Error fetching global security summary: ").append(e.getMessage()).append("\n");
+                    }
+                }
                 break;
                 
             case DEPLOYMENT_STATUS:
                 sb.append("[Deployments]\n");
-                sb.append("- Deployment context fetcher pending integration.\n");
+                if (targetApp != null) {
+                    Application app = applicationRepository.findAll().stream().filter(a -> a.getName().equalsIgnoreCase(targetApp)).findFirst().orElse(null);
+                    if (app != null) {
+                        sb.append(String.format("- App: %s (Current version: %s)\n", app.getName(), app.getVersion() != null ? app.getVersion() : "unknown"));
+                        var eventsPage = deploymentEventRepository.findByApplicationId(app.getId(), PageRequest.of(0, 5));
+                        if (eventsPage != null && !eventsPage.isEmpty()) {
+                            sb.append("  - Recent Deployment Events:\n");
+                            for (var ev : eventsPage.getContent()) {
+                                sb.append(String.format("    * Version %s (Build #%s) in Env %s - Status: %s at %s\n",
+                                        ev.getVersion(), ev.getBuildNumber(), ev.getEnv(), ev.getStatus(), ev.getStartedAt()));
+                            }
+                        } else {
+                            sb.append("  - No deployment event history found.\n");
+                        }
+                    } else {
+                        sb.append(String.format("- Application '%s' not found.\n", targetApp));
+                    }
+                } else if (targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
+                    if (env != null) {
+                        sb.append(String.format("- Environment: %s\n", env.getName()));
+                        var logs = deploymentLogRepository.findAll().stream()
+                                .filter(l -> l.getEnvironment() != null && l.getEnvironment().getId().equals(env.getId()))
+                                .sorted((l1, l2) -> l2.getExecutedAt().compareTo(l1.getExecutedAt()))
+                                .limit(5)
+                                .toList();
+                        if (!logs.isEmpty()) {
+                            sb.append("  - Recent Environment Deployment Logs:\n");
+                            for (var logEntry : logs) {
+                                sb.append(String.format("    * App: %s, Action: %s - Status: %s (Executed by %s at %s)\n",
+                                        logEntry.getAppName(), logEntry.getAction(), logEntry.getStatus(),
+                                        logEntry.getExecutedBy() != null ? logEntry.getExecutedBy().getUsername() : "system",
+                                        logEntry.getExecutedAt()));
+                                if (logEntry.getShortError() != null && !logEntry.getShortError().isEmpty()) {
+                                    sb.append(String.format("      Error: %s\n", logEntry.getShortError()));
+                                }
+                            }
+                        } else {
+                            sb.append("  - No deployment logs found for this environment.\n");
+                        }
+                    } else {
+                        sb.append(String.format("- Environment '%s' not found.\n", targetEnv));
+                    }
+                } else {
+                    var logs = deploymentLogRepository.findAll(PageRequest.of(0, 5, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "executedAt")));
+                    if (logs != null && !logs.isEmpty()) {
+                        sb.append("- Latest Global Deployments:\n");
+                        for (var logEntry : logs.getContent()) {
+                            sb.append(String.format("  * App: %s in Env %s, Action: %s - Status: %s (at %s)\n",
+                                    logEntry.getAppName(), 
+                                    logEntry.getEnvironment() != null ? logEntry.getEnvironment().getName() : "Global",
+                                    logEntry.getAction(), logEntry.getStatus(), logEntry.getExecutedAt()));
+                        }
+                    } else {
+                        sb.append("  - No deployment history found.\n");
+                    }
+                }
                 break;
                 
             case INFRA_TOPOLOGY:
                 sb.append("[Topology]\n");
-                sb.append("- Topology mapping pending integration.\n");
+                if (targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
+                    if (env != null) {
+                        sb.append(String.format("- Env: %s (Cluster: %s)\n", env.getName(), env.getCluster() != null ? env.getCluster().getName() : "none"));
+                        List<ManagedNode> nodes = managedNodeRepository.findByEnvironment(env);
+                        if (!nodes.isEmpty()) {
+                            sb.append("  - Managed Nodes:\n");
+                            for (ManagedNode node : nodes) {
+                                sb.append(String.format("    * %s (%s) - Role: %s\n",
+                                        node.getNodeName() != null ? node.getNodeName() : "Unnamed",
+                                        node.getIp(),
+                                        node.getRole() != null ? node.getRole() : "app"));
+                            }
+                        } else {
+                            sb.append("  - No managed nodes found.\n");
+                        }
+                        List<Application> envApps = applicationRepository.findByEnvironmentId(env.getId());
+                        if (!envApps.isEmpty()) {
+                            sb.append("  - Deployed Applications:\n");
+                            for (Application a : envApps) {
+                                sb.append(String.format("    * %s (Type: %s, Port: %s, Status: %s)\n",
+                                        a.getName(), a.getType(), a.getPort(), a.getStatus()));
+                            }
+                        } else {
+                            sb.append("  - No deployed applications found.\n");
+                        }
+                    } else {
+                        sb.append(String.format("- Environment '%s' not found.\n", targetEnv));
+                    }
+                } else {
+                    List<Environment> envs = environmentRepository.findAll();
+                    sb.append(String.format("- Total active environments: %d\n", envs.size()));
+                    for (Environment e : envs) {
+                        long nodeCount = managedNodeRepository.countByEnvironment(e);
+                        long appCount = applicationRepository.findByEnvironmentId(e.getId()).size();
+                        sb.append(String.format("  * Env %s: %d nodes, %d applications\n", e.getName(), nodeCount, appCount));
+                    }
+                }
                 break;
                 
             case USER_AUDIT:
                 sb.append("[Audit Logs]\n");
-                sb.append("- RBAC/Audit mapping pending integration.\n");
+                List<ActivityLog> activityLogs;
+                if (targetEnv != null) {
+                    activityLogs = activityLogRepository.findAll().stream()
+                            .filter(l -> l.getEnv() != null && l.getEnv().equalsIgnoreCase(targetEnv))
+                            .sorted((l1, l2) -> l2.getTimestamp().compareTo(l1.getTimestamp()))
+                            .limit(5)
+                            .toList();
+                } else {
+                    activityLogs = activityLogRepository.findTop10ByOrderByTimestampDesc();
+                }
+                
+                if (!activityLogs.isEmpty()) {
+                    sb.append("  - Recent Activity Logs:\n");
+                    for (ActivityLog l : activityLogs) {
+                        sb.append(String.format("    * [%s] %s - %s (Env: %s) by %s\n",
+                                l.getTimestamp(), l.getType(), l.getTitle(), l.getEnv(),
+                                l.getExecutedBy() != null ? l.getExecutedBy().getUsername() : "system"));
+                    }
+                } else {
+                    sb.append("  - No recent activity logs found.\n");
+                }
+                
+                List<User> users = userRepository.findAll();
+                if (!users.isEmpty()) {
+                    sb.append("  - Registered Users:\n");
+                    for (User u : users) {
+                        sb.append(String.format("    * Username: %s, Role: %s\n", u.getUsername(), u.getRole()));
+                    }
+                }
                 break;
 
             default:
