@@ -24,7 +24,11 @@ fi
 
 run_database() {
     echo "=== Simulating DATABASE_CONNECTION_FAILURE ==="
-    curl -s -X GET "${BASE_URL}/rca/db" | jq || echo "Endpoint triggered."
+    echo "Sending 50 requests to trigger Prometheus 5xx alert threshold..."
+    for i in {1..50}; do
+        curl -s -X GET "${BASE_URL}/rca/db" > /dev/null
+    done
+    echo "Endpoint triggered. Database errors logged."
 }
 
 run_deployment() {
@@ -43,12 +47,20 @@ run_config() {
 
 run_network() {
     echo "=== Simulating NETWORK_FAILURE ==="
-    curl -s -X GET "${BASE_URL}/rca/network" | jq || echo "Endpoint triggered."
+    echo "Sending 50 requests to trigger Prometheus 5xx alert threshold..."
+    for i in {1..50}; do
+        curl -s -X GET "${BASE_URL}/rca/network" > /dev/null
+    done
+    echo "Endpoint triggered. Network timeouts logged."
 }
 
 run_dependency() {
     echo "=== Simulating DEPENDENCY_FAILURE ==="
-    curl -s -X GET "${BASE_URL}/rca/dependency" | jq || echo "Endpoint triggered."
+    echo "Sending 50 requests to trigger Prometheus 5xx alert threshold..."
+    for i in {1..50}; do
+        curl -s -X GET "${BASE_URL}/rca/dependency" > /dev/null
+    done
+    echo "Endpoint triggered. Dependency failures logged."
 }
 
 run_traffic() {

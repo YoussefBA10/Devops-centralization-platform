@@ -317,13 +317,8 @@ const AnalysePage: React.FC = () => {
               <option 
                 key={ticket.id} 
                 value={ticket.id}
-                className={
-                  ticket.status === 'OPEN' ? 'text-destructive bg-destructive/5' : 
-                  ticket.status === 'IN_PROGRESS' ? 'text-amber-500 bg-amber-500/5' : 
-                  'text-emerald-500 bg-emerald-500/5'
-                }
               >
-                {ticket.title} — {new Date(ticket.createdAt).toLocaleString()}
+                {ticket.status === 'OPEN' ? '🔴' : ticket.status === 'IN_PROGRESS' ? '🟡' : '🟢'} {ticket.title} — {new Date(ticket.createdAt).toLocaleString()}
               </option>
             ))}
           </select>
