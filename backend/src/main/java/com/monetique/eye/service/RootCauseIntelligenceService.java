@@ -36,6 +36,7 @@ public class RootCauseIntelligenceService {
         processNetworkFailure(signals, scores, evidenceMap);
         processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
+        processApplicationError(signals, scores, evidenceMap);
         processTrafficSpike(signals, scores, evidenceMap);
 
         // 3. Final Ranking & Probability Calculation
@@ -202,6 +203,45 @@ public class RootCauseIntelligenceService {
         }
     }
 
+    private void processApplicationError(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+        double score = 0;
+        List<String> logs = new ArrayList<>();
+        
+        if (checkField(signals, "server_error_500")) {
+            score += 3.0;
+            logs.add("Multiple HTTP 500 responses detected");
+        }
+        if (checkField(signals, "unhandled_exception")) {
+            score += 5.0;
+            logs.add("Unhandled exception or fatal error found in logs");
+        }
+        if (checkField(signals, "runtime_exception_count")) {
+            score += 4.0;
+            logs.add("Unhandled RuntimeException found in logs");
+        }
+        if (checkField(signals, "illegal_state_count")) {
+            score += 4.0;
+            logs.add("Unhandled IllegalStateException found in logs");
+        }
+        if (checkField(signals, "npe_count")) {
+            score += 4.0;
+            logs.add("NullPointerException found in logs");
+        }
+        if (checkField(signals, "startup_failure")) {
+            score += 6.0;
+            logs.add("Application startup or context initialization failure");
+        }
+
+        if (score > 0) {
+            if (score >= 4.0 && checkField(signals, "server_error_500")) {
+                logs.add("Container restarted after exception"); // Assumed correlation
+            }
+            scores.put("APPLICATION_ERROR", score + 8.0);
+            evidence.put("APPLICATION_ERROR", logs);
+        }
+    }
+
+
     private void processNetworkFailure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
         double score = 0;
         List<String> logs = new ArrayList<>();
@@ -260,7 +300,7 @@ public class RootCauseIntelligenceService {
     }
 
     private String getRuleType(String category) {
-        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM") || category.equals("DISK_PRESSURE") || category.equals("SERVICE_UNREACHABLE")) return "root_cause";
+        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM") || category.equals("DISK_PRESSURE") || category.equals("SERVICE_UNREACHABLE") || category.equals("APPLICATION_ERROR")) return "root_cause";
         if (category.equals("BUG_CRASH")) return "trigger";
         return "impact";
     }
