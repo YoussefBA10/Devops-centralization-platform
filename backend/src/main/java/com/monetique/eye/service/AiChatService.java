@@ -468,6 +468,30 @@ public class AiChatService {
                         } else {
                             sb.append("  - No deployed applications found.\n");
                         }
+                        
+                        sb.append("\n[Metrics]\n");
+                        try {
+                            String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+                            Double cpu = prometheusClient.getCpuUsage(envLabel);
+                            Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                            sb.append(String.format("- CPU Usage: %.1f%%, RAM Usage: %.1f%%\n", cpu, ram));
+                        } catch (Exception e) {
+                            sb.append("- Metrics currently unavailable.\n");
+                        }
+
+                        sb.append("\n[Recent Logs]\n");
+                        try {
+                            java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 5);
+                            if (envLogs != null && !envLogs.isEmpty()) {
+                                for (java.util.Map<String, Object> log : envLogs) {
+                                    sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), log.get("message")));
+                                }
+                            } else {
+                                sb.append("- No recent logs found.\n");
+                            }
+                        } catch (Exception e) {
+                            sb.append("- Log search currently unavailable.\n");
+                        }
                     } else {
                         sb.append(String.format("- Environment '%s' not found.\n", targetEnv));
                     }
