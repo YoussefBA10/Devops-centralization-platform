@@ -317,8 +317,13 @@ const AnalysePage: React.FC = () => {
               <option 
                 key={ticket.id} 
                 value={ticket.id}
+                className={`bg-background ${
+                  ticket.status === 'OPEN' ? 'text-destructive' : 
+                  ticket.status === 'IN_PROGRESS' ? 'text-amber-500' : 
+                  'text-emerald-500'
+                }`}
               >
-                {ticket.status === 'OPEN' ? '🔴' : ticket.status === 'IN_PROGRESS' ? '🟡' : '🟢'} {ticket.title} — {new Date(ticket.createdAt).toLocaleString()}
+                {ticket.title} — {new Date(ticket.createdAt).toLocaleString()}
               </option>
             ))}
           </select>
