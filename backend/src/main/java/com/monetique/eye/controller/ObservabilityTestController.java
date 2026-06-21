@@ -81,4 +81,51 @@ public class ObservabilityTestController {
             }
         }).start();
     }
+
+    @GetMapping("/rca/db")
+    public ResponseEntity<?> triggerRcaDb() {
+        log.error("HikariPool - Connection is not available");
+        log.error("Cannot acquire connection from pool");
+        return ResponseEntity.status(500).body(Map.of("message", "Simulated DATABASE_CONNECTION_FAILURE"));
+    }
+
+    @GetMapping("/rca/deployment")
+    public void triggerRcaDeployment() {
+        log.error("Application failed after deployment");
+        log.error("Container restarted repeatedly");
+        log.error("CrashLoopBackOff");
+        new Thread(() -> {
+            try {
+                Thread.sleep(100);
+            } catch (Exception e) {}
+            System.exit(1);
+        }).start();
+    }
+
+    @GetMapping("/rca/config")
+    public void triggerRcaConfig() {
+        log.error("Could not resolve placeholder 'JWT_SECRET' in value \"${JWT_SECRET}\"");
+        log.error("Invalid YAML");
+        log.error("Application context initialization failed");
+        new Thread(() -> {
+            try {
+                Thread.sleep(100);
+            } catch (Exception e) {}
+            System.exit(1);
+        }).start();
+    }
+
+    @GetMapping("/rca/network")
+    public ResponseEntity<?> triggerRcaNetwork() {
+        log.error("Failed to resolve hostname 'api.external.com'");
+        log.error("Connection timeout");
+        return ResponseEntity.status(504).body(Map.of("message", "Simulated NETWORK_FAILURE"));
+    }
+
+    @GetMapping("/rca/dependency")
+    public ResponseEntity<?> triggerRcaDependency() {
+        log.error("Unable to connect to redis:6379");
+        log.error("Kafka broker unavailable");
+        return ResponseEntity.status(500).body(Map.of("message", "Simulated DEPENDENCY_FAILURE"));
+    }
 }
