@@ -30,14 +30,17 @@ public class RootCauseIntelligenceService {
         Map<String, Double> scores = new HashMap<>();
         Map<String, List<String>> evidenceMap = new HashMap<>();
 
-        processDbFailure(signals, scores, evidenceMap);
+        processDatabaseConnectionFailure(signals, scores, evidenceMap);
         processMemoryPressure(signals, scores, evidenceMap, envLabel, appFilter, nodeFilter, end);
         processDiskPressure(signals, scores, evidenceMap, envLabel, appFilter, end);
         processNetworkFailure(signals, scores, evidenceMap);
         processServiceUnreachable(signals, scores, evidenceMap);
         processBugCrash(signals, scores, evidenceMap);
         processApplicationError(signals, scores, evidenceMap);
-        processTrafficSpike(signals, scores, evidenceMap);
+        processTrafficSpike(signals, scores, evidenceMap, envLabel, appFilter, end);
+        processDeploymentFailure(signals, scores, evidenceMap);
+        processConfigurationError(signals, scores, evidenceMap);
+        processDependencyFailure(signals, scores, evidenceMap);
 
         // 3. Final Ranking & Probability Calculation
         double totalScore = scores.values().stream().mapToDouble(Double::doubleValue).sum();
@@ -88,24 +91,44 @@ public class RootCauseIntelligenceService {
         return ranked;
     }
 
-    private void processDbFailure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+    private void processDatabaseConnectionFailure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
         double score = 0;
         List<String> logs = new ArrayList<>();
         
-        // Signal: Pool Saturation
+        // Existing signals
         if (checkField(signals, "pool_active_max_match")) {
             score += 2.0;
-            logs.add("pool.active=pool.max appeared multiple times");
+            logs.add("Database connection pool exhausted (pool.active=pool.max)");
         }
-        // Signal: Wait Time
         if (checkField(signals, "db_wait_high")) {
             score += 1.5;
             logs.add("waited >5000ms on connection detected");
         }
+
+        // New signals
+        if (checkField(signals, "db_pool_timeout")) {
+            score += 5.0;
+            logs.add("HikariPool - Connection is not available");
+        }
+        if (checkField(signals, "db_cannot_acquire")) {
+            score += 4.0;
+            logs.add("Cannot acquire connection from pool");
+        }
+        if (checkField(signals, "sql_timeout")) {
+            score += 3.0;
+            logs.add("SQL connection timeout");
+        }
+        if (checkField(signals, "conn_refused")) {
+            // Distinguish slightly from network refusal if we have other DB signals
+            if (score > 0) {
+                score += 3.0;
+                logs.add("Database connection refused");
+            }
+        }
         
         if (score > 0) {
-            scores.put("DB_FAILURE", score + 10.0); // RESOURCE_SATURATION (Top Priority)
-            evidence.put("DB_FAILURE", logs);
+            scores.put("DATABASE_CONNECTION_FAILURE", score + 10.0);
+            evidence.put("DATABASE_CONNECTION_FAILURE", logs);
         }
     }
 
@@ -250,9 +273,26 @@ public class RootCauseIntelligenceService {
             score += 2.5;
             logs.add("circuit-breaker:open detected in upstream calls");
         }
+        if (checkField(signals, "network_timeout")) {
+            score += 4.0;
+            logs.add("Connection timeout");
+        }
+        if (checkField(signals, "network_dns")) {
+            score += 5.0;
+            logs.add("Failed to resolve hostname");
+        }
+        if (checkField(signals, "network_unreachable")) {
+            score += 5.0;
+            logs.add("Network unreachable");
+        }
+        if (checkField(signals, "conn_refused")) {
+            // General connection refused
+            score += 2.0;
+            logs.add("Connection refused");
+        }
         
         if (score > 0) {
-            scores.put("NETWORK_FAILURE", score + 4.0); // Impact/Upstream
+            scores.put("NETWORK_FAILURE", score + 5.0);
             evidence.put("NETWORK_FAILURE", logs);
         }
     }
@@ -280,18 +320,113 @@ public class RootCauseIntelligenceService {
         }
     }
 
-    private void processTrafficSpike(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+    private void processTrafficSpike(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence, String envLabel, String appFilter, java.time.Instant end) {
         double score = 0;
         List<String> logs = new ArrayList<>();
         
         if (checkField(signals, "rate_limit_429")) {
-            score += 1.5;
+            score += 5.0;
             logs.add("HTTP 429 (Too Many Requests) returned by gateway");
+        }
+
+        // Lightweight metric heuristic for traffic spikes vs historical baseline
+        try {
+            String app = appFilter != null ? appFilter : ".*";
+            String rateQuery = String.format("sum(rate(http_server_requests_seconds_count{environment=~\"%s\", job=~\".*%s.*\"}[1m]))", envLabel, app);
+            Double currentRate = prometheusClient.queryMetric(rateQuery, end);
+            Double historicalRate = prometheusClient.queryMetric(rateQuery, end.minus(java.time.Duration.ofHours(1)));
+            
+            if (currentRate > 0 && historicalRate > 0 && currentRate > (historicalRate * 2)) {
+                score += 4.0;
+                logs.add("Requests per second increased suddenly (>2x vs 1h ago)");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch Prometheus traffic metrics: {}", e.getMessage());
         }
         
         if (score > 0) {
-            scores.put("TRAFFIC_SPIKE", score + 1.0);
+            scores.put("TRAFFIC_SPIKE", score + 4.0);
             evidence.put("TRAFFIC_SPIKE", logs);
+        }
+    }
+
+    private void processDeploymentFailure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+        double score = 0;
+        List<String> logs = new ArrayList<>();
+        
+        if (checkField(signals, "crash_loop_backoff")) {
+            score += 8.0;
+            logs.add("Kubernetes CrashLoopBackOff detected");
+        }
+        if (checkField(signals, "container_restarted")) {
+            score += 5.0;
+            logs.add("Container restarted repeatedly");
+        }
+        if (checkField(signals, "deployment_failure_log")) {
+            score += 7.0;
+            logs.add("Application failing after deployment");
+        }
+        if (checkField(signals, "startup_failure")) {
+            score += 4.0;
+            logs.add("Startup failures detected");
+        }
+        
+        if (score > 0) {
+            scores.put("DEPLOYMENT_FAILURE", score + 11.0); // Very high priority
+            evidence.put("DEPLOYMENT_FAILURE", logs);
+        }
+    }
+
+    private void processConfigurationError(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+        double score = 0;
+        List<String> logs = new ArrayList<>();
+        
+        if (checkField(signals, "config_placeholder")) {
+            score += 6.0;
+            logs.add("Could not resolve placeholder (Missing environment variable)");
+        }
+        if (checkField(signals, "config_invalid_yaml")) {
+            score += 6.0;
+            logs.add("Invalid YAML configuration");
+        }
+        if (checkField(signals, "config_missing_url")) {
+            score += 5.0;
+            logs.add("Connection URL missing");
+        }
+        if (checkField(signals, "config_missing_secrets")) {
+            score += 6.0;
+            logs.add("Missing secrets");
+        }
+        
+        if (score > 0) {
+            scores.put("CONFIGURATION_ERROR", score + 9.0);
+            evidence.put("CONFIGURATION_ERROR", logs);
+        }
+    }
+
+    private void processDependencyFailure(Map<String, Object> signals, Map<String, Double> scores, Map<String, List<String>> evidence) {
+        double score = 0;
+        List<String> logs = new ArrayList<>();
+        
+        if (checkField(signals, "dep_redis")) {
+            score += 6.0;
+            logs.add("Redis connection failed");
+        }
+        if (checkField(signals, "dep_kafka")) {
+            score += 6.0;
+            logs.add("Kafka broker unavailable");
+        }
+        if (checkField(signals, "dep_elasticsearch")) {
+            score += 6.0;
+            logs.add("Elasticsearch connection failed");
+        }
+        if (checkField(signals, "server_error_500") && score > 0) {
+            logs.add("Application errors increased");
+        }
+        
+        if (score > 0) {
+            scores.put("DEPENDENCY_FAILURE", score + 8.5);
+            evidence.put("DEPENDENCY_FAILURE", logs);
         }
     }
 
@@ -300,8 +435,8 @@ public class RootCauseIntelligenceService {
     }
 
     private String getRuleType(String category) {
-        if (category.equals("DB_FAILURE") || category.equals("MEMORY_OOM") || category.equals("DISK_PRESSURE") || category.equals("SERVICE_UNREACHABLE") || category.equals("APPLICATION_ERROR")) return "root_cause";
-        if (category.equals("BUG_CRASH")) return "trigger";
+        if (category.equals("DATABASE_CONNECTION_FAILURE") || category.equals("MEMORY_OOM") || category.equals("DISK_PRESSURE") || category.equals("SERVICE_UNREACHABLE") || category.equals("APPLICATION_ERROR") || category.equals("DEPENDENCY_FAILURE") || category.equals("NETWORK_FAILURE")) return "root_cause";
+        if (category.equals("BUG_CRASH") || category.equals("CONFIGURATION_ERROR") || category.equals("DEPLOYMENT_FAILURE")) return "trigger";
         return "impact";
     }
 

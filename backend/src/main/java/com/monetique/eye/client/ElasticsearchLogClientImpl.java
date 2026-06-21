@@ -252,6 +252,32 @@ public class ElasticsearchLogClientImpl implements ElasticsearchLogClient {
                 .aggregations("disk_full", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("No space left on device"))))))
                 .aggregations("disk_usage_high", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.range(r -> r.field("disk_usage_pct").gte(JsonData.of(85)))))))
                 .aggregations("inode_exhausted", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("No inodes available"))))))
+                
+                // DATABASE_CONNECTION_FAILURE
+                .aggregations("db_pool_timeout", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("HikariPool - Connection is not available"))))))
+                .aggregations("db_cannot_acquire", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Cannot acquire connection from pool"))))))
+                .aggregations("sql_timeout", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("SQL connection timeout"))))))
+                
+                // DEPLOYMENT_FAILURE
+                .aggregations("crash_loop_backoff", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("CrashLoopBackOff"))))))
+                .aggregations("container_restarted", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Container restarted repeatedly"))))))
+                .aggregations("deployment_failure_log", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Application failed after deployment"))))))
+                
+                // CONFIGURATION_ERROR
+                .aggregations("config_placeholder", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Could not resolve placeholder"))))))
+                .aggregations("config_invalid_yaml", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Invalid YAML"))))))
+                .aggregations("config_missing_url", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Connection URL missing"))))))
+                .aggregations("config_missing_secrets", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Missing secrets"))))))
+                
+                // NETWORK_FAILURE
+                .aggregations("network_timeout", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Connection timeout"))))))
+                .aggregations("network_dns", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Failed to resolve hostname"))))))
+                .aggregations("network_unreachable", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Network unreachable"))))))
+                
+                // DEPENDENCY_FAILURE
+                .aggregations("dep_redis", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Unable to connect to redis"))))))
+                .aggregations("dep_kafka", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Kafka broker unavailable"))))))
+                .aggregations("dep_elasticsearch", a -> a.filter(f -> f.bool(b -> b.should(s1 -> s1.match(m -> m.field("message").query("Elasticsearch connection failed"))))))
             , Void.class);
 
             response.aggregations().forEach((name, agg) -> {

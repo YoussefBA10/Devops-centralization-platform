@@ -231,12 +231,12 @@ public class LogAnalyticsService {
                 "req/s", start, end, step, 12));
             
             datasets.addAll(fetchMultiRangeMetric(
-                String.format(Locale.US, "sum by (job) (rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval),
+                String.format(Locale.US, "sum by (job) (increase(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[1m]))", envLabel, appFilter, nodeFilter(nodeName)),
                 "errors/min", start, end, step, 12));
         } else {
             datasets.add(ChartData.Series.builder()
                 .label("errors/min")
-                .data(fetchRangeMetric(String.format(Locale.US, "sum(rate(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[%s])) * 60", envLabel, appFilter, nodeFilter(nodeName), rateInterval), start, end, step, 12))
+                .data(fetchRangeMetric(String.format(Locale.US, "sum(increase(http_server_requests_seconds_count{status=~\"5..\", environment=\"%s\", job=~\".*%s.*\"%s}[1m]))", envLabel, appFilter, nodeFilter(nodeName)), start, end, step, 12))
                 .color("#ef4444")
                 .fill(true)
                 .build());
