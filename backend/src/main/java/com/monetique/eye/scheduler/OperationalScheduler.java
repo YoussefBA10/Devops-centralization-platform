@@ -16,11 +16,16 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class OperationalScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(OperationalScheduler.class);
+
+    // Only generate AI digests every N cycles to stay within Groq rate limits
+    private static final int AI_DIGEST_EVERY_N_CYCLES = 10;
+    private final AtomicInteger cycleCounter = new AtomicInteger(0);
 
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
@@ -49,6 +54,8 @@ public class OperationalScheduler {
     @Scheduled(fixedRate = 60000)
     public void runObservabilityCycle() {
         log.info("Starting observability cycle...");
+        int currentCycle = cycleCounter.incrementAndGet();
+        boolean runAiDigest = (currentCycle % AI_DIGEST_EVERY_N_CYCLES == 0);
 
         List<Environment> environments = environmentRepository.findAll();
         for (Environment env : environments) {
@@ -72,15 +79,18 @@ public class OperationalScheduler {
                 // 4. Save window
                 aggregationService.saveWindow(app, errorCount, stabilityIndex);
 
-                // 5. Generate AI Digest (limit frequency or only for active environments)
-                try {
-                    aiDigestService.generateApplicationDigest(app, stabilityIndex, errorCount);
-                } catch (Exception e) {
-                    log.error("Failed to generate AI digest for {}: {}", app.getName(), e.getMessage());
+                // 5. Generate AI Digest (throttled to every 10 minutes)
+                if (runAiDigest) {
+                    try {
+                        aiDigestService.generateApplicationDigest(app, stabilityIndex, errorCount);
+                    } catch (Exception e) {
+                        log.error("Failed to generate AI digest for {}: {}", app.getName(), e.getMessage());
+                    }
                 }
             }
         }
         
-        log.info("Observability cycle completed.");
+        log.info("Observability cycle {} completed.{}", currentCycle, runAiDigest ? " (AI digests generated)" : "");
     }
 }
+
