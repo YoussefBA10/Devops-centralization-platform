@@ -290,7 +290,8 @@ public class AiChatService {
                 if (targetEnv != null) {
                     List<Map<String, Object>> logs = esLogService.getRecentLogs(targetEnv.toLowerCase(), 10);
                     for (Map<String, Object> log : logs) {
-                        sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), log.get("message")));
+                        Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
+                        sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), msg));
                     }
                 }
                 break;
@@ -484,7 +485,8 @@ public class AiChatService {
                             java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 5);
                             if (envLogs != null && !envLogs.isEmpty()) {
                                 for (java.util.Map<String, Object> log : envLogs) {
-                                    sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), log.get("message")));
+                                    Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
+                                    sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), msg));
                                 }
                             } else {
                                 sb.append("- No recent logs found.\n");
