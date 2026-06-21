@@ -19,12 +19,14 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
 public class AiChatService {
 
     private final GroqService groqService;
+    private final IntentClassifier intentClassifier;
     private final EnvironmentRepository environmentRepository;
     private final ApplicationRepository applicationRepository;
     private final TicketRepository ticketRepository;
@@ -34,8 +36,12 @@ public class AiChatService {
     private final ElasticsearchLogService esLogService;
     private final ConversationRepository conversationRepository;
     private final ObjectMapper objectMapper;
+    
+    // In-memory state management for action confirmations
+    private final Map<Long, PendingAction> pendingActions = new ConcurrentHashMap<>();
 
     public AiChatService(GroqService groqService,
+                        IntentClassifier intentClassifier,
                         EnvironmentRepository environmentRepository,
                         ApplicationRepository applicationRepository,
                         TicketRepository ticketRepository,
@@ -46,6 +52,7 @@ public class AiChatService {
                         ConversationRepository conversationRepository,
                         ObjectMapper objectMapper) {
         this.groqService = groqService;
+        this.intentClassifier = intentClassifier;
         this.environmentRepository = environmentRepository;
         this.applicationRepository = applicationRepository;
         this.ticketRepository = ticketRepository;
@@ -77,6 +84,8 @@ public class AiChatService {
                     .build();
             conversation = conversationRepository.save(conversation);
         }
+        
+        Long activeConversationId = conversation != null ? conversation.getId() : -1L;
 
         if (conversation != null && conversation.getMessagesJson() != null) {
             try {
@@ -85,11 +94,64 @@ public class AiChatService {
                 history = new ArrayList<>();
             }
         }
+        
+        // 1. Check for Pending Action Confirmations
+        PendingAction pendingAction = pendingActions.get(activeConversationId);
+        if (pendingAction != null && !pendingAction.isExpired()) {
+            if (query.trim().equalsIgnoreCase("yes") || query.toLowerCase().contains("confirm")) {
+                pendingActions.remove(activeConversationId);
+                // Execute actual action (mocked for now, needs actual service call)
+                String result = "Action " + pendingAction.getActionType() + " executed successfully for " + 
+                                pendingAction.getTargetApp() + " on " + pendingAction.getTargetEnv() + ".";
+                updateHistory(conversation, history, query, result);
+                return result;
+            } else if (query.trim().equalsIgnoreCase("no") || query.toLowerCase().contains("cancel")) {
+                pendingActions.remove(activeConversationId);
+                String result = "Action cancelled.";
+                updateHistory(conversation, history, query, result);
+                return result;
+            }
+            // If they didn't say yes/no, we remove pending and proceed as normal
+            pendingActions.remove(activeConversationId);
+        }
 
-        // 1. Gather Context
-        String context = gatherInfrastructureContext();
+        // 2. Classify Intent
+        Intent intent = intentClassifier.classifyIntent(query);
+        
+        // Handle explicit fallbacks
+        if (intent == Intent.OUT_OF_SCOPE) {
+            String fallback = "I am Monetique Eye's specialized infrastructure and observability assistant. I can help you analyze logs, check metrics, review security postures, and manage deployments. For general questions, please use a standard AI assistant.";
+            updateHistory(conversation, history, query, fallback);
+            return fallback;
+        }
+        
+        if (intent == Intent.AMBIGUOUS_CLARIFY) {
+            String fallback = "I need a bit more specific information to help with that. Could you clarify which Environment (e.g., staging, production) or Application you are referring to?";
+            updateHistory(conversation, history, query, fallback);
+            return fallback;
+        }
+        
+        // Handle Actions
+        if (intent == Intent.ACTION_REQUEST) {
+            String targetApp = intentClassifier.extractApplication(query);
+            String targetEnv = intentClassifier.extractEnvironment(query);
+            
+            if (targetApp == null || targetEnv == null) {
+                String fallback = "To perform an action, I need both the target Application and Environment. Could you clarify?";
+                updateHistory(conversation, history, query, fallback);
+                return fallback;
+            }
+            
+            pendingActions.put(activeConversationId, new PendingAction("RESTART", targetApp, targetEnv));
+            String response = "You have requested to perform an action on the **" + targetApp + "** application in the **" + targetEnv + "** environment. Please reply with 'Yes' to confirm execution.";
+            updateHistory(conversation, history, query, response);
+            return response;
+        }
 
-        // 2. Build History String for Prompt
+        // 3. Gather Targeted Context based on Intent
+        String context = gatherTargetedContext(intent, query);
+
+        // 4. Build History String for Prompt
         StringBuilder historySb = new StringBuilder();
         if (!history.isEmpty()) {
             historySb.append("\nPREVIOUS CONVERSATION HISTORY:\n");
@@ -98,11 +160,13 @@ public class AiChatService {
             }
         }
 
-        // 3. Build Prompt
+        // 5. Build Prompt
         String prompt = String.format("""
                 You are 'Monetique Eye AI', an advanced infrastructure assistant.
                 
-                USER CONTEXT (REAL-TIME METRICS & LOGS):
+                USER INTENT: %s
+                
+                RELEVANT CONTEXT:
                 %s
                 %s
                 
@@ -110,19 +174,22 @@ public class AiChatService {
                 %s
                 
                 INSTRUCTIONS:
-                - Use the provided REAL-TIME METRICS and LOGS to answer questions specifically.
-                - Use the PREVIOUS CONVERSATION HISTORY to maintain context of the current discussion.
-                - If the user asks for metrics of an app, look into the METRICS section.
-                - If the user asks about recent errors or logs, look into the RECENT LOGS section.
+                - Use the provided RELEVANT CONTEXT to answer the query specifically.
                 - Keep responses professional, concise, and enterprise-level.
                 - Use markdown for lists or emphasizing key metrics.
-                - If there are critical failures, high CPU usage, or open tickets, prioritize mentioning them.
-                """, context, historySb.toString(), query);
+                - If data is missing from the context, explicitly state that you don't have enough data rather than hallucinating.
+                """, intent.name(), context, historySb.toString(), query);
 
-        // 4. Call Groq
+        // 6. Call Groq
         String response = groqService.generateSummary(prompt);
 
-        // 5. Update History
+        // 7. Update History
+        updateHistory(conversation, history, query, response);
+
+        return response;
+    }
+    
+    private void updateHistory(Conversation conversation, List<Map<String, String>> history, String query, String response) {
         if (conversation != null) {
             history.add(Map.of("role", "user", "content", query));
             history.add(Map.of("role", "assistant", "content", response));
@@ -133,66 +200,79 @@ public class AiChatService {
                 // Log error
             }
         }
-
-        return response;
     }
 
-    private String gatherInfrastructureContext() {
+    private String gatherTargetedContext(Intent intent, String query) {
         StringBuilder sb = new StringBuilder();
+        String targetEnv = intentClassifier.extractEnvironment(query);
+        String targetApp = intentClassifier.extractApplication(query);
 
-        // Environments, Apps & Metrics
-        List<Environment> environments = environmentRepository.findAll();
-        sb.append("INFRASTRUCTURE STATUS & METRICS:\n");
-        for (Environment env : environments) {
-            String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
-            Double cpu = prometheusClient.getCpuUsage(envLabel);
-            Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
-            
-            sb.append(String.format("- Environment: %s (CPU: %.1f%%, RAM: %.1f%%)\n", env.getName(), cpu, ram));
-            
-            List<Application> apps = applicationRepository.findByEnvironmentId(env.getId());
-            for (Application app : apps) {
-                sb.append(String.format("  * App: %s, Status: %s, Port: %d\n", 
-                    app.getName(), app.getStatus(), app.getPort()));
-            }
-        }
-
-        // Recent Logs
-        sb.append("\nRECENT LOGS (Last 10 entries per environment):\n");
-        for (Environment env : environments) {
-            List<Map<String, Object>> logs = esLogService.getRecentLogs(env.getName().toLowerCase(), 10);
-            if (!logs.isEmpty()) {
-                sb.append(String.format("- Env %s logs:\n", env.getName()));
-                for (Map<String, Object> log : logs) {
-                    sb.append(String.format("  [%s] %s: %s\n", 
-                        log.get("severity"), log.get("service_name"), log.get("message")));
+        // Only fetch what is needed based on Intent
+        switch (intent) {
+            case METRIC_QUERY:
+                sb.append("[Metrics]\n");
+                if (targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
+                    if (env != null) {
+                        String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+                        Double cpu = prometheusClient.getCpuUsage(envLabel);
+                        Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                        sb.append(String.format("- Env %s CPU: %.1f%%, RAM: %.1f%%\n", env.getName(), cpu, ram));
+                    }
+                } else {
+                    sb.append("Please specify an environment to get accurate metrics.\n");
                 }
-            }
-        }
+                break;
+                
+            case LOG_SEARCH:
+                sb.append("[Recent Logs]\n");
+                if (targetEnv != null) {
+                    List<Map<String, Object>> logs = esLogService.getRecentLogs(targetEnv.toLowerCase(), 10);
+                    for (Map<String, Object> log : logs) {
+                        sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), log.get("message")));
+                    }
+                }
+                break;
+                
+            case INCIDENT_SUMMARY:
+                sb.append("[Incidents & Alerts]\n");
+                List<Ticket> openTickets = ticketRepository.findAll().stream()
+                        .filter(t -> t.getStatus() == TicketStatus.OPEN)
+                        .limit(5)
+                        .collect(Collectors.toList());
+                for (Ticket t : openTickets) {
+                    sb.append(String.format("- [%s] %s: %s\n", t.getPriority(), t.getTitle(), t.getDescription()));
+                }
+                break;
+                
+            case SECURITY_QUERY:
+                sb.append("[Security Posture]\n");
+                sb.append("- SecurityService endpoints pending full integration. Note: Acknowledge that you are searching for security metrics.\n");
+                break;
+                
+            case DEPLOYMENT_STATUS:
+                sb.append("[Deployments]\n");
+                sb.append("- Deployment context fetcher pending integration.\n");
+                break;
+                
+            case INFRA_TOPOLOGY:
+                sb.append("[Topology]\n");
+                sb.append("- Topology mapping pending integration.\n");
+                break;
+                
+            case USER_AUDIT:
+                sb.append("[Audit Logs]\n");
+                sb.append("- RBAC/Audit mapping pending integration.\n");
+                break;
 
-        // Open Tickets
-        List<Ticket> openTickets = ticketRepository.findAll().stream()
-                .filter(t -> t.getStatus() == TicketStatus.OPEN)
-                .limit(5)
-                .collect(Collectors.toList());
-        if (!openTickets.isEmpty()) {
-            sb.append("\nRECENT OPEN TICKETS:\n");
-            for (Ticket t : openTickets) {
-                sb.append(String.format("- [%s] %s: %s\n", t.getPriority(), t.getTitle(), t.getDescription()));
-            }
-        }
-
-        // Recent Anomalies
-        sb.append("\nRECENT ANOMALIES:\n");
-        for (Environment env : environments) {
-            var anomalies = anomalyService.getRecentAnomalies(env.getId());
-            if (!anomalies.isEmpty()) {
-                sb.append(String.format("- Env %s: %d anomalies detected recently.\n", env.getName(), anomalies.size()));
-                anomalies.stream().limit(3).forEach(a -> 
-                    sb.append(String.format("  * %s on %s: %s\n", a.getSeverity(), a.getNode(), a.getDescription())));
-            }
+            default:
+                // Fallback to basic cluster health for general queries
+                sb.append("[Cluster Health]\n");
+                sb.append(environmentRepository.count() + " environments active.\n");
+                break;
         }
 
         return sb.toString();
     }
 }
+

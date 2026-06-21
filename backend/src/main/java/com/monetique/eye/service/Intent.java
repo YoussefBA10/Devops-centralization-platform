@@ -1,0 +1,16 @@
+package com.monetique.eye.service;
+
+public enum Intent {
+    ACTION_REQUEST,
+    SECURITY_QUERY,
+    METRIC_QUERY,
+    LOG_SEARCH,
+    INCIDENT_SUMMARY,
+    DEPLOYMENT_STATUS,
+    INFRA_TOPOLOGY,
+    USER_AUDIT,
+    ANALYTICAL,
+    AMBIGUOUS_CLARIFY,
+    OUT_OF_SCOPE,
+    GENERAL_QUERY
+}
