@@ -13,8 +13,8 @@ import java.util.List;
 public class GroqService {
 
     private static final Logger log = LoggerFactory.getLogger(GroqService.class);
-    private static final int MAX_RETRIES = 3;
-    private static final long INITIAL_BACKOFF_MS = 15000; // 15s, 30s, 60s — spans Groq's rate limit window
+    private static final int MAX_RETRIES = 2;
+    private static final long INITIAL_BACKOFF_MS = 3000; // 3s, 6s — fast enough for interactive chat
 
     private final WebClient webClient;
     private final String model;

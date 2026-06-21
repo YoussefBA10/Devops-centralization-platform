@@ -103,22 +103,24 @@ public class SecurityReportService {
      */
     @Transactional
     public int reassignMisplacedReports() {
-        List<SecurityScanReport> misplaced = reportRepository.findMisplacedReports(
+        List<Long> misplacedIds = reportRepository.findMisplacedReportIds(
                 ReportComponent.FRONTEND, ReportComponent.BACKEND);
-        if (misplaced.isEmpty()) {
+        if (misplacedIds.isEmpty()) {
             return 0;
         }
         int reassigned = 0;
-        for (SecurityScanReport report : misplaced) {
+        for (Long reportId : misplacedIds) {
+            SecurityScanReport report = reportRepository.findById(reportId).orElse(null);
+            if (report == null) continue;
             Application current = report.getApplication();
             Application correct = resolveApplicationForReport(current, report.getComponent());
             if (!correct.getId().equals(current.getId())) {
                 report.setApplication(correct);
+                reportRepository.save(report);
                 reassigned++;
             }
         }
         if (reassigned > 0) {
-            reportRepository.saveAll(misplaced);
             log.info("Reassigned {} misplaced security scan report(s) to the correct application", reassigned);
         }
         return reassigned;
