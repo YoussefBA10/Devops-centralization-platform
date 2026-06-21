@@ -14,12 +14,12 @@ public class IntentClassifier {
 
     private static final Pattern ACTION_PATTERN = Pattern.compile("(?i)\\b(restart|deploy|silence|acknowledge|resolve|create ticket|add node)\\b");
     private static final Pattern SECURITY_PATTERN = Pattern.compile("(?i)\\b(security|cve|vulnerability|falco|dependency-check|scan|suspicious|posture)\\b");
-    private static final Pattern METRIC_PATTERN = Pattern.compile("(?i)\\b(cpu|memory|disk|latency|response time|network load|usage|p95)\\b");
+    private static final Pattern METRIC_PATTERN = Pattern.compile("(?i)\\b(cpu|memory|disk|latency|response time|network load|usage|p95|metrics?|performance)\\b");
     private static final Pattern LOG_PATTERN = Pattern.compile("(?i)\\b(logs?|errors?|warn|search|exception|trace|spike in logs)\\b");
     private static final Pattern INCIDENT_PATTERN = Pattern.compile("(?i)\\b(alerts?|incidents?|root cause|mttr|firing|resolved)\\b");
     private static final Pattern DEPLOYMENT_PATTERN = Pattern.compile("(?i)\\b(deployment|rollback|version|ci/cd|release)\\b");
-    private static final Pattern TOPOLOGY_PATTERN = Pattern.compile("(?i)\\b(topology|nodes?|online|containerized|standalone|running on|unreachable|environment|infra)\\b");
-    private static final Pattern AUDIT_PATTERN = Pattern.compile("(?i)\\b(access|permissions?|audit|rbac|who)\\b");
+    private static final Pattern TOPOLOGY_PATTERN = Pattern.compile("(?i)\\b(topology|nodes?|online|containerized|standalone|running on|unreachable|environment|infra|infrastructure)\\b");
+    private static final Pattern AUDIT_PATTERN = Pattern.compile("(?i)\\b(access|permissions?|audit|rbac|who|users?|roles?)\\b");
     private static final Pattern ANALYTICAL_PATTERN = Pattern.compile("(?i)\\b(compare|trend|least stable|most resources|improving)\\b");
     
     private static final Pattern OUT_OF_SCOPE_PATTERN = Pattern.compile("(?i)\\b(weather|joke|fix my code|python script|write code)\\b");
@@ -46,6 +46,21 @@ public class IntentClassifier {
             return Intent.CONVERSATIONAL;
         }
 
+        Intent baseIntent = determineBaseIntent(query);
+
+        // If it requires environment/app but both are missing, clarify
+        if (baseIntent == Intent.METRIC_QUERY || baseIntent == Intent.LOG_SEARCH || baseIntent == Intent.ACTION_REQUEST) {
+            String env = extractEnvironment(query);
+            String app = extractApplication(query);
+            if (env == null && app == null) {
+                return Intent.AMBIGUOUS_CLARIFY;
+            }
+        }
+
+        return baseIntent;
+    }
+
+    private Intent determineBaseIntent(String query) {
         if (ACTION_PATTERN.matcher(query).find()) {
             return Intent.ACTION_REQUEST;
         }

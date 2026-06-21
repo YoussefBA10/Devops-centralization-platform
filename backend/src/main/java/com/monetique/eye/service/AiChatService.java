@@ -271,7 +271,7 @@ public class AiChatService {
         // Only fetch what is needed based on Intent
         switch (intent) {
             case METRIC_QUERY:
-                sb.append("[Metrics]\n");
+                sb.append("### 📊 Metrics & Performance\n");
                 if (targetEnv != null) {
                     Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
                     if (env != null) {
@@ -286,29 +286,37 @@ public class AiChatService {
                 break;
                 
             case LOG_SEARCH:
-                sb.append("[Recent Logs]\n");
+                sb.append("### 📝 Recent Logs\n");
                 if (targetEnv != null) {
                     List<Map<String, Object>> logs = esLogService.getRecentLogs(targetEnv.toLowerCase(), 10);
-                    for (Map<String, Object> log : logs) {
-                        Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
-                        sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), msg));
+                    if (!logs.isEmpty()) {
+                        for (Map<String, Object> log : logs) {
+                            Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
+                            sb.append(String.format("- **[%s] %s**: %s\n", log.get("severity"), log.get("service_name"), msg));
+                        }
+                    } else {
+                        sb.append("- No recent logs found for environment: " + targetEnv + "\n");
                     }
                 }
                 break;
                 
             case INCIDENT_SUMMARY:
-                sb.append("[Incidents & Alerts]\n");
+                sb.append("### ⚠️ Active Alerts & Incidents\n");
                 List<Ticket> openTickets = ticketRepository.findAll().stream()
                         .filter(t -> t.getStatus() == TicketStatus.OPEN)
                         .limit(5)
                         .collect(Collectors.toList());
-                for (Ticket t : openTickets) {
-                    sb.append(String.format("- [%s] %s: %s\n", t.getPriority(), t.getTitle(), t.getDescription()));
+                if (!openTickets.isEmpty()) {
+                    for (Ticket t : openTickets) {
+                        sb.append(String.format("- **[%s] %s**: %s\n", t.getPriority(), t.getTitle(), t.getDescription()));
+                    }
+                } else {
+                    sb.append("- ✅ No active firing alerts or incidents.\n");
                 }
                 break;
                 
             case SECURITY_QUERY:
-                sb.append("[Security Posture]\n");
+                sb.append("### 🛡️ Security Posture\n");
                 if (targetApp != null) {
                     Application app = applicationRepository.findAll().stream().filter(a -> a.getName().equalsIgnoreCase(targetApp)).findFirst().orElse(null);
                     if (app != null) {
@@ -381,7 +389,7 @@ public class AiChatService {
                 break;
                 
             case DEPLOYMENT_STATUS:
-                sb.append("[Deployments]\n");
+                sb.append("### 🚀 Deployment History\n");
                 if (targetApp != null) {
                     Application app = applicationRepository.findAll().stream().filter(a -> a.getName().equalsIgnoreCase(targetApp)).findFirst().orElse(null);
                     if (app != null) {
@@ -442,7 +450,7 @@ public class AiChatService {
                 break;
                 
             case INFRA_TOPOLOGY:
-                sb.append("[Topology]\n");
+                sb.append("### 📌 Infrastructure & Topology\n");
                 if (targetEnv != null) {
                     Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
                     if (env != null) {
@@ -470,26 +478,61 @@ public class AiChatService {
                             sb.append("  - No deployed applications found.\n");
                         }
                         
-                        sb.append("\n[Metrics]\n");
+                        sb.append("\n### 📊 Metrics\n");
                         try {
                             String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
                             Double cpu = prometheusClient.getCpuUsage(envLabel);
                             Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
-                            sb.append(String.format("- CPU Usage: %.1f%%, RAM Usage: %.1f%%\n", cpu, ram));
+                            sb.append(String.format("- **CPU Usage**: %.1f%%\n- **RAM Usage**: %.1f%%\n", cpu, ram));
                         } catch (Exception e) {
                             sb.append("- Metrics currently unavailable.\n");
                         }
 
-                        sb.append("\n[Recent Logs]\n");
+                        sb.append("\n### ⚠️ Log Issues & Warnings\n");
                         try {
-                            java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 5);
+                            java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 20);
                             if (envLogs != null && !envLogs.isEmpty()) {
+                                long errorCount = 0;
+                                long warnCount = 0;
+                                java.util.List<String> problemSummaries = new java.util.ArrayList<>();
+
                                 for (java.util.Map<String, Object> log : envLogs) {
-                                    Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
-                                    sb.append(String.format("- [%s] %s: %s\n", log.get("severity"), log.get("service_name"), msg));
+                                    String severity = log.get("severity") != null ? log.get("severity").toString().toUpperCase() : "INFO";
+                                    Object msgObj = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
+                                    String message = msgObj != null ? msgObj.toString() : "";
+                                    
+                                    boolean isError = severity.contains("ERROR") || severity.contains("ERR") || message.toLowerCase().contains("error") || message.toLowerCase().contains("exception") || message.toLowerCase().contains("fail");
+                                    boolean isWarn = severity.contains("WARN") || message.toLowerCase().contains("warn") || message.toLowerCase().contains("warning");
+
+                                    if (isError) {
+                                        errorCount++;
+                                        String service = log.get("service_name") != null ? log.get("service_name").toString() : "unknown";
+                                        String brief = cleanLogMessage(message);
+                                        String problem = String.format("- **[ERROR] %s**: %s", service, brief);
+                                        if (!problemSummaries.contains(problem) && problemSummaries.size() < 3) {
+                                            problemSummaries.add(problem);
+                                        }
+                                    } else if (isWarn) {
+                                        warnCount++;
+                                        String service = log.get("service_name") != null ? log.get("service_name").toString() : "unknown";
+                                        String brief = cleanLogMessage(message);
+                                        String problem = String.format("- **[WARN] %s**: %s", service, brief);
+                                        if (!problemSummaries.contains(problem) && problemSummaries.size() < 3) {
+                                            problemSummaries.add(problem);
+                                        }
+                                    }
+                                }
+
+                                if (errorCount > 0 || warnCount > 0) {
+                                    for (String problem : problemSummaries) {
+                                        sb.append(problem).append("\n");
+                                    }
+                                    sb.append(String.format("*(Recent logs analyzed: %d errors and %d warnings detected)*\n", errorCount, warnCount));
+                                } else {
+                                    sb.append("- ✅ No significant errors or warnings detected in recent logs.\n");
                                 }
                             } else {
-                                sb.append("- No recent logs found.\n");
+                                sb.append("- No recent logs found to analyze.\n");
                             }
                         } catch (Exception e) {
                             sb.append("- Log search currently unavailable.\n");
@@ -509,7 +552,7 @@ public class AiChatService {
                 break;
                 
             case USER_AUDIT:
-                sb.append("[Audit Logs]\n");
+                sb.append("### 🔑 Audit & User Management\n");
                 List<ActivityLog> activityLogs;
                 if (targetEnv != null) {
                     activityLogs = activityLogRepository.findAll().stream()
@@ -543,12 +586,42 @@ public class AiChatService {
 
             default:
                 // Fallback to basic cluster health for general queries
-                sb.append("[Cluster Health]\n");
+                sb.append("### 🏥 Cluster Health\n");
                 sb.append(environmentRepository.count() + " environments active.\n");
                 break;
         }
 
         return sb.toString();
+    }
+
+    private String cleanLogMessage(String message) {
+        if (message == null || message.isBlank()) return "Unknown message";
+        String msg = message.trim();
+        // Check if message is a JSON string
+        if (msg.startsWith("{") && msg.endsWith("}")) {
+            try {
+                // Look for the "message":"..." key value
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"message\"\\s*:\\s*\"([^\"]+)\"");
+                java.util.regex.Matcher m = p.matcher(msg);
+                if (m.find()) {
+                    String extracted = m.group(1);
+                    extracted = extracted.replace("\\\"", "\"").replace("\\\\", "\\");
+                    return extracted;
+                }
+            } catch (Exception e) {
+                // Fallback to substring
+            }
+        }
+        
+        // Remove common spring timestamp/thread formatting if it's too long
+        if (msg.contains(" : ")) {
+            msg = msg.substring(msg.indexOf(" : ") + 3);
+        }
+        
+        if (msg.length() > 150) {
+            return msg.substring(0, 147) + "...";
+        }
+        return msg;
     }
 }
 
