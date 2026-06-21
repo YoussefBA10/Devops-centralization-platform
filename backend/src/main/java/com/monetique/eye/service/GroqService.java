@@ -47,7 +47,9 @@ public class GroqService {
                 return message.get("content").toString();
             }
         } catch (Exception e) {
-            // Log Groq error
+            System.err.println("Groq API Error:");
+            e.printStackTrace();
+            return "AI Summary unavailable at this time. Error details: " + e.getMessage();
         }
         return "AI Summary unavailable at this time.";
     }
