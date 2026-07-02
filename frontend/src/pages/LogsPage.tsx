@@ -351,7 +351,7 @@ const LogsPage: React.FC = () => {
                           )}
                         </div>
                         <div className="text-[13px] font-medium leading-[1.5] break-words whitespace-pre-wrap selection:bg-primary/30">
-                          {log.normalizedSummary || log.rawMessage}
+                          {(log.normalizedSummary || log.rawMessage || '').replace('%{message}', log.rawMessage || '')}
                         </div>
                       </div>
                     </td>
