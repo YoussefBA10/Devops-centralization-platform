@@ -427,23 +427,30 @@ const UserManagementPage: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-3 gap-4">
                       {[
-                        { key: 'observability', label: 'Observability', icon: Shield },
-                        { key: 'logs', label: 'Log Explorer', icon: Terminal },
-                        { key: 'infraGraph', label: 'Infra Graph', icon: Share2 }
-                      ].map(item => (
-                        <button
-                          key={item.key}
-                          onClick={() => togglePermission('monitoring', item.key)}
-                          className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all text-left ${
-                            (permissions.monitoring as any)[item.key]
-                              ? 'bg-blue-500/10 border-blue-500/30 text-blue-500'
-                              : 'bg-secondary/30 border-white/5 text-muted-foreground hover:border-white/10'
-                          }`}
-                        >
-                          <item.icon className="w-5 h-5" />
-                          <span className="font-bold text-sm">{item.label}</span>
-                        </button>
-                      ))}
+                        { key: 'observability', label: 'Observability', icon: Shield, isRoot: false },
+                        { key: 'logs', label: 'Log Explorer', icon: Terminal, isRoot: false },
+                        { key: 'infraGraph', label: 'Infra Graph', icon: Share2, isRoot: false },
+                        { key: 'securityDashboardView', label: 'Security', icon: Shield, isRoot: true },
+                        { key: 'analyseView', label: 'Analyse', icon: BarChart2, isRoot: true }
+                      ].map(item => {
+                        const isEnabled = item.isRoot 
+                          ? (permissions as any)[item.key] 
+                          : (permissions.monitoring as any)[item.key];
+                        return (
+                          <button
+                            key={item.key}
+                            onClick={() => item.isRoot ? togglePermission(item.key) : togglePermission('monitoring', item.key)}
+                            className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all text-left ${
+                              isEnabled
+                                ? 'bg-blue-500/10 border-blue-500/30 text-blue-500'
+                                : 'bg-secondary/30 border-white/5 text-muted-foreground hover:border-white/10'
+                            }`}
+                          >
+                            <item.icon className="w-5 h-5" />
+                            <span className="font-bold text-sm">{item.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </Card>
 
@@ -564,8 +571,6 @@ const UserManagementPage: React.FC = () => {
                     <div className="grid grid-cols-3 gap-4">
                       {[
                         { key: 'networkMonitorView', label: 'Network Monitor', icon: Network },
-                        { key: 'securityDashboardView', label: 'Security Dashboard', icon: Shield },
-                        { key: 'analyseView', label: 'Analyse', icon: BarChart2 },
                         { key: 'operationalIntelligenceView', label: 'Operational Intelligence', icon: Activity },
                         { key: 'auditLogView', label: 'Audit Log', icon: FileText },
                         { key: 'documentationView', label: 'Documentation', icon: Book }
