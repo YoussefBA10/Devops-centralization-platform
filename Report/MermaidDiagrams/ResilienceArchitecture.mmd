@@ -1,0 +1,21 @@
+graph TB
+    subgraph "Client Request"
+        A["Frontend"] -->|"JWT"| B["Backend API"]
+    end
+    
+    subgraph "Primary Path"
+        B --> C["MySQL"]
+        B --> D["Prometheus"]
+        B --> E["Elasticsearch"]
+    end
+    
+    subgraph "Protected Services"
+        B -->|"Circuit Breaker"| F["Groq AI"]
+        B -->|"Try/Catch"| G["Jenkins API"]
+    end
+    
+    subgraph "Failure Handling"
+        F -->|"OPEN"| H["Return Default Message"]
+        G -->|"Exception"| I["Log + Return Error"]
+        D -->|"Down"| J["Return Cached Stability Score"]
+    end

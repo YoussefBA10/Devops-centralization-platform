@@ -1,0 +1,57 @@
+graph TB
+    subgraph "Central VM (VMPipe)"
+        subgraph "Application Stack"
+            BE["Backend<br/>:8880"]
+            FE["Frontend<br/>:80"]
+            DB["MySQL 8.0<br/>:3306"]
+        end
+        
+        subgraph "Monitoring Stack"
+            PROM["Prometheus<br/>:9090"]
+            GRAF["Grafana<br/>:3000"]
+            AM["Alertmanager<br/>:9093"]
+            BB["Blackbox Exporter<br/>:9115"]
+        end
+        
+        subgraph "Logging Stack"
+            ES["Elasticsearch<br/>:9200"]
+            LS["Logstash<br/>:5044"]
+            FB["Filebeat<br/>:5066"]
+        end
+        
+        subgraph "CI/CD"
+            JK["Jenkins<br/>:8082"]
+        end
+        
+        subgraph "Exporters"
+            NE1["Node Exporter<br/>:9100"]
+            CA1["cAdvisor<br/>:8085"]
+            ESE["ES Exporter<br/>:9114"]
+        end
+    end
+
+    subgraph "Agent Node 1"
+        NE2["Node Exporter"]
+        CA2["cAdvisor"]
+        FB2["Filebeat"]
+        APP1["App Container"]
+    end
+
+    subgraph "Agent Node 2"
+        NE3["Node Exporter"]
+        CA3["cAdvisor"]
+        FB3["Filebeat"]
+        APP2["App Container"]
+    end
+
+    PROM -.->|"Scrape"| NE2
+    PROM -.->|"Scrape"| CA2
+    PROM -.->|"Scrape"| NE3
+    PROM -.->|"Scrape"| CA3
+    FB2 -->|"Ship Logs"| LS
+    FB3 -->|"Ship Logs"| LS
+    LS --> ES
+    BE --> DB
+    BE --> PROM
+    BE --> ES
+    FE --> BE

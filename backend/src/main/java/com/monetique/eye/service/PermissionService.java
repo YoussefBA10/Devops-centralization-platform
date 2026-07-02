@@ -59,6 +59,12 @@ public class PermissionService {
             case "INCIDENTS_EDIT" -> detail.isIncidentsEdit();
             case "INCIDENTS_DELETE" -> detail.isIncidentsDelete();
             case "CHATBOT_ACCESS" -> detail.isChatbotAccess();
+            case "NETWORK_MONITOR_VIEW" -> detail.isNetworkMonitorView();
+            case "SECURITY_DASHBOARD_VIEW" -> detail.isSecurityDashboardView();
+            case "ANALYSE_VIEW" -> detail.isAnalyseView();
+            case "AUDIT_LOG_VIEW" -> detail.isAuditLogView();
+            case "DOCUMENTATION_VIEW" -> detail.isDocumentationView();
+            case "OPERATIONAL_INTELLIGENCE_VIEW" -> detail.isOperationalIntelligenceView();
             default -> false;
         };
     }

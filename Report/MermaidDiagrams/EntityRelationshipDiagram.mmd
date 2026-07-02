@@ -1,0 +1,117 @@
+erDiagram
+    CLUSTER ||--o{ ENVIRONMENT : "has"
+    ENVIRONMENT ||--o{ APPLICATION : "contains"
+    ENVIRONMENT ||--o{ MANAGED_NODE : "monitors"
+    ENVIRONMENT ||--o{ TICKET : "has"
+    ENVIRONMENT ||--o{ DEPLOYMENT_LOG : "tracks"
+    ENVIRONMENT }o--o{ USER : "assigned to"
+    
+    APPLICATION ||--o{ TICKET : "related to"
+    APPLICATION ||--o{ INCIDENT : "generates"
+    APPLICATION ||--o{ CONVERSATION : "has"
+    APPLICATION ||--o{ AI_OPERATIONAL_SUMMARY : "receives"
+    APPLICATION ||--o{ LOG_AGGREGATION_WINDOW : "aggregated"
+    APPLICATION ||--o{ RECURRING_PATTERN : "detected"
+    APPLICATION ||--o{ DEPLOYMENT_EVENT : "tracks"
+    
+    INCIDENT ||--o| TICKET : "linked to"
+    INCIDENT ||--o{ INCIDENT_TIMELINE : "has entries"
+    INCIDENT ||--o{ INCIDENT_ATTACHMENT : "has files"
+    INCIDENT }o--|| USER : "owned by"
+    
+    TICKET }o--|| USER : "created by"
+    TICKET }o--o| USER : "assigned to"
+    
+    USER ||--o{ USER_PERMISSION : "has"
+    USER ||--o{ CLUSTER_ACCESS : "accesses"
+    USER ||--o{ GITHUB_TOKEN : "owns"
+    
+    ALERT_GROUP ||--o{ ALERT : "contains"
+    
+    CLUSTER {
+        Long id PK
+        String name UK
+        String description
+        LocalDateTime createdAt
+    }
+    
+    ENVIRONMENT {
+        Long id PK
+        String name UK
+        Long cluster_id FK
+        String description
+        String prometheusLabel
+        String centralNodeIp
+        DeploymentStatus lastDeploymentStatus
+        LocalDateTime lastDeployedAt
+        Long version
+    }
+    
+    USER {
+        Long id PK
+        String username UK
+        String password
+        Role role
+    }
+    
+    APPLICATION {
+        Long id PK
+        Long environment_id FK
+        String name
+        String type
+        String appLanguage
+        String repoUrl
+        String targetNode
+        String branch
+        Integer port
+        String status
+        Boolean isCanary
+        Integer canaryPort
+        String envVarsJson
+    }
+    
+    MANAGED_NODE {
+        Long id PK
+        Long environment_id FK
+        String ip UK
+        String nodeName
+        String sshUser
+        String sshPassword
+        String role
+        Integer nodeExporterPort
+        Integer cadvisorPort
+        Boolean containerized
+    }
+    
+    TICKET {
+        Long id PK
+        Long environment_id FK
+        Long application_id FK
+        String title
+        String description
+        String priority
+        TicketStatus status
+        Long createdBy FK
+        Long assignedTo FK
+    }
+    
+    INCIDENT {
+        Long id PK
+        Long application_id FK
+        String title
+        String aiSummary
+        IncidentSeverity severity
+        IncidentStatus status
+        Long owner_id FK
+        Long ticket_id FK
+    }
+    
+    DEPLOYMENT_EVENT {
+        String id PK
+        Long app_id FK
+        String env
+        String version
+        String buildNumber
+        String status
+        Timestamp startedAt
+    }

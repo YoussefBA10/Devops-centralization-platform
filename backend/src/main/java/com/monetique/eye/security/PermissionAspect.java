@@ -149,6 +149,12 @@ public class PermissionAspect {
             case "INCIDENTS_EDIT" -> "You don't have permission to modify incident tickets.";
             case "INCIDENTS_DELETE" -> "You don't have permission to delete incident tickets.";
             case "CHATBOT_ACCESS" -> "You don't have access to the Monetique Eye AI assistant.";
+            case "NETWORK_MONITOR_VIEW" -> "You don't have permission to view the network monitor.";
+            case "SECURITY_DASHBOARD_VIEW" -> "You don't have permission to view the security dashboard.";
+            case "ANALYSE_VIEW" -> "You don't have permission to access the analysis module.";
+            case "AUDIT_LOG_VIEW" -> "You don't have permission to view audit logs.";
+            case "DOCUMENTATION_VIEW" -> "You don't have permission to view the documentation.";
+            case "OPERATIONAL_INTELLIGENCE_VIEW" -> "You don't have permission to access operational intelligence.";
             case "ENV_ACCESS_DENIED" -> "Access denied for environment: " + context;
             default -> "Access denied. Insufficient permissions.";
         };

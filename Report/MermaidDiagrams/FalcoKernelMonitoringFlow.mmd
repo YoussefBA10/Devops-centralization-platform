@@ -1,0 +1,14 @@
+flowchart TD
+    subgraph "Target VM Node"
+        Container["App Container"] -- "execve / unexpected shell" --> Kernel["Linux Kernel"]
+        eBPF["eBPF Probe"] -. trace .-> Kernel
+        eBPF --> FalcoEngine["Falco Rules Engine"]
+        FalcoEngine -- "Rule matched — HIGH alert" --> Webhook["Webhook Sender"]
+    end
+
+    subgraph "Central VMPipe Server"
+        Webhook -- "POST /api/v1/security/alerts" --> Backend["Monetique Eye Backend"]
+        Backend --> AuditDB[("MySQL Audit Log")]
+        Backend -- "WebSocket push" --> UI["Security Dashboard"]
+        UI --> Operator(("DevOps Team"))
+    end

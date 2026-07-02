@@ -1,0 +1,16 @@
+sequenceDiagram
+    autonumber
+    actor Operator as Operator (Browser)
+    participant API as LogController
+    participant ES  as Elasticsearch
+    participant CSV as CSV Formatter
+
+    Operator->>API: GET /api/v1/apps/{appId}/logs/export?filters
+    Note over API: Validate JWT and environment scope
+    API->>ES: BoolQuery (filter: severity, time, text) size=1000 sort=@timestamp desc
+    ES-->>API: JSON hit array (max 1000 entries)
+    API->>CSV: Pass log list
+    Note over CSV: Inject UTF-8 BOM<br/>Add sep=, header<br/>Double-quote and escape each field
+    CSV-->>API: Formatted CSV string
+    Note over API: Content-Type: text/csv<br/>Content-Disposition: attachment; filename=logs_export_{appId}.csv
+    API-->>Operator: Stream file download

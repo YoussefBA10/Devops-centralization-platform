@@ -1,0 +1,16 @@
+graph LR
+    A([Live Log Stream]) --> B[Window Aggregator\n1-minute buckets]
+    B --> C[Pattern Parser / Tokenizer]
+
+    subgraph Similarity Engine
+        C --> D[Log Vectorizer\nTF-IDF weights]
+        D --> E{Cosine Similarity\nvs 30-day baseline}
+    end
+
+    subgraph Alarm Output
+        E -- "< 0.85 Anomalous" --> F[Flag Drift Event]
+        E -- ">= 0.85 Normal"  --> G[Update Baseline Weights]
+    end
+
+    F --> H[Cluster Anomaly Groups]
+    H --> I[Security Dashboard\nLog Drift Panel]

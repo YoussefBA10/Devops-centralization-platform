@@ -1,0 +1,53 @@
+graph TB
+    subgraph "Client Layer"
+        A["🖥️ React 19 SPA<br/>Vite + Tailwind CSS"]
+    end
+
+    subgraph "API Gateway Layer"
+        B["🔐 Spring Security<br/>JWT Filter + RBAC"]
+    end
+
+    subgraph "Application Layer"
+        C["⚙️ Spring Boot 3.3<br/>REST Controllers"]
+        D["🤖 AI Engine<br/>Groq Llama 3.3"]
+        E["📦 Deployment Engine<br/>Ansible + SSH"]
+    end
+
+    subgraph "Data Layer"
+        F["🗄️ MySQL 8.0<br/>JPA/Hibernate"]
+        G["🔍 Elasticsearch<br/>Log Storage"]
+    end
+
+    subgraph "Monitoring Layer"
+        H["📊 Prometheus<br/>Metrics Collection"]
+        I["📈 Grafana<br/>Visualization"]
+        J["🚨 Alertmanager<br/>Alert Routing"]
+        K["📝 Logstash<br/>Log Processing"]
+        L["📋 Filebeat<br/>Log Shipping"]
+    end
+
+    subgraph "Agent Nodes"
+        M["🖥️ Node Exporter"]
+        N["📦 cAdvisor"]
+        O["📋 Filebeat Agent"]
+    end
+
+    A -->|"HTTPS/REST"| B
+    B -->|"Auth"| C
+    C -->|"Query"| F
+    C -->|"Search"| G
+    C -->|"PromQL"| H
+    C -->|"Chat"| D
+    C -->|"SSH/Ansible"| E
+    E -->|"Provision"| M
+    E -->|"Provision"| N
+    E -->|"Provision"| O
+    H -->|"Scrape"| M
+    H -->|"Scrape"| N
+    H -->|"Alerts"| J
+    J -->|"Webhook"| C
+    J -->|"Email"| P["📧 SMTP"]
+    L -->|"Ship Logs"| K
+    O -->|"Ship Logs"| K
+    K -->|"Index"| G
+    H -->|"Data Source"| I

@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    actor Client as User / Browser
+    participant API    as Backend (Spring Boot)
+    participant DB     as MySQL DB
+    participant Filter as JWT Filter
+
+    Note over Client, API: Authentication Phase
+    Client->>API: POST /api/v1/auth/login {username, password}
+    API->>DB: SELECT user WHERE username = ?
+    DB-->>API: User row (passwordHash, roles, allowedEnvs)
+    API->>API: BCrypt.verify(password, hash)
+
+    alt Valid credentials
+        API->>API: Sign JWT (HMAC-SHA256, TTL 24h)
+        API-->>Client: 200 OK — { token, expiresIn: 86400 }
+    else Invalid
+        API-->>Client: 401 Unauthorized
+    end
+
+    Note over Client, Filter: Authorization Phase (all subsequent requests)
+    Client->>Filter: GET /api/v1/... Authorization: Bearer <token>
+    Filter->>Filter: Parse & verify signature / expiry
+    alt Token valid
+        Filter->>Filter: Extract claims to SecurityContext
+        Filter->>API: Forward with authenticated principal
+        API-->>Client: 200 OK — requested resource
+    else Token invalid / expired
+        Filter-->>Client: 403 Forbidden
+    end

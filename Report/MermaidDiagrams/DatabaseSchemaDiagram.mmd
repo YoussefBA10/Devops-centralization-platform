@@ -1,0 +1,18 @@
+erDiagram
+    ENVIRONMENT ||--o{ MANAGED_NODE    : "hosts"
+    ENVIRONMENT ||--o{ APPLICATION     : "contains"
+    ENVIRONMENT ||--o{ TICKET          : "tracks"
+    ENVIRONMENT ||--o{ USER_PERMISSION : "scopes"
+
+    MANAGED_NODE ||--o{ SERVICE_LINK   : "source"
+    MANAGED_NODE ||--o{ SERVICE_LINK   : "target"
+    MANAGED_NODE ||--o{ TICKET         : "affects"
+
+    APPLICATION  ||--o{ TICKET         : "affects"
+
+    USER ||--o{ USER_PERMISSION  : "holds"
+    USER ||--o{ NOTIFICATION     : "receives"
+    USER ||--o{ ACTIVITY_LOG     : "performs"
+
+    TICKET ||--o{ INCIDENT_TIMELINE_ENTRY : "chronicles"
+    TICKET ||--o{ INCIDENT_ATTACHMENT     : "embeds"

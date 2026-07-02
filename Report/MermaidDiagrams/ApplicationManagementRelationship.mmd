@@ -1,0 +1,22 @@
+    sequenceDiagram
+        participant Client
+        participant JwtFilter as JwtRequestFilter
+        participant SecurityConfig
+        participant UserDetailsService
+        participant JwtUtil
+        participant Controller
+
+        Client->>JwtFilter: Request + "Bearer <token>"
+        JwtFilter->>JwtUtil: extractUsername(token)
+        JwtUtil-->>JwtFilter: username
+        JwtFilter->>UserDetailsService: loadUserByUsername(username)
+        UserDetailsService-->>JwtFilter: UserDetails (with Role)
+        JwtFilter->>JwtUtil: isTokenValid(token, userDetails)
+        JwtUtil-->>JwtFilter: true/false
+        JwtFilter->>SecurityConfig: Set SecurityContext
+        JwtFilter->>Controller: Authorized Request
+        
+        Note over Controller: @RequiresPermission("MONITORING_LOGS")
+        Controller->>PermissionAspect: AOP intercept
+        PermissionAspect->>PermissionService: can(username, "MONITORING_LOGS")
+        PermissionAspect->>PermissionService: hasClusterAccess(username, envId)

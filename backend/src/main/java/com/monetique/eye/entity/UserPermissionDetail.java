@@ -44,4 +44,12 @@ public class UserPermissionDetail {
 
     // Chatbot
     private boolean chatbotAccess;
+
+    // New Features
+    private boolean networkMonitorView;
+    private boolean securityDashboardView;
+    private boolean analyseView;
+    private boolean auditLogView;
+    private boolean documentationView;
+    private boolean operationalIntelligenceView;
 }

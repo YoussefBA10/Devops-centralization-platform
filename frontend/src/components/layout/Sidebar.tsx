@@ -51,13 +51,13 @@ const Sidebar: React.FC = () => {
       name: 'Observability', 
       path: '/operational', 
       icon: Activity,
-      show: isAdmin || permissions?.monitoring?.observability
+      show: isAdmin || permissions?.operationalIntelligenceView
     },
     { 
       name: 'Security', 
       path: '/security', 
       icon: Shield,
-      show: true // You might want to tie this to a specific permission later
+      show: isAdmin || permissions?.securityDashboardView
     },
     { 
       name: 'Infrastructure', 
@@ -69,7 +69,7 @@ const Sidebar: React.FC = () => {
       name: 'Network Monitor', 
       path: '/network-monitor', 
       icon: Network,
-      show: isAdmin || permissions?.monitoring?.network
+      show: isAdmin || permissions?.networkMonitorView
     },
     { 
       name: 'Logs', 
@@ -81,13 +81,19 @@ const Sidebar: React.FC = () => {
       name: 'Analyse', 
       path: '/analyse', 
       icon: BarChart2,
-      show: isAdmin || permissions?.monitoring?.observability
+      show: isAdmin || permissions?.analyseView
     },
     { 
       name: 'Tickets', 
       path: '/tickets', 
       icon: FileText,
       show: isAdmin || permissions?.incidents?.view
+    },
+    { 
+      name: 'Audit Log', 
+      path: '/audit-log', 
+      icon: FileText,
+      show: isAdmin || permissions?.auditLogView
     },
     { 
       name: 'AI Assistant', 
@@ -99,7 +105,7 @@ const Sidebar: React.FC = () => {
       name: 'Documentation', 
       path: '/documentation', 
       icon: Book,
-      show: true 
+      show: isAdmin || permissions?.documentationView
     },
   ];
 

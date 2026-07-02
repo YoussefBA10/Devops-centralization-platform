@@ -1,0 +1,21 @@
+graph TD
+    A([New Metric Window — 30 min]) --> B[Error Rate Collector]
+    A --> C[Alert Frequency Counter]
+    A --> D[Incident Duration Tracker]
+    A --> E[Anomaly Count Collector]
+
+    B --> F[Z-Score Normaliser\nmu and sigma from 30-day history]
+    C --> F
+    D --> F
+    E --> F
+
+    F --> G[Weighted Average\nScore 0 to 100]
+
+    G --> H{Score band?}
+    H -- "80 or above" --> I[Healthy]
+    H -- "50 to 79"   --> J[Degraded]
+    H -- "below 50"   --> K[Critical]
+
+    I --> L[AI Executive Digest Panel]
+    J --> L
+    K --> L

@@ -1,0 +1,40 @@
+graph LR
+    subgraph "Sources"
+        A["Docker Containers"]
+        B["Application Logs"]
+        C["Loki API"]
+    end
+
+    subgraph "Collection"
+        D["Filebeat<br/>:5066"]
+        E["TCP Input<br/>:5044"]
+        F["Loki Poller<br/>(exec 30s)"]
+    end
+
+    subgraph "Processing (Logstash)"
+        G["JSON Parse"]
+        H["Grok Patterns"]
+        I["Severity Classification"]
+        J["Category Classification"]
+        K["Service Name Resolution"]
+        L["Environment Extraction"]
+    end
+
+    subgraph "Storage"
+        M["Elasticsearch<br/>app-logs-{env}-{date}"]
+        N["Elasticsearch<br/>loki-logs-{date}"]
+    end
+
+    A --> D
+    B --> E
+    C --> F
+    D --> G
+    E --> G
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K --> L
+    L --> M
+    L --> N

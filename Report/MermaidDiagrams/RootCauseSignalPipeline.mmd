@@ -1,0 +1,9 @@
+graph LR
+    A[Log Events] --> B[Log Aggregator]
+    B --> C[Elasticsearch]
+    C --> D[Log Drift Analysis]
+    C --> E[Semantic Similarity]
+    D --> F[AI Root Cause Engine]
+    E --> F
+    M[Metrics / Prometheus] --> F
+    F --> G[Root Cause Analysis Report]

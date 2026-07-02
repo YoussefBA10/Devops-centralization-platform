@@ -1,0 +1,53 @@
+erDiagram
+    CLUSTER ||--o{ ENVIRONMENT : "contains"
+    ENVIRONMENT ||--o{ MANAGED_NODE : "provisions"
+    ENVIRONMENT ||--o{ APPLICATION : "hosts"
+    
+    MANAGED_NODE ||--o{ SERVICE_LINK : "source"
+    MANAGED_NODE ||--o{ SERVICE_LINK : "target"
+    
+    CLUSTER {
+        Long id PK
+        String name
+        String description
+    }
+    
+    ENVIRONMENT {
+        Long id PK
+        Long cluster_id FK
+        String name
+        String prometheusLabel
+        String centralNodeIp
+    }
+    
+    MANAGED_NODE {
+        Long id PK
+        Long environment_id FK
+        String ip
+        String nodeName
+        String sshUser
+        String role
+        Boolean containerized
+    }
+    
+    APPLICATION {
+        Long id PK
+        Long environment_id FK
+        String name
+        String type
+        String targetNode
+        Integer port
+        String status
+    }
+    
+    SERVICE_LINK {
+        String id PK
+        Long source_node_id FK
+        Long target_node_id FK
+        String name
+        Integer targetPort
+        String targetPath
+        String protocol
+        String probeModule
+        Boolean enabled
+    }

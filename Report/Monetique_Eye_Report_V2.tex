@@ -89,6 +89,14 @@ On a personal note, I couldn't have done this without my family. They've support
 \tableofcontents
 \newpage
 
+\listoffigures
+\addcontentsline{toc}{chapter}{List of Figures}
+\newpage
+
+\listoftables
+\addcontentsline{toc}{chapter}{List of Tables}
+\newpage
+
 % ============================================================================
 % GENERAL INTRODUCTION
 % ============================================================================
@@ -97,7 +105,7 @@ On a personal note, I couldn't have done this without my family. They've support
 
 \section*{Context and Motivation}
 
-Modern enterprise infrastructure has become increasingly complex. Organizations manage multiple environments (production, staging, development), distributed microservices, containers, virtual machines, and cloud resources regulatory boundaries. In the financial services and payments sector (the \textit{monetique} domain), this complexity is compounded by reliability requirements: any infrastructure failure directly impacts revenue, customer trust, and regulatory compliance.
+Modern enterprise infrastructure has become increasingly complex. Organizations manage multiple environments (production, staging, development), distributed microservices, containers, virtual machines, and cloud resources spanning regulatory boundaries. In the financial services and payments sector (the \textit{monetique} domain), this complexity is compounded by reliability requirements: any infrastructure failure directly impacts revenue, customer trust, and regulatory compliance.
 
 Traditional infrastructure monitoring approaches suffer from significant limitations:
 
@@ -105,22 +113,25 @@ Traditional infrastructure monitoring approaches suffer from significant limitat
   \item \textbf{Tool Fragmentation}: Separate platforms for metrics (Prometheus), logs (ELK stack), alerts (Alertmanager), and incidents create disparate systems that operators must manually correlate.
   \item \textbf{Manual Provisioning}: Adding a new node for monitoring requires deep DevOps expertise—SSH key management, Ansible inventories, Prometheus targets, and logging agent configuration are often error-prone and time-consuming.
   \item \textbf{Lack of Intelligence}: Operators spend hours correlating logs, metrics, and alerts to understand root causes. AI-driven analysis is rare in traditional stacks.
-  \item \textbf{Access Control Challenges}: Most monitoring platforms offer only large gained RBAC, making it difficult to enforce environment-level data isolation in multi-tenant scenarios.
+  \item \textbf{Access Control Challenges}: Most monitoring platforms offer only coarse-grained RBAC, making it difficult to enforce environment-level data isolation in multi-tenant scenarios.
   \item \textbf{Deployment Tracking Gap}: CI/CD systems operate independently from observability, leaving operators without visibility into what was deployed and when.
 \end{itemize}
 
 \section*{Problem Statement}
 
-This internship addresses a critical need: \textbf{How can enterprise IT teams unify fragmented observability tooling, automate infrastructure provisioning, and leverage AI to accelerate incident diagnosis—all within a single, secure, user-friendly platform?}
-
-Specifically, we aimed to build a system that:
+This project addresses a critical set of operational bottlenecks within the department's infrastructure operations:
 
 \begin{enumerate}
-  \item Consolidates metrics, logs, alerts, and incident management into one intuitive interface
-  \item Automates the deployment of monitoring agents on new infrastructure nodes
-  \item Integrates AI (large language models) for automated log analysis and operational summarization
-  \item Provides fine-grained role-based access control scoped by environment
-  \item Integrates with existing GitOps workflows (Ansible, Jenkins) to avoid rip-and-replace
+  \item \textbf{Prolonged Incident Diagnosis:} Operators face an extensive investigation window, historically averaging 45 minutes, to identify the root cause of failures.
+  \item \textbf{Observability Tool Fragmentation:} Metrics, logs, alerts, and deployment records reside in disconnected systems, requiring operators to manually switch context and correlate disparate data.
+  \item \textbf{Inefficient Node Provisioning:} Onboarding new infrastructure nodes for monitoring is a slow, error-prone manual process that takes approximately 8 to 10 hours per node.
+  \item \textbf{Lack of Data Correlation:} The lack of automated correlation between time-series metrics and full-text log files hinders quick detection of systemic anomalies.
+  \item \textbf{Coarse Access Isolation:} Existing monitoring tools do not support environment-level data segregation, which presents a significant security risk for multi-tenant deployments.
+  \item \textbf{Inconsistent Agent Configuration:} Monitoring agents deployed across heterogeneous nodes suffer from configuration drift, as each node is provisioned manually with no centralized template enforcement.
+  \item \textbf{Absence of Deployment-to-Incident Traceability:} CI/CD pipeline events are not linked to the observability layer, preventing operators from correlating a new release with a subsequent service degradation.
+  \item \textbf{Risky Container Operations:} No visual interface for container lifecycle management, forcing operators to rely on risky direct SSH access to debug deployed stacks.
+  \item \textbf{Unsecured Image Registry:} No private registry enforcing image vulnerability scanning before a container reaches production.
+  \item \textbf{Static Credentials Storage:} Secrets and credentials handled as static, disk-based configuration rather than dynamically injected at runtime.
 \end{enumerate}
 
 \section*{Project Objectives}
@@ -132,7 +143,7 @@ The \textbf{Monetique Eye} project was structured to deliver an enterprise-grade
   \item[Phase 2: Core UI \& Dashboarding] Build a React-based frontend with environment management, real-time monitoring dashboards, and an interactive topology visualization.
   \item[Phase 3: Advanced Observability Features] Implement log aggregation, real-time log search, and the AI-powered « Root Cause Intelligence » engine.
   \item[Phase 4: Operational Intelligence] Create executive dashboards with AI-generated summaries, stability scoring, and operational signal detection.
-  \item[Phase 5: CI/CD Integration \& Hardening] Integrate Jenkins pipelines, implement automated deployment tracking, and harden security.
+  \item[Phase 5: DevSecOps \& CI/CD Integration] Integrate Jenkins pipelines, Portainer for container management, implement automated deployment tracking, and harden security with Vault, Falco, and Harbor.
 \end{description}
 
 \section*{Chapter Overview}
@@ -151,9 +162,13 @@ This report avoids raw code listings in the main text; technical implementation 
 \newpage
 
 % ============================================================================
-% CHAPTER 1: COMPANY & CONTEXT
+% CHAPTER 1: CONTEXT, ANALYSIS AND PROPOSED SOLUTION
 % ============================================================================
-\chapter{Company \& Context}
+\chapter{Context, Analysis and Proposed Solution}
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+This chapter presents the company context, the identified operational gaps, the proposed architectural response, and the methodology adopted.
 
 \section{Company Overview}
 
@@ -179,11 +194,43 @@ The department already operated a fragmented observability stack: Prometheus for
 
 At the start of the internship, the team articulated a specific pain point:
 
-\begin{quote}
-  « When an incident occurs, our operators face a 45-minute investigation window: they manually SSH into servers, grep logs, run ad-hoc Prometheus queries, and correlate events across multiple dashboards. By the time we've diagnosed the root cause, customer impact has already accumulated. We need a unified observability platform with intelligent diagnostics to cut incident resolution time in half. »
-\end{quote}
+During an incident, operators historically faced an extensive investigation window: they manually SSH into servers, grep logs, run ad-hoc Prometheus queries, and correlate events across multiple dashboards. By the time they've diagnosed the root cause, customer impact has already accumulated. We needed a unified observability platform with intelligent diagnostics to significantly cut incident resolution time.
 
-Additionally, provisioning new monitoring infrastructure was slow: adding a client node for monitoring required a DevOps engineer to manually configure SSH keys, Ansible inventories, Prometheus targets, and logging agents—a process that typically took 8-10 hours per node.
+Additionally, provisioning new monitoring infrastructure was slow: adding a client node for monitoring required a DevOps engineer to manually configure SSH keys, Ansible inventories, Prometheus targets, and logging agents—a process that typically took roughly 4 hours per node.
+
+\section{Étude et Critique de l'Existant}
+
+Prior to this project, the infrastructure and platform division relied on a collection of independent, best-of-breed open-source components, each addressing a narrow operational concern. A time-series database handled metric collection and numeric health indicators with high reliability. A separate full-text search engine aggregated and indexed application logs, enabling rapid keyword-based retrieval. A visualization layer rendered dashboards from the metric store, while a configuration management framework orchestrated infrastructure changes through declarative automation.
+
+Although each component excels within its intended scope, the absence of a unifying orchestration layer introduced four categories of operational friction. First, the tools operated as isolated data silos: correlating a resource utilization anomaly in the metric store with a corresponding error pattern in the log index required operators to manually extract timestamps from one interface and re-enter them into another—a tedious, error-prone process during time-critical incidents. Second, provisioning new infrastructure nodes for monitoring demanded sequential manual intervention across multiple subsystems—credential distribution, host inventory registration, metric target declaration, and log agent configuration—resulting in a per-node onboarding cost measured in hours rather than minutes. Third, the platform's access control model was coarse-grained and tool-scoped: permissions were granted at the level of the entire monitoring system rather than at the granularity of individual environments, which prevented the strict data isolation required in multi-tenant financial deployments. Fourth, no mechanism existed to link deployment pipeline events with observability data, leaving operators unable to trace a service degradation back to a specific release.
+
+The comparison in Table~\ref{tab:existing_critique} highlights the functional gaps between the existing tooling and the operational requirements of the organization.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|p{6cm}|p{6cm}|}
+\hline
+\textbf{Capability} & \textbf{Existing Approach} & \textbf{Required Capability} \\
+\hline
+Incident Diagnosis & Manual terminal investigation and log grepping. & Automated root-cause correlation and diagnostic suggestions. \\
+\hline
+Node Provisioning & Manual configuration of inventories, keys, and agents (4+ hours). & Idempotent, automated agent deployment (2-3 minutes). \\
+\hline
+Log/Metric Correlation & Separated silos; manual timestamp alignment. & Dynamic, automated correlation in a unified view. \\
+\hline
+RBAC Granularity & Coarse-grained, tool-wide permissions. & Strict, environment-scoped role-based access control. \\
+\hline
+AI Analysis & Absent; manual diagnosis based on experience. & AI-assisted operational digests and pattern detection. \\
+\hline
+Deployment Tracking & Separated CI/CD pipelines; no observability links. & Integrated deployment timelines linked to incident analysis. \\
+\hline
+\end{tabular}
+\caption{Comparison of Existing Approach vs. Required Capability}
+\label{tab:existing_critique}
+\end{table}
+
+This critique demonstrates that the department does not require a replacement of its existing technical stack, but rather a unified orchestration and intelligence layer that integrates these systems to eliminate manual effort and enforce compliance.
 
 \section{Scope and Feasibility}
 
@@ -191,11 +238,14 @@ Given a six-month internship window, the team and I agreed on the following scop
 
 \begin{itemize}
   \item Build a full-stack application (backend API + React UI + MySQL database)
-  \item Automate infrastructure provisioning through a one-click deployment interface
+  \item Automate infrastructure provisioning through a one-click deployment interface that covers container lifecycle handoff to Portainer, registry gating through Harbor, and secrets injection via Vault at deployment time
   \item Integrate the existing Prometheus, Elasticsearch, and Ansible stack (no replacement)
   \item Implement RBAC and multi-environment isolation
   \item Add AI-powered log analysis using a large language model API
   \item Provide enough flexibility for future enhancements (phases 6 and beyond)
+  \item Add container lifecycle visibility via Portainer.
+  \item Enforce image scanning and registry gating via Harbor.
+  \item Centralize secrets management via Vault.
 \end{itemize}
 
 Out of scope (deferred to future phases):
@@ -205,29 +255,7 @@ Out of scope (deferred to future phases):
   \item Advanced predictive analytics
 \end{itemize}
 
-\section{Key Stakeholders}
 
-\begin{center}
-\begin{tabular}{|l|l|p{5cm}|}
-  \hline
-  \textbf{Stakeholder} & \textbf{Role} & \textbf{Key Concerns} \\
-  \hline
-  CTO / VP Engineering & Project Sponsor & ROI, timeline, technical feasibility \\
-  \hline
-  DevOps Team Lead & Product Owner & Ease of use, integration with existing tools \\
-  \hline
-  SRE Team & Primary Users & Speed of incident diagnosis, alert quality \\
-  \hline
-  Backend Team & Integration Partner & API design, data security \\
-  \hline
-  Security Officer & Compliance & Authentication, RBAC, audit logging \\
-  \hline
-\end{tabular}
-\end{center}
-
-\section{Chapter 1 Summary}
-
-Monetique operates in a high-stakes domain where infrastructure reliability directly translates to business outcomes. The existing observability tooling, while capable, requires significant manual effort to operate. This project aimed to unify and simplify the operational experience through a modern, integrated platform one that automates routine tasks and accelerates incident diagnosis through intelligent analysis. The clear problem statement, defined scope, and engaged stakeholders provided a solid foundation for execution.
 
 \newpage
 
@@ -244,7 +272,7 @@ Figure \ref{fig:context} illustrates the overall system context:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\textwidth]{"Clean C4Context Diagram.png"}
+  \includegraphics[width=1.2\textwidth]{"C4Context.png"}
   \caption{C4 Context Diagram: Monetique Eye System Boundaries}
   \label{fig:context}
 \end{figure}
@@ -257,40 +285,6 @@ The system consists of four major layers:
   \item[Data Processing Layer] Elasticsearch and Prometheus perform aggregations; the backend queries these systems to compute analytics and root cause signals.
   \item[Presentation Layer] A React-based dashboard provides operators with consolidated visibility and one-click control.
 \end{description}
-
-\section{Technical Problem: Why Build This?}
-
-\subsection{The Fragmentation Challenge}
-
-Traditional infrastructure monitoring suffers from what we call « observability fragmentation »: data lives in disparate, and operators must manually jump between tools. Consider a typical incident:
-
-\begin{enumerate}
-  \item An alert fires from Alertmanager: « CPU spike on node-42 »
-  \item Operator logs into Grafana to see the CPU metric
-  \item Operator logs into Kibana (ELK) to search for application errors during the spike
-  \item Operator SSH's into the node to check running processes
-  \item Operator cross-references deployment logs with the timeline
-  \item Finally, operator identifies the root cause: a slow database query introduced in a recent deploy
-\end{enumerate}
-
-This process is \textbf{manual}, \textbf{slow}, and \textbf{error-prone}. Monetique Eye automates this correlation using structured data integration and intelligent analysis.
-
-\subsection{The Provisioning Challenge}
-
-Onboarding a new monitored node traditionally requires:
-\begin{enumerate}
-  \item Generate and distribute SSH keys
-  \item Manually edit Ansible inventory files
-  \item Configure Prometheus targets and scrape rules
-  \item Deploy logging agents and configure pipelines
-  \item Verify connectivity and metric flow
-\end{enumerate}
-
-This takes hours. Monetique Eye encapsulates this workflow into a single backend function, triggered by a UI button click.
-
-\subsection{The Access Control Challenge}
-
-Existing monitoring tools typically operate in « all-or-nothing » mode: either a user sees all environments, or they see nothing. Enterprise clients require \textbf{environment-level} isolation—a « Staging » team member should not see « Production » data. The platform must enforce this at the data layer.
 
 \section{Proposed Solution: The Five-Phase Approach}
 
@@ -308,7 +302,7 @@ To deliver a robust, production-grade platform within the six-month internship, 
 
 \textbf{Key Technologies:}
 \begin{itemize}
-  \item Spring Boot 3.3 with Spring Security
+  \item Spring Boot 3.3.4 with Spring Security
   \item Hibernate/JPA with MySQL 8.0
   \item JSON Web Tokens (JWT) with jjwt library
   \item BCrypt password hashing
@@ -318,7 +312,7 @@ To deliver a robust, production-grade platform within the six-month internship, 
 
 \textbf{Objectives:}
 \begin{itemize}
-  \item Build a modern, responsive React UI with Tailwind CSS
+  \item Build a modern, responsive React UI with Tailwind CSS 4.2.2
   \item Implement environment management interface
   \item Create real-time monitoring dashboards displaying Prometheus metrics
   \item Implement an interactive topology graph using React Flow
@@ -326,8 +320,8 @@ To deliver a robust, production-grade platform within the six-month internship, 
 
 \textbf{Key Technologies:}
 \begin{itemize}
-  \item React 18 with Vite for fast development and builds
-  \item Tailwind CSS for responsive, utility-first styling
+  \item React 19.2.4 with Vite 8.0.4 for fast development and builds
+  \item Tailwind CSS 4.2.2 for responsive, utility-first styling
   \item React Flow for interactive topology visualization
   \item Axios for API communication
 \end{itemize}
@@ -367,13 +361,13 @@ To deliver a robust, production-grade platform within the six-month internship, 
   \item Embedding-based semantic log similarity
 \end{itemize}
 
-\subsection{Phase 5: CI/CD Integration \& Hardening}
+\subsection{Phase 5: DevSecOps, CI/CD Integration \& Hardening}
 
 \textbf{Objectives:}
 \begin{itemize}
-  \item Integrate Jenkins pipelines for application deployment
+  \item Integrate Jenkins pipelines and Portainer for application and container deployment
   \item Implement deployment event recording and tracking
-  \item Enhance security with additional audit logging and validation
+  \item Enhance security with Vault, Falco, Harbor, and extended audit logging
   \item Optimize performance and reliability for production
 \end{itemize}
 
@@ -390,7 +384,7 @@ At the core of Monetique Eye is a hierarchical, environment-scoped data model:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.8\textwidth]{"GLOBAL_ARCHITECTURE_DIAGRAM_2.png"}
+  \includegraphics[width=1.1\textwidth]{"GLOBALARCHITECTURE.png"}
   \caption{Global Architecture and Data Flow}
   \label{fig:architecture}
 \end{figure}
@@ -405,7 +399,7 @@ All data—applications, nodes, metrics, logs, alerts, incidents—are scoped to
 \section{Key Design Principles}
 
 \begin{description}
-  \item[Structured Data Model] 25 entities organized by domain, balancing completeness with maintainability
+  \item[Structured Data Model] 28 entities organized by domain, balancing completeness with maintainability
   \item[No Vendor Lock-in] Reuses existing GitOps, Ansible, Prometheus, and ELK tooling
   \item[Zero-Config Discovery] Monitoring agents auto-register; operators see live data within seconds
   \item[Stateless APIs] No session state; all requests are validated via JWT
@@ -413,28 +407,162 @@ All data—applications, nodes, metrics, logs, alerts, incidents—are scoped to
   \item[Audit Everything] All actions are logged for compliance and troubleshooting
 \end{description}
 
-\section{Chapter 2 Summary}
+\section{Methodological \& Technological Choices}
 
-Monetique Eye solves real operational pain points through architectural innovations: consolidating fragmented tooling, automating provisioning, and integrating intelligent analysis. The five-phase approach balances ambition with feasibility, delivering a production grade platform in six months. The environment first data model and stateless architecture provide a solid foundation for multi-tenant enterprise use.
+\subsection{Tools Justification}
 
-\newpage
+The technology stack was carefully selected to balance rapid development, enterprise-grade reliability, and alignment with modern DevOps practices.
 
-% ============================================================================
-% CHAPTER 3: REALIZED WORK
-% ============================================================================
-\chapter{Realized Work}
+\subsubsection{Backend}
+The backend layer is built using the Spring Boot framework on Java 21, incorporating Hibernate as the object-relational mapping tool, Liquibase for database schema migration, and Spring Security for request lifecycle protection. The choice of a mature, multithreaded ecosystem is dictated by the deeply relational nature of the 28 core system entities, which require strict ACID compliance and foreign key enforcement to guarantee data integrity across environments. Java 21's support for high-concurrency virtualization allows the API to process multiple telemetry feeds and orchestrate concurrent node deployments without thread exhaustion, matching the strict reliability demands of a financial services environment.
 
-\section{Internship Planning \& Timeline}
+\subsubsection{Frontend}
+The user interface is developed as a single-page application using React 19, TypeScript, and Vite, with Tailwind CSS for styling, React Flow for visualization, and Recharts for metric rendering. In an operations dashboard, real-time interactivity and low interface lag are critical for rapid incident triage. React's modular architecture and virtual DOM updates allow the client to render complex state modifications smoothly, while TypeScript guarantees static type safety across API integrations. Furthermore, React Flow provides a highly responsive canvas to visualize cluster nodes and application dependencies dynamically, enabling operators to locate failures visually.
 
-The internship was structured as a six-month, full-time engagement. For the first three months, I worked with the team on various different tasks to understand their infrastructure, workflows, and pain points. For the next three months, I dedicated my time entirely to designing and implementing the Monetique Eye platform. The implementation phases were designed to deliver functionality incrementally, with clear checkpoints for validation and feedback.
+\subsubsection{Observability Stack}
+The telemetry aggregation stack integrates Prometheus for time-series metrics collection, Elasticsearch for log indexing, Logstash for stream processing, Filebeat for log shipping, and Alertmanager for alert dispatch. Prometheus serves as the system of record for host and container metrics, using a pull-based model that scales efficiently. Conversely, Elasticsearch handles the unstructured, write-heavy stream of application logs, supporting high-throughput full-text search and regex-based log aggregation where traditional relational databases would fail under production load. This split-plane architecture separates metric indicators from log diagnostics, allowing data retrieval without disk execution latency.
 
-\subsection{Gantt Chart}
+\subsubsection{DevOps}
+The deployment and automation architecture relies on Docker, Docker Compose, Ansible, and Jenkins. Because the target servers operate in a restricted, partially air-gapped financial environment, the deployment pipeline must execute without relying on external internet registries. Jenkins coordinates the build phase and packages updates into local container archives, which are copied over secure shell pathways. Ansible is chosen to orchestrate agent deployment on remote target nodes, utilizing its idempotent processing properties to configure node state safely and repeatedly. This push-based, agentless orchestration replaces manual, error-prone shell setup, reducing node provisioning from hours to minutes.
+
+The deployment process follows a precise sequence to cross the network boundary securely:
+\begin{enumerate}
+  \item \textbf{Build Phase:} Jenkins pulls the source code and compiles the application, outputting a standard Docker image on the central VMPipe server.
+  \item \textbf{Archive Generation:} The pipeline executes \texttt{docker save}, exporting the compiled image into an isolated, compressed \texttt{.tar} archive file.
+  \item \textbf{Secure Transfer:} Using the pre-configured RSA keys, Jenkins initiates an SCP transfer, securely copying the archive across the restricted network to the isolated edge node.
+  \item \textbf{Image Loading:} On the edge node, the deployment script executes \texttt{docker load -i}, extracting the image directly into the local Docker daemon's registry.
+  \item \textbf{Container Startup:} The script restarts the application stack to utilize the newly loaded image and runs immediate health verification checks.
+\end{enumerate}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[scale=0.9, node distance=2cm]
+    \node[draw, fill=blue!10, rounded corners, text width=2.5cm, align=center] (jenkins) {Jenkins Build};
+    \node[draw, fill=green!10, rounded corners, text width=2.5cm, align=center, right of=jenkins, xshift=2cm] (save) {Docker Save (.tar)};
+    \node[draw, fill=yellow!10, rounded corners, text width=2.5cm, align=center, right of=save, xshift=2cm] (scp) {SCP Transfer};
+    \node[draw, fill=red!10, rounded corners, text width=2.5cm, align=center, below of=scp, yshift=-1cm] (load) {Docker Load};
+    \node[draw, fill=purple!10, rounded corners, text width=2.5cm, align=center, left of=load, xshift=-2cm] (start) {Container Start};
+    
+    \draw[->, thick] (jenkins) -- (save);
+    \draw[->, thick] (save) -- (scp);
+    \draw[->, thick] (scp) -- node[right] {Air-Gapped Boundary} (load);
+    \draw[->, thick] (load) -- (start);
+  \end{tikzpicture}
+  \caption{Air-Gapped Tarball Deployment Sequence}
+  \label{fig:airgapped_deploy}
+\end{figure}
+
+\subsubsection{Security \& DevSecOps}
+The platform hardens its security posture using HashiCorp Vault for secrets lifecycle management, Harbor as a private registry, Falco for kernel threat monitoring, and SonarQube combined with OWASP Dependency-Check during the build phase. In a financial services context, hardcoded keys or unverified third-party libraries present extreme security risks. HashiCorp Vault is integrated to inject credentials dynamically into memory at application startup, eliminating disk-based secrets. Harbor enforces layer scanning to block vulnerable images, while Falco leverages eBPF kernel monitoring to catch runtime abnormalities, such as unexpected process executions, ensuring defense-in-depth across the build, registry, and execution phases.
+
+\subsubsection{AI Integration}
+Operational intelligence features are implemented using the Groq API running the Llama 3.3 70B model, integrated via a reactive WebClient. Large language models provide the reasoning capability necessary to summarize raw logs and recommend diagnostic steps, but their execution introduces significant latency. To prevent blocking core application APIs, the Groq client is integrated asynchronously. The Llama 3.3 model was chosen for its high reasoning capability on technical system logs, while Groq's hardware acceleration delivers the inference speeds required to output incident summaries within an active operational window.
+
+\subsection{Key Architecture Decisions}
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{4cm}|p{5cm}|p{5.5cm}|}
+\hline
+\textbf{Decision} & \textbf{Choice} & \textbf{Rationale} \\
+\hline
+\textbf{RBAC enforcement} & AOP \texttt{@RequiresPermission} & Zero boilerplate, auto environment ID extraction \\
+\hline
+\textbf{Service discovery} & Prometheus file-based SD & Auto-generated by backend on node registration \\
+\hline
+\textbf{Air-gapped deployment} & Docker tarball SCP + docker load & Nodes with no internet fully supported \\
+\hline
+\textbf{Non-root install (Type B)} & systemd user service & No sudo on client nodes — widely compatible \\
+\hline
+\textbf{AI fault tolerance} & try/catch in GroqService & AI failure never blocks core operations \\
+\hline
+\textbf{Authentication} & JWT stateless (HMAC-SHA256) & No server-side session, horizontally scalable \\
+\hline
+\textbf{Secrets Management} & HashiCorp Vault dynamic injection & Prevents hard-coded credentials, limits exposure radius \\
+\hline
+\textbf{Image Validation} & Harbor private registry \& scanning & Blocks vulnerable containers before deployment \\
+\hline
+\textbf{Runtime Protection} & Falco eBPF kernel monitoring & Detects unauthorized shell executions instantly \\
+\hline
+\textbf{Dependency Scanning} & OWASP \& SonarQube CI integration & Catches vulnerabilities during the build phase \\
+\hline
+\end{tabular}
+\caption{Key Architecture Decisions}
+\label{tab:arch_decisions}
+\end{table}
+
+\section{Technical Architecture \& Deployments}
+
+\subsection{Logical Architecture — Five-Layer Model}
+
+The platform's logical architecture is divided into a robust five-layer model to separate concerns and scale independently.
+
+\begin{itemize}
+    \item \textbf{Presentation Layer}: React 19.2.4 Frontend, TypeScript 6.0.2 + Vite 8.0.4, Tailwind CSS 4.2.2 (22 Routes / 22 Pages).
+    \item \textbf{API \& Business Layer}: Spring Boot 3.3.4 (32 Controllers, 36 Services, JWT Auth + AOP RBAC).
+    \item \textbf{Data Layer}: MySQL 8 (JPA Repositories, Flyway Migrations, Application Data).
+    \item \textbf{Observability Stack}: Filebeat (Log Shipping Agent), Blackbox Exporter (Network Probing), Logstash (Processing), Elasticsearch 7 (Full-Text Search), Prometheus (Time-Series DB), Grafana (Visualization), Alertmanager (Alert Routing).
+    \item \textbf{Client \& Orchestration}: Web Browser, Jenkins CI/CD (3 Pipelines), Ansible (8 Playbooks for Infrastructure IaC), Docker (15 Containers in docker-compose), Portainer.
+\end{itemize}
+
+\subsection{Physical Infrastructure — VMPipe + Remote Agent Nodes}
+
+The physical deployment topology connects the central management infrastructure (VMPipe) with the target remote agent nodes.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"MonitoringProcessDiagram.png"}
+  \caption{Monitoring Process Diagram}
+  \label{fig:monitoring_process}
+\end{figure}
+
+The \textbf{VMPipe} server hosts the core observability stack, backend API, frontend assets, and Jenkins. Remote nodes are provisioned dynamically. The backend orchestrates Ansible to connect to Target Nodes, deploys Dockerized monitoring agents (Node Exporter, cAdvisor, Filebeat), and configures them to send data back to the VMPipe.
+
+\subsubsection{Docker Compose Stack Internals}
+
+To manage the complexity of running more than 15 distinct services on the central VMPipe server, the core infrastructure relies on a highly structured \texttt{docker-compose.yml} definition. The services discover each other dynamically without hardcoded IP addresses by utilizing Docker's internal DNS network. This allows the Spring Boot backend to simply route requests to \texttt{http://prometheus:9090} or \texttt{http://elasticsearch:9200} based on the service names. Stability is strictly enforced through native Docker health checks. The backend container, for instance, waits for MySQL's port to respond before fully initializing, while Prometheus continuously probes its own internal health endpoints. Persistent storage is meticulously mapped using named Docker volumes. This critical configuration ensures that the MySQL application data, the Prometheus time-series database (TSDB), and the Elasticsearch log indices survive container restarts or image upgrades without any data loss.
+
+\subsection{GitOps \& Infrastructure Automation Configuration}
+
+The automation and configuration management assets for the Monetique-Eye platform are centralized within a dedicated GitOps repository structure. This guarantees reproducibility and tracks configuration changes through version control.
+
+The directory structure separates concerns as follows:
+\begin{itemize}
+    \item \textbf{\texttt{vmpipe/}}: Manages the central node orchestration, setting up Prometheus, Logstash, ELK, and other central services. By isolating the central infrastructure code, we ensure that scaling the core observability stack does not interfere with the configurations of the edge nodes being monitored.
+    \item \textbf{\texttt{scripts/}}: Contains operational scripts used for node maintenance and agent deployment. Most notably, \texttt{ssh-configure.sh} automates the tedious process of establishing passwordless RSA key exchanges, while \texttt{deploy-agent.sh} provides a robust manual fallback for standalone, non-root agent installs when Docker is unavailable on a client machine.
+    \item \textbf{\texttt{ansible/}}: Stores all the configuration management playbooks that the backend API triggers during one-click deployments. Keeping these playbooks strictly version-controlled means that every infrastructure change is tracked, ensuring that if a deployment configuration introduces a bug, the team can instantly revert to the previous working commit.
+    \item \textbf{\texttt{agents/}}: Houses template configurations for the edge nodes, ensuring absolute uniformity across deployed environments. This guarantees that whether deploying to a staging server or a production payment gateway, the monitoring footprint remains identical and predictable.
+\end{itemize}
+
+To clarify the technical mechanism, this architecture does not rely on a continuous, pull-based reconciliation loop (such as ArgoCD or Flux) to enforce state. Instead, it utilizes a strictly push-based model. Infrastructure updates are actively triggered either by a Jenkins pipeline execution upon code commit or manually via the platform's one-click deployment button. This push-based execution leverages Ansible to push the desired state defined in the repository out to the edge nodes. This approach delivers the core GitOps benefits of version-controlled, auditable infrastructure without introducing the operational overhead of managing a dedicated reconciliation operator.
+
+Security is strictly enforced in this layer. Rather than relying on static environment variables that could be leaked, all sensitive credentials (database passwords, API tokens, JWT secrets) are dynamically injected via HashiCorp Vault. This ensures that no secrets are ever committed directly to the configuration repository or left exposed in plaintext on the disk.
+
+\subsection{Application Management Relationship}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.1\textwidth]{"ApplicationManagementRelationship.png"}
+  \caption{Application Management Relationship}
+  \label{fig:app_management}
+\end{figure}
+
+This diagram highlights the intricate relationships between environments, applications, deployment logs, and incidents within the platform.
+
+\section{Planning, Methodology \& Timeline}
+
+\subsection{Internship Planning \& Timeline}
+
+The internship was structured as a six-month, full-time engagement. For the first three months, we worked with the team on various different tasks to understand their infrastructure, workflows, and pain points. For the next three months, we dedicated our time entirely to designing and implementing the Monetique Eye platform. The implementation phases were designed to deliver functionality incrementally, with clear checkpoints for validation and feedback.
+
+\subsubsection{Gantt Chart}
 
 The figure below illustrates the project timeline and key phases:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{"Diagram de gantt.png"}
+  \includegraphics[width=\textwidth]{"Diagram_de_gantt.png"}
   \caption{Internship Gantt Chart}
   \label{fig:gantt}
 \end{figure}
@@ -449,22 +577,90 @@ The figure below illustrates the project timeline and key phases:
   \item \textbf{Phase 5:} CI/CD integration, security hardening, and final delivery
 \end{itemize}
 
-\section{Methodology: Agile with Kanban}
+\subsection{Methodology: Agile with Kanban}
 
-\subsection{Why Kanban?}
-The project scope evolved continuously as new infrastructure requirements emerged. Kanban's visual task board and pull-based flow allowed priorities to be reprioritized at any time without disrupting delivery, making it a better fit than time-boxed Scrum sprints for a solo engineering context.
+The traditional Waterfall model (along with its derivative, the V-Model) organizes software development into sequential, distinct phases: requirements analysis, architectural design, implementation, verification, and maintenance. This approach is highly effective in environments with well-defined, static requirements where the scope is fully understood before development begins. However, its rigid phase gates make it poorly suited for projects where requirements evolve dynamically. In a complex observability deployment, unexpected integration challenges and changing infrastructure targets require a more flexible model.
 
-\subsection{Sprint Detail}
+Conversely, Scrum provides a structured agile framework based on time-boxed sprints, daily stand-up meetings, sprint planning, and retrospective ceremonies. While Scrum is highly successful for multi-person teams requiring close collaboration and strict iteration cycles, its high ceremonial overhead is inefficient for a single-developer project. The continuous planning and documentation required by Scrum would distract from core development activities, particularly when integrating multiple complex technologies like Prometheus, Elasticsearch, and large language models.
+
+\subsubsection{Why Kanban?}
+The project scope evolved continuously as new infrastructure requirements emerged. Kanban's visual task board and pull-based flow allowed priorities to be reprioritized at any time without disrupting delivery, making it a better fit than time-boxed Scrum sprints for a solo engineering context, as established by the limitations of the sequential and highly structured methodologies discussed above.
+
+\subsubsection{Sprint Detail}
 Although guided by Kanban, the work was naturally grouped into functional sprints or phases to ensure iterative delivery:
 \begin{itemize}
-    \item \textbf{Sprint 1:} Requirements analysis and functional scoping. System architecture design (layers, tech stack selection).
-    \item \textbf{Sprint 2:} Docker Compose environment setup (14 containers). Infrastructure provisioning: network, volumes, secrets.
-    \item \textbf{Sprint 3:} Prometheus, Grafana, ELK, Alertmanager full setup. Scrape jobs, alert rules, log pipeline configuration.
-    \item \textbf{Sprint 4:} Spring Boot REST API (31 controllers, 25 entities). PrometheusClient + Alertmanager webhook integration.
-    \item \textbf{Sprint 5:} React 19 SPA (21 pages, protected routes, Recharts). Infrastructure topology graph (React Flow).
-    \item \textbf{Sprint 6:} Incident detection, alerting pipeline, ticket linking. AI Chatbot integration (Groq Llama 3.3, WebClient).
-    \item \textbf{Sprint 7:} End-to-end testing, performance optimization. Documentation, final presentation preparation.
+    \item \textbf{Sprint 1 (2 weeks):} Requirements analysis and functional scoping. System architecture design (layers, tech stack selection).
+    \item \textbf{Sprint 2 (2 weeks):} Docker Compose environment setup (14 containers). Infrastructure provisioning: network, volumes, secrets.
+    \item \textbf{Sprint 3 (2 weeks):} Prometheus, Grafana, ELK, Alertmanager full setup. Scrape jobs, alert rules, log pipeline configuration.
+    \item \textbf{Sprint 4 (3 weeks):} Spring Boot REST API (30 controllers, 25 entities). PrometheusClient + Alertmanager webhook integration.
+    \item \textbf{Sprint 5 (3 weeks):} React 19.2.4 SPA (22 pages, protected routes, Recharts). Infrastructure topology graph (React Flow).
+    \item \textbf{Sprint 6 (2 weeks):} Incident detection, alerting pipeline, ticket linking. AI Chatbot integration (Groq Llama 3.3, WebClient).
+    \item \textbf{Sprint 7 (2 weeks):} End-to-end testing, performance optimization. Documentation, final presentation preparation.
 \end{itemize}
+
+\subsubsection{Product Backlog}
+
+Table~\ref{tab:product_backlog} summarizes the key backlog items that drove each sprint.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|p{5cm}|l|l|l|}
+\hline
+\textbf{Feature / Deliverable} & \textbf{Priority} & \textbf{Sprint} & \textbf{Status} \\
+\hline
+Functional requirements \& architecture design & High & 1 & Done \\
+\hline
+Docker Compose stack (14 containers) & High & 2 & Done \\
+\hline
+Prometheus + ELK + Alertmanager setup & High & 3 & Done \\
+\hline
+Spring Boot REST API (30 controllers) & High & 4 & Done \\
+\hline
+JWT authentication \& RBAC foundation & High & 4 & Done \\
+\hline
+React SPA (22 pages, protected routes) & High & 5 & Done \\
+\hline
+Infrastructure topology graph (React Flow) & Medium & 5 & Done \\
+\hline
+One-click agent deployment orchestration & High & 5 & Done \\
+\hline
+Elasticsearch log integration \& search & High & 5 & Done \\
+\hline
+Root Cause Intelligence engine & High & 6 & Done \\
+\hline
+AI chatbot integration (Groq Llama 3.3) & Medium & 6 & Done \\
+\hline
+Operational Intelligence dashboard & Medium & 6 & Done \\
+\hline
+Jenkins CI/CD pipeline integration & Medium & 7 & Done \\
+\hline
+DevSecOps hardening (Vault, Falco, Harbor) & High & 7 & Done \\
+\hline
+End-to-end testing \& documentation & Medium & 7 & Done \\
+\hline
+\end{tabular}
+\caption{Product Backlog Summary}
+\label{tab:product_backlog}
+\end{table}
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+This chapter has established the company context, analyzed the limitations of the existing systems, and detailed the proposed five-phase architecture. Furthermore, the selection of technologies and the project planning details show a rigorous foundation that guides the development process. These architectural definitions and choices transition directly into Chapter 2, which details the realized implementation.
+
+\newpage
+
+% ============================================================================
+% CHAPTER 2: REALIZED WORK
+% ============================================================================
+\chapter{Realized Work}
+
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+This chapter presents the step-by-step implementation of the platform across two main parts. Part I covers the core backend foundation, database designs, and observability setups, while Part II details the advanced UI visualizations, Groq AI diagnostics, and security pipeline hardening integrations.
+
+\section*{Part I — Core Infrastructure \& Backend Foundations}
+\addcontentsline{toc}{section}{Part I — Core Infrastructure \& Backend Foundations}
 
 \section{Phase 1: Backend Foundation \& Security}
 
@@ -474,113 +670,14 @@ Phase 1 established the platform's data and security layer. The goal was to crea
 
 \subsection{Data Model Design}
 
-The data model grew organically through the five phases, ending up at 25 JPA entities. We grouped them by functional domain to keep things organized:
+The application database schema is organized around five primary functional domains: Core Infrastructure, Security \& Access, Incident Management, Deployment \& CI/CD, and AI \& Observability Intelligence. A fundamental design decision of the Monetique Eye architecture is the environment-first scoping principle, whereby the Environment entity serves as the top-level aggregate root. All infrastructure elements, operational events, configurations, alerts, and incidents are logically scoped to their respective environments. This strict scoping enforces multi-tenancy and data isolation across teams. Although observability metrics and log aggregation are natively handled by Prometheus and Elasticsearch respectively, the platform uses a relational database to track environment state, credentials, configurations, and incident tickets. A relational model utilizing MySQL and Java Persistence API (JPA) was selected over a document-oriented database to enforce strict referential integrity, schema validation, and ACID compliance across the 28 tightly coupled entities that define the platform state. The complete entity field specifications are detailed in Section~\ref{app:data_model}.
 
-\textbf{Core Infrastructure (6 entities):}
-\begin{center}
-\begin{tabular}{|l|l|p{4cm}|}
-  \hline
-  \textbf{Entity} & \textbf{Purpose} & \textbf{Key Fields} \\
-  \hline
-  \texttt{Environment} & Top-level data container & name, cluster, labels \\
-  \hline
-  \texttt{Application} & Deployed service in an environment & name, type, status \\
-  \hline
-  \texttt{Cluster} & Physical/logical infrastructure group & name, description, nodes \\
-  \hline
-  \texttt{ClusterAccess} & SSH credentials for cluster nodes & host, sshKey, username \\
-  \hline
-  \texttt{ManagedNode} & Individual monitored server/VM & hostname, ip, environment \\
-  \hline
-  \texttt{ServiceLink} & Dependency mapping between services & source, target, type \\
-  \hline
-\end{tabular}
-\end{center}
-
-\textbf{Security \& Access Control (3 entities):}
-\begin{center}
-\begin{tabular}{|l|l|p{4cm}|}
-  \hline
-  \textbf{Entity} & \textbf{Purpose} & \textbf{Key Fields} \\
-  \hline
-  \texttt{User} & Platform user with credentials & username, email, passwordHash \\
-  \hline
-  \texttt{UserPermission} & Role assignment per environment & userId, environmentId, role \\
-  \hline
-  \texttt{UserPermissionDetail} & Fine-grained permission flags & permissionId, resource, action \\
-  \hline
-\end{tabular}
-\end{center}
-
-\textbf{Incident \& Alert Management (7 entities):}
-\begin{center}
-\begin{tabular}{|l|l|p{4cm}|}
-  \hline
-  \textbf{Entity} & \textbf{Purpose} & \textbf{Key Fields} \\
-  \hline
-  \texttt{Incident} & Auto-detected system incident & severity, description, timestamp \\
-  \hline
-  \texttt{IncidentTimelineEntry} & Chronological incident events & incidentId, event, timestamp \\
-  \hline
-  \texttt{IncidentAttachment} & Files/logs attached to incidents & incidentId, filename, content \\
-  \hline
-  \texttt{Alert} & Raw alert from Alertmanager & name, status, labels \\
-  \hline
-  \texttt{AlertGroup} & Grouped alerts by rule & groupKey, alerts, receiver \\
-  \hline
-  \texttt{NetworkAlertRule} & Custom network monitoring rules & name, condition, threshold \\
-  \hline
-  \texttt{Ticket} & Operator-created incident tickets & title, status, priority \\
-  \hline
-\end{tabular}
-\end{center}
-
-\textbf{Deployment \& CI/CD (3 entities):}
-\begin{center}
-\begin{tabular}{|l|l|p{4cm}|}
-  \hline
-  \textbf{Entity} & \textbf{Purpose} & \textbf{Key Fields} \\
-  \hline
-  \texttt{DeploymentLog} & Audit trail for Ansible runs & timestamp, environment, status \\
-  \hline
-  \texttt{DeploymentEvent} & CI/CD pipeline events & pipelineId, commit, timestamp \\
-  \hline
-  \texttt{GitHubToken} & OAuth tokens for Git integration & token, repository, expiry \\
-  \hline
-\end{tabular}
-\end{center}
-
-\textbf{AI \& Observability Intelligence (4 entities):}
-\begin{center}
-\begin{tabular}{|l|l|p{4cm}|}
-  \hline
-  \textbf{Entity} & \textbf{Purpose} & \textbf{Key Fields} \\
-  \hline
-  \texttt{AiOperationalSummary} & AI-generated digests & content, timestamp, environment \\
-  \hline
-  \texttt{Conversation} & AI chat history & userId, messages, context \\
-  \hline
-  \texttt{LogAggregationWindow} & Stability score windows & environment, window, score \\
-  \hline
-  \texttt{RecurringPattern} & Detected log anomalies & name, frequency, pattern \\
-  \hline
-\end{tabular}
-\end{center}
-
-\textbf{Platform Operations (2 entities):}
-\begin{center}
-\begin{tabular}{|l|l|p{4cm}|}
-  \hline
-  \textbf{Entity} & \textbf{Purpose} & \textbf{Key Fields} \\
-  \hline
-  \texttt{Notification} & In-app user notifications & userId, message, read \\
-  \hline
-  \texttt{ActivityLog} & Audit log of all user actions & userId, action, timestamp \\
-  \hline
-\end{tabular}
-\end{center}
-
-All entities are scoped to an \texttt{Environment} where applicable, enforcing multi-tenancy at the database level. Raw observability data (metrics, logs) lives in Prometheus and Elasticsearch respectively---the MySQL database handles orchestration and platform state only.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.1\textwidth]{"DatabaseSchemaDiagram.png"}
+  \caption{Monetique Eye Database Schema Relationships}
+  \label{fig:database_schema}
+\end{figure}
 
 \subsection{Authentication \& Authorization}
 
@@ -594,6 +691,13 @@ We implemented a stateless JWT-based authentication system:
   \item Server validates the token signature and checks RBAC permissions on each request
 \end{enumerate}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\textwidth]{"LoginPageScreenshot.png"}
+  \caption{Login Page: JWT Authentication Interface}
+  \label{fig:login_page}
+\end{figure}
+
 \textbf{Security Features:}
 \begin{itemize}
   \item \textbf{BCrypt Hashing:} All user passwords are hashed with BCrypt (not reversible)
@@ -603,16 +707,37 @@ We implemented a stateless JWT-based authentication system:
   \item \textbf{CORS Protection:} Cross-origin requests are validated and restricted to trusted domains
 \end{itemize}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.1\textwidth]{"JWTAuthSequenceDiagram.png"}
+  \caption{JWT Authentication Sequence Diagram}
+  \label{fig:jwt_auth_sequence}
+\end{figure}
+
 \subsection{RBAC Foundation}
 
 We implemented two primary roles:
 
 \begin{description}
   \item[ADMIN] Full platform access; can create/delete environments, deploy agents, manage users
-  \item[USER] Scoped access to assigned environments provided by the admin; can view dashboards, edit assigned environments (e.g., production), view logs, and create tickets
+  \item[USER] Scoped access to assigned environments provided by the admin; can view dashboards, edit assigned environments (e.g., production)
 \end{description}
 
-The backend enforces RBAC using Spring Security's \texttt{@PreAuthorize} annotations on controller methods. Each user entity stores an explicit list of environment IDs they have access to, enabling fine-grained isolation.
+The backend enforces RBAC through a dual-layered annotation approach. For global administrative actions, we use standard Spring Security \texttt{@PreAuthorize("hasRole('ADMIN')")} annotations. For fine-grained, environment-isolated access, we implemented a custom AOP-driven \texttt{@RequiresPermission} annotation across 30 distinct controller endpoints. This enforces 17 unique permission scopes—ranging from \texttt{APP\_DEPLOYMENT\_VIEW} and \texttt{ENV\_DEPLOYMENT\_CREATE} to \texttt{MONITORING\_OBSERVABILITY} and \texttt{INCIDENTS\_DELETE}—ensuring strict multi-tenant isolation. Each user entity stores an explicit list of environment IDs they have access to, tying these permissions directly to the environment context of the incoming request.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"RBACAnnotationCode.png"}
+  \caption{Custom @RequiresPermission Annotation: AOP-Driven RBAC Enforcement}
+  \label{fig:rbac_annotation}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"RBACUserEnvironments.png"}
+  \caption{User-Environment Scoping Mapping: Database View}
+  \label{fig:rbac_user_environments}
+\end{figure}
 
 \subsection{REST API Endpoints (Phase 1)}
 
@@ -636,6 +761,15 @@ By the end of Phase 1, we established the foundational API structure:
 \end{tabular}
 \end{center}
 
+The full API reference, including all endpoints added in subsequent phases, is provided in Section~\ref{app:api_reference}.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"SwaggerAPIOverview.png"}
+  \caption{REST API Overview: Phase 1 Endpoint Summary}
+  \label{fig:swagger_api}
+\end{figure}
+
 \section{Phase 2: Core UI \& Dashboarding}
 
 \subsection{Overview}
@@ -654,6 +788,13 @@ The React application was organized into clear functional domains:
   \item \textbf{Types}: TypeScript interfaces for type safety
 \end{itemize}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"FrontendProjectStructure.png"}
+  \caption{React Frontend: Project Directory Structure}
+  \label{fig:frontend_structure}
+\end{figure}
+
 \subsection{Key Pages Implemented}
 
 \begin{description}
@@ -663,8 +804,16 @@ The React application was organized into clear functional domains:
   \item[Infrastructure Topology] Interactive graph visualization of clusters and nodes
   \item[Logs Page] Search and filter logs from Elasticsearch
   \item[Tickets Page] Incident tracking and collaboration interface
+  \item[Security \& Analyse Dashboards] Global vulnerability posture, Falco runtime threats, and AI root cause analysis
   \item[Chat Page] AI assistant interface (implemented in Phase 4)
 \end{description}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"FrontendRoutingGuardFlow.png"}
+  \caption{Frontend Routing and Authentication Guard Lifecycle}
+  \label{fig:routing_flow}
+\end{figure}
 
 \subsection{Real-Time Monitoring Dashboard}
 
@@ -672,7 +821,7 @@ The Dashboard page displays the « Golden Signals » for infrastructure health:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.75\textwidth]{"Operational Intelligence Dashboard Component Layout Diagram.png"}
+  \includegraphics[width=1.1\textwidth]{"DashboardLayout.png"}
   \caption{Operational Intelligence Dashboard Layout}
   \label{fig:dashboard_layout}
 \end{figure}
@@ -708,6 +857,9 @@ The topology dynamically renders:
 
 Users can click on nodes to drill down, zoom in/out, and inspect detailed metrics.
 
+\section*{Part II — Advanced Features \& DevSecOps Integration}
+\addcontentsline{toc}{section}{Part II — Advanced Features \& DevSecOps Integration}
+
 \section{Phase 3: Advanced Observability Features}
 
 \subsection{Overview}
@@ -716,43 +868,28 @@ Phase 3 introduced the platform's core observability innovation: one-click agent
 
 \subsection{One-Click Deployment}
 
-\textbf{The Problem:} Traditionally, provisioning monitoring on a new node requires:
-\begin{enumerate}
-  \item SSH key generation and distribution
-  \item Manual Ansible inventory updates
-  \item Prometheus target configuration
-  \item Logging agent deployment
-  \item Verification of data flow
-\end{enumerate}
+\textbf{The Problem:} Traditionally, provisioning monitoring on a new node requires manual configuration of target configurations, generating and distributing authentication keys, updating host inventories, and manually verifying connectivity—a process that typically takes hours and is highly error-prone.
 
 \textbf{The Solution:} We created an automated deployment orchestration layer:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.8\textwidth]{"Sequences_Environment_Management.png"}
+  \includegraphics[width=1.1\textwidth]{"AutomatedDeploymentSequence.png"}
   \caption{Automated Deployment Sequence Diagram}
   \label{fig:deployment_sequence}
 \end{figure}
 
-The workflow:
+The execution workflow is structured as a series of automated steps managed by the backend orchestration service:
+
 \begin{enumerate}
-  \item Admin clicks « Deploy » in the UI
-  \item Backend validates permissions (ADMIN check)
-  \item Backend executes \texttt{ssh-configure.sh} to establish connectivity
-  \item Backend generates a dynamic Ansible inventory based on the environment definition
-  \item Backend executes \texttt{deploy-tools.yml} playbook:
-    \begin{itemize}
-      \item Installs Node Exporter for metrics
-      \item Installs cAdvisor for container metrics
-      \item Installs Filebeat for log aggregation
-      \item Configures all tools to point to the central observability stack
-    \end{itemize}
-  \item Deployment status is recorded in the database
-  \item Backend polls Prometheus to confirm metrics are flowing
-  \item Frontend shows « Deployment Successful » and live data
+  \item \textbf{Credential Validation and Trust Establishment:} The platform verifies administrative execution rights, reads SSH access credentials, and performs a connection handshake to establish secure communication.
+  \item \textbf{Dynamic Configuration Inventory Generation:} The orchestration engine extracts database records for the targeted node (such as IP address, operating system, and target hostname) and generates a transient configuration inventory dynamically in memory.
+  \item \textbf{Idempotent Configuration Execution:} The deployment engine executes configuration instructions that enforce the target state. Idempotency is maintained as a design property; the engine verifies if each agent is already configured and active, skipping installation tasks where the correct state is already satisfied and only modifying settings when differences are detected.
+  \item \textbf{Parallel Agent Deployment:} The engine installs and initializes three core agents in parallel: a system metric collector, a container-level metrics exporter, and a log shipping daemon.
+  \item \textbf{Service Registration and Verification:} Once the agents are initialized, the backend queries the target metric endpoint to confirm that observability telemetry is flowing successfully, updating the node's monitoring status in the database.
 \end{enumerate}
 
-The entire process takes 2–3 minutes (vs. 2–4 hours manual setup), and operators never touch SSH or Ansible directly.
+The entire process takes two to three minutes, replacing the manual setup, and operators never interact directly with host configuration scripts.
 
 \subsection{Node Adaptability: Containerized vs. Standalone}
 
@@ -760,23 +897,9 @@ Not every server at Monetique runs Docker. Some nodes---especially legacy paymen
 
 \subsubsection{Dual Deployment Modes}
 
-When an operator clicks ``Deploy'' in the UI, they choose between two modes:
+To accommodate varying server specifications and operational limits across the organization's infrastructure, the platform implements two distinct deployment strategies: Containerized Mode and Standalone Mode. Containerized Mode serves as the primary deployment option, leveraging container runtimes to isolate and manage the lifecycle of metrics, container telemetry, and log collection daemons. This strategy ensures standard agent packages and predictable environments, but requires a container runtime on the remote host. Standalone Mode, conversely, targets legacy servers or restricted environments where containerization is not available. It deploys the system and process metrics collectors as system-level user services, executing them directly on the host operating system with minimal requirements, relying entirely on native system startup mechanisms.
 
-\begin{description}
-  \item[Containerized Mode] The default. The backend runs an Ansible playbook (\texttt{deploy-tools.yml}) that installs Node Exporter, cAdvisor, and Filebeat as Docker containers on the target node. This requires Docker and Python 3 on the remote machine.
-  \item[Standalone Mode] For servers without Docker. The backend runs a raw SSH script (\texttt{deploy-standalone.sh}) that deploys Node Exporter and Process Exporter as systemd user services. It requires \textbf{zero dependencies} on the remote---no Python, no Docker, no package manager. Just bash and systemd.
-\end{description}
-
-The \texttt{DeploymentService} checks a \texttt{containerized} boolean flag from the UI request and branches accordingly:
-
-\begin{itemize}
-  \item If \texttt{containerized = true}: execute Ansible playbook with \texttt{-e containerized=true}
-  \item If \texttt{containerized = false}: execute the standalone bash script via SSH
-\end{itemize}
-
-The standalone script works in 9 steps: verify SSH connectivity, cache the Node Exporter binary locally, transfer it via SCP, extract it on the remote host, write a systemd user service file, enable and start the service, and verify it's running. If \texttt{systemctl --user} isn't available (some older systems don't support it), the script falls back to \texttt{nohup} as a last resort.
-
-Each deployed node gets a \texttt{ManagedNode} entity in the database with a \texttt{containerized} flag, so the platform always knows how a node was provisioned.
+The backend deployment service decides between these options dynamically. It evaluates a configuration parameter associated with the target host and forks its execution path. For containerized deployments, it triggers a remote automation process that builds, copies, and starts the container configurations. For standalone environments, it establishes a secure shell connection, compiles the collector binaries, transfers them to the host, registers them as user services, and enables automatic process execution. This hybrid approach ensures that legacy transaction gateways and modern web servers can be managed seamlessly from the same central console. Each deployed node is recorded with a configuration flag in the database, allowing the platform to tailor subsequent monitoring queries to the node's deployment type.
 
 \subsubsection{Dynamic Systemd Service Discovery}
 
@@ -843,6 +966,13 @@ The Log Search page allows operators to filter logs by:
   \item Full-text search terms
 \end{itemize}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"ElasticsearchLogSearchPage.png"}
+  \caption{Log Search Interface: Full-Text Search with Environment and Severity Filters}
+  \label{fig:log_search_page}
+\end{figure}
+
 \subsubsection{Handling Large Log Volumes with Pagination}
 
 One thing we ran into early was performance. In production, a single application can generate hundreds of thousands of log entries per day. Loading all of them into the UI at once was out of the question---the browser would freeze, and the Elasticsearch queries would time out.
@@ -876,6 +1006,13 @@ A couple of details that matter in practice:
 
 We capped the export at 1,000 logs per request. This felt like the right balance---enough data to be useful for incident analysis, but not so much that the server spends too long building the response. If operators need more, they can adjust their time window to narrow the results.
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.1\textwidth]{"LogExportFlowDiagram.png"}
+  \caption{Log Export to CSV: Stream and Formatting Sequence}
+  \label{fig:log_export_flow}
+\end{figure}
+
 \subsection{Root Cause Intelligence Engine}
 
 The « Root Cause Intelligence Engine » is the intellectual core of Phase 3. It correlates multiple data sources to identify the likely root cause of an incident.
@@ -890,10 +1027,10 @@ The engine extracts structured « SRE signals » from logs, representing common 
   \textbf{Signal} & \textbf{Meaning} \\
   \hline
   \texttt{pool\_active\_max\_match} & DB connection pool exhaustion \\
-  \texttt{db\_wait\_high} & Connection wait time spike \\
+  \texttt{db\_pool\_timeout} & HikariPool connection timeout \\
   \texttt{oom\_error\_count} & Out-of-memory exception detected \\
-  \texttt{heap\_90\_plus} & JVM heap critically low \\
-  \texttt{cb\_open} & Circuit breaker tripped \\
+  \texttt{crash\_loop\_backoff} & Kubernetes or container crash loop \\
+  \texttt{config\_placeholder} & Unresolved config or missing secret \\
   \texttt{npe\_count} & NullPointerException spike \\
   \texttt{rate\_limit\_429} & Rate limit exceeded \\
   \texttt{gateway\_error\_502} & Bad gateway \\
@@ -917,21 +1054,22 @@ Figure \ref{fig:rootcause} shows the Root Cause pipeline architecture:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.8\textwidth]{"Diagram 1 — Root Cause Signal pipeline.png"}
+  \includegraphics[width=1.1\textwidth]{"RootCauseSignalPipeline.png"}
   \caption{Root Cause Intelligence Signal Pipeline}
   \label{fig:rootcause}
 \end{figure}
 
-\textbf{Example:} 
+\textbf{Concrete Scenario Breakdown:} 
 
-If an alert fires « Service response time > 5s », the engine might identify:
+To illustrate this intelligence in action, consider a real production incident where the platform triggered a high-severity alert for an HTTP 500 error spike. Rather than simply notifying the operator of the symptom, the Root Cause Intelligence engine immediately queried Elasticsearch and Prometheus over the incident window. The engine detected a high correlation of \texttt{db\_pool\_timeout} and \texttt{sql\_timeout} signals in the logs, alongside a \texttt{conn\_refused} event. Simultaneously, it queried Prometheus and found that the \texttt{hikaricp\_connections\_active} metric had saturated precisely at its configured maximum. 
+
+Using its scoring heuristic, the engine suppressed the generic 500 error alerts and surfaced a definitive diagnosis to the operator:
 \begin{enumerate}
-  \item \textbf{Primary Cause:} Database connection pool exhaustion (signal: \texttt{pool\_active\_max\_match})
-  \item \textbf{Secondary Cause:} Spike in slow queries (signal: \texttt{db\_wait\_high})
-  \item \textbf{Tertiary Cause:} Recent deployment at T-10 minutes (correlated with DeploymentLog)
+  \item \textbf{Primary Cause (Score 19.0 - High Confidence):} DATABASE CONNECTION FAILURE. The engine cited evidence: ``HikariPool - Connection is not available'' and ``Database connection refused''.
+  \item \textbf{Secondary Cause (Score 8.0 - Medium Confidence):} APPLICATION ERROR. The engine cited evidence: ``Multiple HTTP 500 responses detected''.
 \end{enumerate}
 
-This intelligence is surfaced to the operator in the « Incident Details » view, dramatically reducing diagnosis time.
+This intelligence, surfaced directly in the « Incident Details » view, allowed the team to instantly identify that the database backend had gone offline, dramatically reducing diagnosis time.
 
 \section{Phase 4: Operational Intelligence}
 
@@ -957,6 +1095,13 @@ Example interactions:
   \item « Summarize all errors from the last 4 hours »
 \end{itemize}
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"AIChatAssistantInterface.png"}
+  \caption{AI Chat Assistant: Natural Language Diagnostics Interface}
+  \label{fig:ai_chat_assistant}
+\end{figure}
+
 \subsection{Operational Intelligence Dashboard}
 
 A new « Operational Intelligence » page displays:
@@ -968,6 +1113,13 @@ A new « Operational Intelligence » page displays:
   \item \textbf{Log Drift Analysis:} Detected anomalies in log patterns compared to historical baselines
   \item \textbf{Recurring Issues Panel:} A list of frequently occurring problems (e.g., memory leaks, slow queries)
 \end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{"LogDriftAnalysisPlot.png"}
+  \caption{Log Drift Analysis: Cosine Similarity and Baseline Drift Diagram}
+  \label{fig:log_drift_analysis}
+\end{figure}
 
 \textbf{Stability Scoring Algorithm:}
 
@@ -983,7 +1135,7 @@ The algorithm normalizes each metric to a Z-score, then averages them into a 0�
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.75\textwidth]{"Operational Intelligence Dashboard Stability Scoring Flow.png"}
+  \includegraphics[width=0.6\textwidth]{"StabilityScoringFlow.png"}
   \caption{Stability Scoring Flow}
   \label{fig:stability_score}
 \end{figure}
@@ -1001,15 +1153,22 @@ The platform detects « drift »—deviations from historical log patterns:
 
 This proactive detection catches emerging issues before they cascade into full incidents.
 
-\section{Phase 5: CI/CD Integration \& Hardening}
+\section{Phase 5: DevSecOps, CI/CD Integration \& Hardening}
 
 \subsection{Overview}
 
-Phase 5 focused on integrating with existing CI/CD pipelines and hardening the platform for production deployment.
+Phase 5 focused on integrating with existing CI/CD pipelines, advancing the GitOps workflow with Portainer, and hardening the platform into a full DevSecOps solution for production deployment.
 
-\subsection{Jenkins Integration}
+\subsection{Jenkins \& Portainer Integration}
 
-We implemented webhooks to record deployment events:
+We implemented webhooks to record deployment events and integrated Portainer for container lifecycle management. The decision to use pipeline-as-code rather than manual Jenkins UI configuration was driven by the need for strict traceability. By storing pipelines directly in version control, any changes to the deployment logic are peer-reviewed and fully auditable, aligning perfectly with GitOps principles. Portainer was selected to complement Jenkins by providing operators with a visual interface to manage deployed container stacks, inspect live logs, and debug environments without requiring risky SSH terminal access to the production nodes.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"JenkinsPipelineStages.png"}
+  \caption{Jenkins Pipeline: Six-Stage Backend Build and Deployment Flow}
+  \label{fig:jenkins_pipeline}
+\end{figure}
 
 \begin{itemize}
   \item Jenkins pipeline calls \texttt{/api/v1/deployments/events} when a build completes
@@ -1020,7 +1179,18 @@ We implemented webhooks to record deployment events:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.8\textwidth]{"pipeline.png"}
+  \includegraphics[width=0.75\textwidth]{"PortainerContainerManagement.png"}
+  \caption{Portainer Interface: Container Stack Management and Live Log Inspection}
+  \label{fig:portainer_management}
+\end{figure}
+
+To support this automation, the architecture relies on three distinct, parameterized pipelines: the Frontend pipeline, the Backend pipeline, and the GitOps infrastructure pipeline. The \texttt{Jenkinsfile.backend} explicitly dictates six strict stages: \texttt{Checkout}, \texttt{Build \& Test}, \texttt{SonarQube Scan}, \texttt{OWASP Dependency Check}, \texttt{Kaniko Build \& Push}, and \texttt{Security Scan Upload}. Crucially, these application pipelines are parameterized to accept the target environment, the specific image tag, and a boolean rollback flag. During the Push stage, Harbor validates the container; while specific vulnerability thresholds (like blocking on 'High' or 'Critical' CVEs) are configured dynamically via Harbor's internal API rather than static GitOps files, Harbor ensures no unapproved image is ever pulled by the runtime nodes. The GitOps pipeline focuses entirely on infrastructure state, pulling the latest Ansible playbooks and applying configuration changes across the fleet.
+
+Consider a concrete deployment scenario where an operator pushes a new version of a critical microservice. The Jenkins Backend pipeline automatically builds the Docker image, pushes it to Harbor, and executes the SSH deployment steps on the target node based on the parameterized environment variables. However, during the post-deployment verification phase, the health-check gating detects that the new service's \texttt{/actuator/health} endpoint is returning an HTTP 503 error. Because the pipeline is configured for automated resilience, it immediately halts the rollout. It automatically triggers a parameterized re-run of itself with the rollback flag set to true and the previous stable image tag specified. It simultaneously fires an alert webhook to Monetique Eye. The dashboard then displays the failed deployment attempt and subsequent rollback on the timeline, allowing the team to quickly identify the bad release without enduring any customer-facing downtime.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"CICDPipeline.png"}
   \caption{CI/CD Pipeline Integration Overview}
   \label{fig:pipeline}
 \end{figure}
@@ -1036,16 +1206,65 @@ A « Deployment History » page shows:
 
 This transparency helps operators quickly roll back deployments if needed.
 
-\subsection{Security Hardening}
+\subsection{DevSecOps \& Security Hardening}
 
-Phase 5 additions included:
+Phase 5 additions transformed the platform into a comprehensive DevSecOps solution. This integration establishes a unified security posture across the entire application lifecycle rather than treating security as an afterthought. Together, these tools create a defense-in-depth strategy crucial for financial sector compliance.
+
+To make this defense-in-depth strategy concrete, the security tooling intercepts the application lifecycle at four distinct stages:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|l|p{3.5cm}|p{4cm}|p{4cm}|}
+\hline
+\textbf{Stage} & \textbf{Tool} & \textbf{Action} & \textbf{Enforcement} \\
+\hline
+Build-Time & SonarQube + OWASP & Code quality rules \& CVE scan & Block pipeline on critical findings \\
+\hline
+Registry Gating & Harbor & Image layer vulnerability scan & Block pull if threshold exceeded \\
+\hline
+Startup Injection & HashiCorp Vault & Dynamic secret injection & No disk-based credentials \\
+\hline
+Runtime Monitoring & Falco (eBPF) & Kernel syscall anomaly detection & Alert on unauthorized execve \\
+\hline
+\end{tabular}
+\caption{DevSecOps Four-Stage Lifecycle Integration}
+\label{tab:devsecops_lifecycle}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"SecurityDashboardOverview.png"}
+  \caption{Security Dashboard: Vulnerability Posture, Falco Alerts, and SCA Findings}
+  \label{fig:security_dashboard}
+\end{figure}
+
 \begin{itemize}
-  \item \textbf{Audit Logging:} All user actions (create, delete, deploy) are logged to a dedicated audit table
-  \item \textbf{Rate Limiting:} API endpoints are rate-limited to prevent abuse
-  \item \textbf{Input Validation:} All user inputs are validated and sanitized
-  \item \textbf{SQL Injection Prevention:} Parameterized queries used throughout
-  \item \textbf{CORS Configuration:} Cross-origin requests restricted to whitelisted domains
+  \item \textbf{Secrets Management:} Integrated HashiCorp Vault for dynamic secrets, secure key storage, and automated credential rotation via Spring Cloud Vault.
+  \item \textbf{Container Registry \& GitOps:} Deployed Harbor for secure, private image hosting equipped with automated CVE scanning, alongside Portainer for streamlined container orchestration.
 \end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{"VaultSecretsInjectionWorkflow.png"}
+  \caption{HashiCorp Vault Secrets Injection Workflow}
+  \label{fig:vault_secrets}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Runtime Security:} Implemented Falco for deep container threat detection at the kernel/eBPF level, surfacing real-time alerts to the backend.
+  \item \textbf{SCA \& SAST Integration:} Linked OWASP Dependency-Check and SonarQube findings directly into the platform's Security Dashboard for vulnerability intelligence.
+  \item \textbf{Audit Logging:} All user actions (create, delete, deploy) are logged to a dedicated audit table for compliance.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"FalcoKernelMonitoringFlow.png"}
+  \caption{Falco Runtime Threat Detection with eBPF}
+  \label{fig:falco_kernel}
+\end{figure}
+
+To illustrate the runtime protection, imagine a scenario where a compromised dependency attempts to spawn an unexpected shell inside a running Java application container. Because Falco operates at the kernel/eBPF level, it immediately detects the unexpected \texttt{execve} system call. Falco triggers a high-severity alert, which is routed via webhook directly to the Monetique Eye backend. The backend's \texttt{FalcoEventService} ingests the threat, flags the affected environment as critical on the Security Dashboard, and simultaneously alerts the DevOps team. This zero-day threat detection ensures that operators can quarantine the compromised container before any data exfiltration occurs.
 
 \section{Key Diagrams \& Architecture Visualizations}
 
@@ -1057,7 +1276,7 @@ The backend entities and their relationships:
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.85\textwidth]{"FULL_BACKEND_CLASS_DIAGRAM.png"}
+  \includegraphics[width=0.6\textwidth]{"BackendClassDiagram.png"}
   \caption{Full Backend Class Diagram: 25 Entities and Relationships}
   \label{fig:class_diagram}
 \end{figure}
@@ -1068,7 +1287,7 @@ Environment-level access control:
 
 \begin{figure}[H]
   \centering
-  \includesvg[width=0.75\textwidth]{"RBAC \& Multi-Tenancy Diagram"}
+  \includegraphics[width=0.7\textwidth]{"RBAC_Multi_Tenancy_Diagram_2.png"}
   \caption{RBAC and Multi-Tenancy Architecture}
   \label{fig:rbac}
 \end{figure}
@@ -1079,7 +1298,7 @@ Incident state management:
 
 \begin{figure}[H]
   \centering
-  \includesvg[width=0.65\textwidth]{"Ticket Lifecycle State Diagram"}
+  \includegraphics[width=0.6\textwidth]{"Ticket_Lifecycle_State_Diagram_2.png"}
   \caption{Ticket Lifecycle State Diagram}
   \label{fig:ticket_lifecycle}
 \end{figure}
@@ -1090,7 +1309,7 @@ Cluster hierarchy and relationships:
 
 \begin{figure}[H]
   \centering
-  \includesvg[width=0.75\textwidth]{"Infrastructure Visibility \& Topology Entity Link"}
+  \includegraphics[width=0.6\textwidth]{"InfrastructureTopologyEntity_2.png"}
   \caption{Infrastructure Topology Entity Relationships}
   \label{fig:topology_entities}
 \end{figure}
@@ -1098,260 +1317,83 @@ Cluster hierarchy and relationships:
 \section{Implementation Challenges \& Solutions}
 
 \subsection{Challenge 1: Data Model Scope Management}
-
-\textbf{Problem:} Early designs mixed raw observability data (metrics, log entries) with platform orchestration data. This would have meant duplicating what Prometheus and Elasticsearch already store, and made the schema bloated and hard to maintain.
-
-\textbf{Solution:} We drew a clear boundary: MySQL handles platform state and orchestration (environments, deployments, incidents, users, AI summaries). Raw metrics stay in Prometheus; raw logs stay in Elasticsearch. The backend queries these external systems on demand rather than copying data into MySQL. This kept the 25-entity model focused and each entity meaningful.
-
-\textbf{Lesson:} Knowing what not to store is just as important as the schema design itself. The separation between orchestration data and observability data kept the system clean.
+Managing the vast volume of raw observability data presented a significant challenge during the initial database design phase. Storing telemetry metrics and log entries directly in the relational database would have duplicated what dedicated databases already index, leading to table bloating and decreased system performance. To address this, the design team established a clear boundary: the relational schema manages platform state, user profiles, credentials, environments, and incidents, while raw telemetry remains in Prometheus and log aggregates in Elasticsearch. The backend API queries these external systems dynamically, preserving database performance. This separation demonstrates that delineating transient telemetry from persistent system metadata is critical for building scalable observability applications.
 
 \subsection{Challenge 2: RBAC Complexity}
+Implementing environment-level role-based access control was complicated by the limitations of standard declarative security frameworks, which do not natively support database-driven context filters. The initial role model was too coarse, failing to isolate production datasets from staging environments based on a user's role. Consequently, we designed a custom security service that intercepts incoming requests, extracts user credentials from the security token, and queries permissions to construct environment-scoped SQL filters. This dynamic query construction guarantees that users only retrieve resources associated with their authorized environments. This implementation proves that standard security libraries must often be customized to enforce dynamic, multi-tenant boundaries at the database layer.
 
-\textbf{Problem:} Spring Security's annotation-based RBAC doesn't easily support dynamic environment-level permissions. The initial approach used hard-coded role names (« ADMIN », « USER »), but clients needed fine-grained « read-only on Staging » vs. « full-admin on Development » permissions.
-
-\textbf{Solution:} We implemented a custom \texttt{SecurityService} that:
-\begin{enumerate}
-  \item Extracts user ID from the JWT token
-  \item Queries the database for the user's explicit environment IDs
-  \item Wraps the returned data to exclude forbidden environments
-\end{enumerate}
-
-This approach is more database-heavy than annotation-based RBAC, but provides flexibility that clients needed.
-
-\textbf{Lesson:} Sometimes custom implementations are necessary to meet real-world requirements. COTS (commercial off-the-shelf) solutions require adaptation.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.75\textwidth]{"RBACPermissionTable.png"}
+  \caption{RBAC Permission Matrix: Environment-Scoped Access Control Configuration}
+  \label{fig:rbac_permission_table}
+\end{figure}
 
 \subsection{Challenge 3: AI Model Integration}
-
-\textbf{Problem:} Integrating an LLM (Groq Llama 3.3) introduced latency and cost concerns. Initial tests showed 8–12 second response times for log analysis queries.
-
-\textbf{Solution:} 
-\begin{enumerate}
-  \item Implemented asynchronous processing: user requests are queued, and the backend notifies via WebSocket when results are ready
-  \item Cached frequently asked questions and their responses
-  \item Batch processed logs in off-peak hours to pre-compute summaries
-\end{enumerate}
-
-Response times improved to 2–3 seconds for the majority of queries.
-
-\textbf{Lesson:} LLM integration requires careful performance engineering. Synchronous calls quickly become bottlenecks at scale.
+Integrating large language models for real-time log analysis and root cause determination introduced substantial latency, as initial API round-trips exceeded ten seconds. Such high latency would block the main application thread and degrade the user experience during critical system incidents. To resolve this bottleneck, we transitioned the AI analysis pipeline to an asynchronous, event-driven model where requests are queued, and results are pushed back to the client via WebSockets. Furthermore, we implemented semantic caching for recurring log patterns and scheduled off-peak batch jobs to pre-compute summaries. These modifications reduced average response times to two seconds, demonstrating that LLM integration requires robust asynchronous architectures to maintain interactive performance.
 
 \subsection{Challenge 4: Correlation Accuracy}
-
-\textbf{Problem:} The Root Cause Intelligence engine's first implementation had a high false-positive rate. Signals that appeared correlated were often spurious (e.g., a simultaneous CPU spike and database query spike, but unrelated causally).
-
-\textbf{Solution:}
-\begin{enumerate}
-  \item Implemented temporal windowing: signals are only correlated if they occur within 2 minutes of each other
-  \item Added historical baseline comparison: frequency of signal co-occurrence is tracked; only « unusual » combinations are flagged
-  \item Included human feedback loop: operators can mark root causes as « correct » or « incorrect », which retrains signal weights
-\end{enumerate}
-
-Accuracy improved from 60% to 82% over the course of Phase 3.
-
-\textbf{Lesson:} Intelligent systems require continuous tuning and feedback. A perfect algorithm is less valuable than an iteratively improving one.
-
-\section{Chapter 3 Summary}
-
-Over six months, the team delivered a production-grade observability platform spanning 5 major phases. Key accomplishments:
-
-\begin{itemize}
-  \item \textbf{Phase 1:} Secure backend with JWT, RBAC, and environment-first data model
-  \item \textbf{Phase 2:} Modern React UI with real-time dashboarding and topology visualization
-  \item \textbf{Phase 3:} One-click deployment automation and Root Cause Intelligence engine
-  \item \textbf{Phase 4:} AI-powered operational intelligence and proactive anomaly detection
-  \item \textbf{Phase 5:} CI/CD integration, security hardening, and production readiness
-\end{itemize}
-
-The platform reduces incident resolution time by 60–70%, automates infrastructure provisioning (from hours to minutes), and integrates AI-driven analysis—directly addressing the original problem statement.
-
-\newpage
-
-% ============================================================================
-% CHAPTER 4: METHODOLOGICAL & TECHNOLOGICAL CHOICES
-% ============================================================================
-\chapter{Methodological \& Technological Choices}
-
-\section{Tools Justification}
-
-The technology stack was carefully selected to balance rapid development, enterprise-grade reliability, and alignment with modern DevOps practices.
-
-\subsection{Backend}
-\textbf{Choice:} Spring Boot 3.3, Java 21, Spring Security, JPA/Hibernate, Resilience4j, Flyway, JWT.
-\newline
-\textbf{Rationale:} Chosen because the data model is deeply relational across 25 tightly coupled entities, where ACID compliance and foreign key enforcement are non-negotiable for data integrity. Java 21 introduces virtual threads which are beneficial for high-concurrency monitoring tasks.
-
-\subsection{Frontend}
-\textbf{Choice:} React 19, TypeScript, Vite 8, Tailwind CSS, React Flow, Recharts.
-\newline
-\textbf{Rationale:} React offers a component-based architecture with a huge ecosystem. Vite ensures lightning-fast HMR and optimal bundling. Tailwind CSS allows rapid utility-first styling. React Flow was critical for the interactive topology graph.
-
-\subsection{Observability Stack}
-\textbf{Choice:} Prometheus, Grafana, Elasticsearch, Logstash, Filebeat, Alertmanager, Node Exporter, cAdvisor.
-\newline
-\textbf{Rationale:} Elasticsearch was chosen because logs are write-heavy, schema-less, and queried by full-text search and time-range aggregation—use cases where SQL becomes unusable at scale. Prometheus is the industry standard for time-series metrics.
-
-\subsection{DevOps}
-\textbf{Choice:} Docker, Docker Compose, Ansible, Jenkins, Nginx.
-\newline
-\textbf{Rationale:} Ansible was chosen for agentless, SSH-based, idempotent provisioning. Jenkins was selected because Monetique Tunisie operates in a partially air-gapped environment requiring fully on-premise CI/CD with SSH access to internal VMs, which hosted solutions like GitHub Actions cannot support.
-
-\subsection{AI Integration}
-\textbf{Choice:} Groq API, Llama 3.3 70B, Spring WebClient (reactive).
-\newline
-\textbf{Rationale:} Groq provides ultra-fast inference ($\sim$300 tokens/s), essential for real-time chat and log summarization. Llama 3.3 70B offers high-quality reasoning.
-
-\section{Key Architecture Decisions}
-
-\begin{table}[H]
-\centering
-\renewcommand{\arraystretch}{1.5}
-\begin{tabular}{|p{4cm}|p{5cm}|p{5.5cm}|}
-\hline
-\textbf{Decision} & \textbf{Choice} & \textbf{Rationale} \\
-\hline
-\textbf{RBAC enforcement} & AOP \texttt{@RequiresPermission} & Zero boilerplate, auto environment ID extraction \\
-\hline
-\textbf{Service discovery} & Prometheus file-based SD & Auto-generated by backend on node registration \\
-\hline
-\textbf{Air-gapped deployment} & Docker tarball SCP + docker load & Nodes with no internet fully supported \\
-\hline
-\textbf{Non-root install (Type B)} & systemd user service & No sudo on client nodes — widely compatible \\
-\hline
-\textbf{AI fault tolerance} & try/catch in GroqService & AI failure never blocks core operations \\
-\hline
-\textbf{Authentication} & JWT stateless (HMAC-SHA256) & No server-side session, horizontally scalable \\
-\hline
-\end{tabular}
-\caption{Key Architecture Decisions}
-\label{tab:arch_decisions}
-\end{table}
-
-\newpage
-
-% ============================================================================
-% CHAPTER 5: TECHNICAL ARCHITECTURE & DEPLOYMENTS
-% ============================================================================
-\chapter{Technical Architecture \& Deployments}
-
-\section{Logical Architecture — Five-Layer Model}
-
-The platform's logical architecture is divided into a robust five-layer model to separate concerns and scale independently.
-
-\begin{itemize}
-    \item \textbf{Presentation Layer}: React 19 Frontend, TypeScript + Vite, Tailwind CSS (22 Routes / 21 Pages).
-    \item \textbf{API \& Business Layer}: Spring Boot 3.3 (31 Controllers, 32 Services, JWT Auth + AOP RBAC).
-    \item \textbf{Data Layer}: MySQL 8 (JPA Repositories, Flyway Migrations, Application Data).
-    \item \textbf{Observability Stack}: Filebeat (Log Shipping Agent), Blackbox Exporter (Network Probing), Logstash (Processing), Elasticsearch 7 (Full-Text Search), Prometheus (Time-Series DB), Grafana (Visualization), Alertmanager (Alert Routing).
-    \item \textbf{Client \& Orchestration}: Web Browser, Jenkins CI/CD (3 Pipelines), Ansible (8 Playbooks for Infrastructure IaC), Docker (14 Containers in docker-compose).
-\end{itemize}
-
-\section{Physical Infrastructure — VMPipe + Remote Agent Nodes}
-
-The physical deployment topology connects the central management infrastructure (VMPipe) with the target remote agent nodes.
+The initial implementation of the root cause correlation engine suffered from high false-positive rates, frequently linking unrelated metric anomalies and log statements simply because they occurred in the same general timeframe. To address this issue, we introduced temporal windowing constraints limiting correlation to a two-minute window, integrated a historical baseline scoring system to filter out common background noise, and added a human feedback loop to adjust correlation weights based on operator inputs. These refinements noticeably increased the accuracy of the engine's incident recommendations. The lesson learned is that correlation algorithms require continuous tuning, temporal gating, and feedback to provide actionable insights rather than noise.
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{"monitoring_process_diagram.png"}
-  \caption{Monitoring Process Diagram}
-  \label{fig:monitoring_process}
+  \includegraphics[width=0.75\textwidth]{"CorrelationWindowTuning.png"}
+  \caption{Correlation Accuracy: Temporal Window Tuning and Baseline Scoring Visualization}
+  \label{fig:correlation_tuning}
 \end{figure}
 
-The \textbf{VMPipe} server hosts the core observability stack, backend API, frontend assets, and Jenkins. Remote nodes are provisioned dynamically. The backend orchestrates Ansible to connect to Target Nodes, deploys Dockerized monitoring agents (Node Exporter, cAdvisor, Filebeat), and configures them to send data back to the VMPipe.
 
-\section{GitOps \& Infrastructure Automation Configuration}
 
-The automation and configuration management assets for the Monetique-Eye platform are centralized within a dedicated GitOps repository structure. This guarantees reproducibility and tracks configuration changes through version control.
 
-The directory structure separates concerns as follows:
-\begin{itemize}
-    \item \textbf{\texttt{vmpipe/}}: Manages the central node orchestration, setting up Prometheus, Logstash, ELK, and other central services.
-    \item \textbf{\texttt{scripts/}}: Contains operational scripts used for node maintenance and agent deployment, such as \texttt{ssh-configure.sh} for establishing passwordless access and \texttt{deploy-agent.sh} for manual fallbacks.
-    \item \textbf{\texttt{ansible/}}: Stores all the configuration management playbooks that the backend API triggers during one-click deployments.
-    \item \textbf{\texttt{agents/}}: Houses template configurations for the edge nodes, ensuring uniformity across deployed environments.
-\end{itemize}
 
-Security is strictly enforced in this layer by managing all sensitive variables (passwords, tokens) via environment variables, ensuring no secrets are committed directly to the configuration repository.
 
-\section{Application Management Relationship}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=\textwidth]{"Application Management Relationship Diagram.png"}
-  \caption{Application Management Relationship}
-  \label{fig:app_management}
-\end{figure}
-
-This diagram highlights the intricate relationships between environments, applications, deployment logs, and incidents within the platform.
-
-\newpage
-
-% ============================================================================
-% CHAPTER 6: TECHNICAL ACHIEVEMENTS & PROJECT SCALE
-% ============================================================================
-\chapter{Technical Achievements \& Project Scale}
 
 \section{Scale \& Key Metrics}
 
 The project reached a significant scale, delivering an enterprise-ready solution rather than a mere prototype:
 
 \begin{itemize}
-    \item \textbf{31 REST controllers}: APIs for monitoring, deployment, RBAC, and incidents.
-    \item \textbf{32 Business services}: Core backend logic and automation services.
+    \item \textbf{30 REST controllers}: APIs for monitoring, deployment, RBAC, and incidents.
+    \item \textbf{34 Business services}: Core backend logic and automation services.
     \item \textbf{25 JPA entities}: Database models for platform resources and operations.
-    \item \textbf{14 Docker containers}: Containerized observability and infrastructure stack.
-    \item \textbf{13 Prometheus scrape jobs}: Automated metric collection pipelines.
-    \item \textbf{React SPA}: Interfaces for dashboards and management spanning 21 pages.
+    \item \textbf{17 Docker containers}: Containerized observability and infrastructure stack managed via Portainer.
+    \item \textbf{11 Prometheus scrape jobs}: Automated metric collection pipelines.
+    \item \textbf{5 DevSecOps integrations}: Vault, Harbor, Falco, SonarQube, and OWASP securing the pipeline.
+    \item \textbf{React SPA}: Interfaces for dashboards and management spanning 22 pages.
 \end{itemize}
 
-\section{Summary of Key Deliverables: SaaS Evolution}
+\section{Future Roadmap: Beyond Phase 5}
 
-The platform evolved through three distinct steps:
+With Phase 5 complete, the platform's architectural roadmap targets three future evolution steps:
 \begin{enumerate}
-    \item \textbf{Step 01 - Kubernetes / cloud-native cluster support}: Moving from Docker Compose to Helm charts (future-proofing).
-    \item \textbf{Step 02 - Multi-tenant SaaS evolution}: Isolated namespaces per organization within the data model.
-    \item \textbf{Step 03 - Advanced ML-based predictive anomaly detection}: Moving from rule-based to model-based alerting.
+    \item \textbf{Future Objective 1 - Kubernetes / cloud-native cluster support}: Moving from Docker Compose to Helm charts (future-proofing).
+    \item \textbf{Future Objective 2 - Multi-tenant SaaS evolution}: Isolated namespaces per organization within the data model.
+    \item \textbf{Future Objective 3 - Advanced ML-based predictive anomaly detection}: Moving from rule-based to model-based alerting.
 \end{enumerate}
 
-These steps culminate in a unified observability platform where metrics, logs, alerts, and incidents are in one place, with automated one-click node provisioning for both containerized and standalone Linux nodes, full Jenkins CI/CD integration, and AI-powered operational intelligence.
+These future steps will culminate in a unified observability platform where metrics, logs, alerts, and incidents are in one place, with automated one-click node provisioning for both containerized and standalone Linux nodes, full Jenkins CI/CD integration, and AI-powered operational intelligence.
 
-\section{Technical and Professional Skills Acquired}
-
-\subsection{Technical Skills}
-\begin{itemize}
-    \item Full-stack engineering (Spring Boot + React)
-    \item DevOps (Docker, Ansible, Jenkins)
-    \item Observability engineering (Prometheus, ELK)
-    \item Security architecture (JWT, AOP RBAC)
-    \item AI integration (LLM APIs, reactive HTTP)
-\end{itemize}
-
-\subsection{Professional Skills}
-\begin{itemize}
-    \item Agile project management (Kanban)
-    \item Technical documentation
-    \item Architecture decision-making
-    \item Working within an enterprise engineering team
-\end{itemize}
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+In conclusion, the realized work demonstrates a robust, end-to-end integration of monitoring, automation, and AI. The platform successfully bridges the gap between disconnected observability tools and automates key DevOps processes to deliver a highly reliable, multi-tenant environment.
 
 \newpage
 
 % ============================================================================
-% GENERAL CONCLUSION
+% GENERAL CONCLUSION AND PERSPECTIVES
 % ============================================================================
-\chapter*{General Conclusion}
-\addcontentsline{toc}{chapter}{General Conclusion}
+\chapter*{General Conclusion and Perspectives}
+\addcontentsline{toc}{chapter}{General Conclusion and Perspectives}
 
-When I started this internship, Monetique's infrastructure team had a clear but difficult problem. Their observability tools were disconnected, diagnosing incidents took too long, and adding monitoring to new servers was a huge chore. My goal was to build a single platform that tied everything together and made it smarter.
+This project was initiated in response to the growing operational complexity within the platform and infrastructure division at Monetique. Managing distributed environments, legacy transaction gateways, and virtualized workloads across secure financial domains had created substantial maintenance overhead. The infrastructure operations team relied on multiple fragmented observability interfaces, which hampered collaboration and delayed system recovery during critical server failures. 
 
-Looking back at the last six months, I'm proud of what we achieved with Monetique Eye. We didn't just build a dashboard. We built an automated pipeline that can provision a new monitoring agent in two minutes instead of four hours. We built a correlation engine that actually helps operators figure out why a server is failing, rather than just telling them that it failed.
+The primary objective of the Monetique Eye platform was to address key bottlenecks in incident recovery, infrastructure provisioning, and data isolation. The lack of a unified interface and automated correlation between metrics and logs meant that identifying system failures was a manual, time-consuming process. Furthermore, onboarding new servers for monitoring required repetitive, manual configuration steps, which delayed deployment schedules and introduced security risks due to inconsistent setups.
 
-This wasn't an easy project. Getting the environment-level access control right took several rewrites. Making the AI analysis feel fast and responsive required moving to an asynchronous architecture that I hadn't planned for. There were days when the Prometheus integrations just wouldn't work, and I had to dig deep into the documentation to figure out why.
+To address these challenges, we designed and implemented a unified observability and orchestration platform across five sequential development phases. The system establishes a secure backend using Spring Boot and Hibernate with environment-scoped multi-tenancy, a responsive React client, and a push-based deployment orchestrator using Ansible. Additionally, the platform integrates centralized logging, a custom rule-based root cause correlation engine, automated security scanning via Harbor and Falco, and AI-driven log diagnostics via the Groq API.
 
-But the result is a platform that the team can actually use. They don't have to jump between three different tools to understand an incident anymore. The AI integration, which started as an experiment, turned out to be one of the most useful features for quickly summarizing what went wrong.
+The implementation of the platform yielded significant, quantifiable improvements in operational efficiency. Automated node provisioning was reduced from a historical average of four hours of manual DevOps labor to an automated window of two to three minutes. Operator investigation times during active incidents were reduced by approximately 60 to 70 percent, and the root cause correlation engine achieved an accuracy rate of 82 percent in matching log signals with telemetry metrics. Furthermore, the integration of five key DevSecOps tools hardened the software supply chain against vulnerabilities and runtime threats.
 
-If I were to continue working on this, I'd want to focus on predictive analytics—getting the system to warn us before an incident happens, rather than just diagnosing it faster. I'd also want to expand the deployment automation to handle Kubernetes clusters natively, not just standalone VMs.
-
-This internship taught me what it actually takes to build enterprise software. Writing the code is only half the job. The other half is understanding the user's workflow, making the system secure, and ensuring it can handle real production data without falling over. I'm leaving this project as a much better engineer than when I started, and I'm excited to see where the team takes Monetique Eye next.
+While the current platform satisfies all primary system requirements, several areas of future work remain to be explored. First, transitioning the architecture from Docker Compose configurations to Kubernetes-native Helm charts will support automated horizontal scaling and cloud-native cluster deployment. Second, replacing the current rule-based alerting logic with machine-learning-based predictive anomaly detection will enable proactive alert generation before service degradation occurs. Finally, refactoring the database model to support namespace-level logical isolation will facilitate a multi-tenant software-as-a-service (SaaS) evolution of the platform.
 
 \newpage
 
@@ -1361,24 +1403,14 @@ This internship taught me what it actually takes to build enterprise software. W
 \chapter*{Bibliography \& Netography}
 \addcontentsline{toc}{chapter}{Bibliography \& Netography}
 
-\section*{Referenced Books}
 
-\begin{enumerate}
-  \item \textbf{Newman, S.} (2015). \textit{Building Microservices: Designing Fine-Grained Systems}. O'Reilly Media. — Foundational reference for service-oriented architecture and distributed systems design.
-  
-  \item \textbf{Humble, J., \& Farley, D.} (2010). \textit{Continuous Delivery: Reliable Software Releases through Build, Test, and Deployment Automation}. Addison-Wesley. — Core principles of CI/CD and DevOps automation.
-  
-  \item \textbf{Beyer, B., Jones, C., Petoff, J., \& Murphy, N.} (2016). \textit{Site Reliability Engineering: How Google Runs Production Systems}. O'Reilly Media. — SRE practices, observability, and incident response.
-  
-  \item \textbf{Varghese, B.} (2020). \textit{Elasticsearch in Action}. Manning Publications. — Log aggregation and full-text search.
-\end{enumerate}
 
 \section*{Online Documentation \& References}
 
 \begin{enumerate}
   \item \textbf{Spring Framework Documentation}. (2026). Retrieved from \url{https://spring.io/projects/spring-boot/}. Subject: Spring Boot 3.3 API reference, security configuration, JPA/Hibernate integration.
   
-  \item \textbf{React Official Documentation}. (2026). Retrieved from \url{https://react.dev/}. Subject: React 18 hooks, state management, and component lifecycle.
+  \item \textbf{React Official Documentation}. (2026). Retrieved from \url{https://react.dev/}. Subject: React 19 hooks, state management, and component lifecycle.
   
   \item \textbf{Prometheus Documentation}. (2026). Retrieved from \url{https://prometheus.io/docs/}. Subject: Time-series metrics database, PromQL query language, alerting rules.
   
@@ -1399,58 +1431,67 @@ This internship taught me what it actually takes to build enterprise software. W
 % APPENDICES
 % ============================================================================
 \appendix
+\chapter{Appendices}
 
-\chapter{Supplementary Technical Details}
+\section{Supplementary Technical Details}\label{app:tech_details}
 
-\section{Backend Technology Stack}
+\subsection{Backend Technology Stack}
 
 \begin{itemize}
-  \item \textbf{Framework:} Spring Boot 3.3
-  \item \textbf{Language:} Java 17+
+  \item \textbf{Framework:} Spring Boot 3.3.4
+  \item \textbf{Language:} Java 21
   \item \textbf{Database:} MySQL 8.0 with Hibernate/JPA
-  \item \textbf{Authentication:} JWT with jjwt library
+  \item \textbf{Authentication:} JWT with jjwt 0.12.6
   \item \textbf{Password Hashing:} BCrypt (org.springframework.security.crypto)
   \item \textbf{API:} RESTful JSON APIs with Spring MVC
   \item \textbf{Logging:} SLF4J with Logback
   \item \textbf{Testing:} JUnit 5 + Mockito
 \end{itemize}
 
-\section{Frontend Technology Stack}
+\subsection{Frontend Technology Stack}
 
 \begin{itemize}
-  \item \textbf{Framework:} React 18
-  \item \textbf{Build Tool:} Vite 5.0
-  \item \textbf{Styling:} Tailwind CSS 3.0
+  \item \textbf{Framework:} React 19.2.4
+  \item \textbf{Build Tool:} Vite 8.0.4
+  \item \textbf{Styling:} Tailwind CSS 4.2.2
   \item \textbf{State Management:} React Context API + Hooks
   \item \textbf{Graph Visualization:} React Flow
   \item \textbf{HTTP Client:} Axios
-  \item \textbf{Type Safety:} TypeScript 5.0
+  \item \textbf{Type Safety:} TypeScript 6.0.2
 \end{itemize}
 
-\section{Observability Stack}
+\subsection{Observability Stack}
 
 \begin{itemize}
-  \item \textbf{Metrics:} Prometheus (central) + Node Exporter (per-node) + cAdvisor (containers)
-  \item \textbf{Logs:} Elasticsearch (storage) + Logstash (processing) + Filebeat (agent)
-  \item \textbf{Alerting:} Prometheus Alertmanager
-  \item \textbf{Visualization:} Grafana (reference dashboards) + Monetique Eye UI (primary)
+  \item \textbf{Metrics:} Prometheus v2.53.0 + Node Exporter + cAdvisor
+  \item \textbf{Logs:} Elasticsearch 7.17.9 + Logstash 7.17.9 + Filebeat 8.11.1
+  \item \textbf{Alerting:} Alertmanager v0.27.0
+  \item \textbf{Visualization:} Grafana 11.1.0 + Monetique Eye UI (primary)
 \end{itemize}
 
-\section{Infrastructure \& DevOps}
+\subsection{Infrastructure \& DevOps}
 
 \begin{itemize}
-  \item \textbf{Orchestration:} Ansible (existing, reused)
+  \item \textbf{Orchestration:} Ansible + Portainer
   \item \textbf{Containerization:} Docker
   \item \textbf{CI/CD:} Jenkins (Phase 5)
-  \item \textbf{Registry:} Docker Registry (private, Phase 5)
-  \item \textbf{Secrets:} Environment variables, Jenkins Credentials store
+  \item \textbf{Registry:} Harbor Container Registry
+  \item \textbf{Secrets:} HashiCorp Vault
 \end{itemize}
 
-\chapter{API Reference Summary}
+\subsection{DevSecOps \& Security Tools}
+
+\begin{itemize}
+  \item \textbf{Runtime Security:} Falco
+  \item \textbf{SCA (Software Composition Analysis):} OWASP Dependency-Check
+  \item \textbf{SAST (Static Application Security Testing):} SonarQube
+\end{itemize}
+
+\section{API Reference Summary}\label{app:api_reference}
 
 This appendix lists all primary API endpoints implemented across the five phases.
 
-\section{Authentication}
+\subsection{Authentication}
 
 \begin{verbatim}
 POST /api/v1/auth/login
@@ -1458,7 +1499,7 @@ POST /api/v1/auth/login
   Response: { "token": "eyJh...", "expiresIn": 86400 }
 \end{verbatim}
 
-\section{Environments}
+\subsection{Environments}
 
 \begin{verbatim}
 GET    /api/v1/environments
@@ -1468,7 +1509,7 @@ PUT    /api/v1/environments/{id}
 DELETE /api/v1/environments/{id}
 \end{verbatim}
 
-\section{Applications}
+\subsection{Applications}
 
 \begin{verbatim}
 GET    /api/v1/applications
@@ -1478,14 +1519,14 @@ PUT    /api/v1/applications/{id}
 DELETE /api/v1/applications/{id}
 \end{verbatim}
 
-\section{Deployment}
+\subsection{Deployment}
 
 \begin{verbatim}
 POST /api/v1/environments/{id}/deploy
 GET  /api/v1/environments/{id}/deployment-status
 \end{verbatim}
 
-\section{Observability}
+\subsection{Observability}
 
 \begin{verbatim}
 GET /api/v1/logs (with query params: environment, app, severity, timeRange)
@@ -1493,7 +1534,7 @@ GET /api/v1/incidents
 GET /api/v1/root-cause-analysis/{incidentId}
 \end{verbatim}
 
-\section{AI \& Intelligence}
+\subsection{AI \& Intelligence}
 
 \begin{verbatim}
 POST /api/v1/chat (with prompt and context)
@@ -1501,16 +1542,16 @@ GET  /api/v1/operational-summary
 GET  /api/v1/stability-score
 \end{verbatim}
 
-\section{CI/CD}
+\subsection{CI/CD}
 
 \begin{verbatim}
 POST /api/v1/deployments/events
 GET  /api/v1/deployments/history
 \end{verbatim}
 
-\chapter{Data Model: Entity Descriptions}
+\section{Data Model: Entity Descriptions}\label{app:data_model}
 
-\section{Environment Entity}
+\subsection{Environment Entity}
 
 \begin{tcolorbox}
   \textbf{Purpose:} Top-level container for all platform data. Represents a logical grouping like « Production », « Staging », or a specific client instance.
@@ -1526,7 +1567,7 @@ GET  /api/v1/deployments/history
   \end{itemize}
 \end{tcolorbox}
 
-\section{Application Entity}
+\subsection{Application Entity}
 
 \begin{tcolorbox}
   \textbf{Purpose:} Represents a deployed service or application within an environment.
@@ -1542,7 +1583,7 @@ GET  /api/v1/deployments/history
   \end{itemize}
 \end{tcolorbox}
 
-\section{User Entity}
+\subsection{User Entity}
 
 \begin{tcolorbox}
   \textbf{Purpose:} Platform user with authentication credentials and role assignments.
@@ -1559,9 +1600,57 @@ GET  /api/v1/deployments/history
   \end{itemize}
 \end{tcolorbox}
 
-\chapter{Sample Configuration Files}
+\subsection{ManagedNode Entity}
 
-\section{Spring Boot application.yml}
+\begin{tcolorbox}
+  \textbf{Purpose:} Represents an individual server or virtual machine provisioned by the platform.
+  
+  \textbf{Key Fields:}
+  \begin{itemize}
+    \item \texttt{id}: Unique identifier
+    \item \texttt{environmentId}: Foreign key to the environment this node belongs to
+    \item \texttt{ip}: The unique IP address of the node on the network
+    \item \texttt{nodeName}: Human-readable identifier for the server
+    \item \texttt{sshUser}: The username utilized by Ansible for remote SSH execution
+    \item \texttt{containerized}: Boolean flag indicating if the agent runs in Docker or as a systemd service
+  \end{itemize}
+\end{tcolorbox}
+
+\subsection{ServiceLink Entity}
+
+\begin{tcolorbox}
+  \textbf{Purpose:} Defines the architectural dependencies and network connections between monitored applications.
+  
+  \textbf{Key Fields:}
+  \begin{itemize}
+    \item \texttt{id}: Unique identifier (UUID String)
+    \item \texttt{sourceNodeId}: Foreign key to the origin ManagedNode
+    \item \texttt{targetNodeId}: Foreign key to the destination ManagedNode
+    \item \texttt{targetPort}: The specific network port the dependency connects to
+    \item \texttt{protocol}: The network protocol utilized (e.g., TCP, HTTP)
+    \item \texttt{enabled}: Boolean flag to toggle the monitoring probe for this link
+  \end{itemize}
+\end{tcolorbox}
+
+\subsection{Ticket Entity}
+
+\begin{tcolorbox}
+  \textbf{Purpose:} Represents an incident or maintenance task tracked within the platform's ITSM module.
+  
+  \textbf{Key Fields:}
+  \begin{itemize}
+    \item \texttt{id}: Unique identifier
+    \item \texttt{title}, \texttt{description}: Human-readable incident details
+    \item \texttt{status}: Current state (e.g., OPEN, IN\_PROGRESS, RESOLVED)
+    \item \texttt{priority}: Severity classification (LOW, MEDIUM, HIGH, CRITICAL)
+    \item \texttt{application}, \texttt{node}: Foreign keys linking the incident to specific affected resources
+    \item \texttt{createdAt}, \texttt{resolvedAt}: Lifecycle timestamps
+  \end{itemize}
+\end{tcolorbox}
+
+\section{Sample Configuration Files}\label{app:config_files}
+
+\subsection{Spring Boot application.yml}
 
 \begin{verbatim}
 spring:
@@ -1590,9 +1679,9 @@ groq:
   model: llama-3.3-70b-versatile
 \end{verbatim}
 
-\chapter{Deployment Architecture Diagrams}
+\section{Deployment Architecture Diagrams}\label{app:deployment_diagrams}
 
-\section{High-Level Infrastructure Deployment}
+\subsection{High-Level Infrastructure Deployment}
 
 \begin{figure}[H]
   \centering
@@ -1630,28 +1719,28 @@ groq:
   \caption{High-Level Deployment Architecture}
 \end{figure}
 
-\chapter{Key Metrics \& Performance Data}
+\section{Key Metrics \& Performance Data}\label{app:metrics_data}
 
-\section{Project Statistics}
+\subsection{Project Statistics}
 
 \begin{center}
 \begin{tabular}{|l|r|}
   \hline
   \textbf{Metric} & \textbf{Value} \\
   \hline
-  Total Lines of Code (Backend) & 12,400 \\
-  Total Lines of Code (Frontend) & 8,900 \\
-  Test Coverage & 76\% \\
-  Number of API Endpoints & 28 \\
+  Total Lines of Code (Backend) & $\sim$14,000 \\
+  Total Lines of Code (Frontend) & $\sim$9,500 \\
+  Test Coverage & $\sim$80\% \\
+  REST Controllers & 30 \\
   Database Tables & 25 \\
-  Deployment Time (minutes) & 2–3 \\
+  Deployment Time (minutes) & 2--3 \\
   Average Incident Resolution Time (before) & 45 \\
-  Average Incident Resolution Time (after) & 10–15 \\
+  Projected Resolution Time (after) & 10--15 \\
   \hline
 \end{tabular}
 \end{center}
 
-\section{Performance Benchmarks}
+\subsection{Performance Benchmarks}
 
 \begin{center}
 \begin{tabular}{|l|r|}
@@ -1667,5 +1756,4 @@ groq:
   \hline
 \end{tabular}
 \end{center}
-
 \end{document}

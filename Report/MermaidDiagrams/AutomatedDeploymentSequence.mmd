@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant Admin as Admin User
+    participant UI as React UI
+    participant API as Spring Boot API
+    participant SSH as SSH Module
+    participant ANS as Ansible
+    participant Node as Target Node
+    participant PROM as Prometheus
+
+    Admin->>UI: Click "Deploy Agent"
+    UI->>API: POST /environments/{id}/deploy
+    API->>API: Validate Permissions
+    API->>SSH: ssh-configure.sh (key exchange)
+    SSH->>Node: Copy SSH Public Key
+    API->>ANS: ansible-playbook deploy-tools.yml
+    ANS->>Node: Transfer Docker Images (Air-gapped)
+    ANS->>Node: Start cAdvisor Container
+    ANS->>Node: Start Node Exporter Container
+    ANS->>Node: Start Filebeat Container
+    ANS-->>API: Deployment Success + Ports
+    API->>API: Save ManagedNode to DB
+    API->>API: Generate Prometheus SD Config
+    API->>PROM: POST /-/reload
+    PROM->>Node: Begin Scraping Metrics
+    API-->>UI: Deployment Complete
+    UI-->>Admin: Show Success Toast

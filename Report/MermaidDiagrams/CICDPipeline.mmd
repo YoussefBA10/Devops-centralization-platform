@@ -1,0 +1,26 @@
+graph LR
+    subgraph "Developer"
+        A["Git Push"] --> B["GitHub/GitLab"]
+    end
+
+    subgraph "Jenkins CI/CD"
+        B --> C["Checkout"]
+        C --> D["Build & Test"]
+        D --> E["Docker Build"]
+        E --> F["Push to Registry"]
+        F --> G{"Env == Prod?"}
+        G -->|"Yes"| H["Manual Approval"]
+        G -->|"No"| I["SSH Deploy"]
+        H --> I
+        I --> J["Health Check"]
+        J -->|"Pass"| K["✅ Notify Monetique Eye"]
+        J -->|"Fail"| L["🔄 Auto-Rollback"]
+        L --> M["❌ Notify Monetique Eye"]
+    end
+
+    subgraph "Monetique Eye"
+        K --> N["Record DeploymentEvent"]
+        M --> N
+        N --> O["Push Metric to VictoriaMetrics"]
+        O --> P["Grafana Deployment Annotation"]
+    end

@@ -1,0 +1,48 @@
+C4Context
+  title System Context diagram for Monetique Eye
+
+  Person(admin, "Admin/DevOps", "Manages environments, deploys agents, manages users.")
+  Person(operator, "Operator/SRE", "Monitors infrastructure, investigates incidents.")
+  System_Ext(jenkins, "Jenkins", "CI/CD pipelines.")
+
+  System(monetiqueEye, "Monetique Eye", "Observability DevOps platform unifying metrics, logs, and alerts.")
+
+  System_Ext(ansible, "Ansible", "Automates infrastructure provisioning.")
+  System_Ext(remoteNode, "Remote Nodes", "Infrastructure nodes running applications and monitoring agents.")
+
+  System_Ext(prometheus, "Prometheus", "Collects and stores metrics.")
+  System_Ext(elk, "ELK Stack", "Centralized logging and search.")
+
+  Rel(admin, monetiqueEye, "Configures and manages")
+  Rel(operator, monetiqueEye, "Monitors and investigates")
+  Rel(jenkins, monetiqueEye, "Sends deployment events")
+
+  Rel(monetiqueEye, ansible, "Orchestrates")
+  Rel(ansible, remoteNode, "Deploys agents to")
+
+  Rel(remoteNode, prometheus, "Emits metrics")
+  Rel(remoteNode, elk, "Emits logs")
+
+  Rel(monetiqueEye, prometheus, "Queries metrics")
+  Rel(monetiqueEye, elk, "Queries logs")
+
+  UpdateLayoutConfig($c4ShapeInRow="3", $c4BoundaryInRow="1")
+
+  UpdateElementStyle(admin, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(operator, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(jenkins, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(monetiqueEye, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(ansible, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(remoteNode, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(prometheus, $bgColor="white", $fontColor="black", $borderColor="black")
+  UpdateElementStyle(elk, $bgColor="white", $fontColor="black", $borderColor="black")
+
+  UpdateRelStyle(admin, monetiqueEye, $textColor="black", $lineColor="black")
+  UpdateRelStyle(operator, monetiqueEye, $textColor="black", $lineColor="black")
+  UpdateRelStyle(jenkins, monetiqueEye, $textColor="black", $lineColor="black")
+  UpdateRelStyle(monetiqueEye, ansible, $textColor="black", $lineColor="black", $offsetX="-20", $offsetY="-10")
+  UpdateRelStyle(ansible, remoteNode, $textColor="black", $lineColor="black", $offsetY="-15")
+  UpdateRelStyle(remoteNode, prometheus, $textColor="black", $lineColor="black")
+  UpdateRelStyle(remoteNode, elk, $textColor="black", $lineColor="black")
+  UpdateRelStyle(monetiqueEye, prometheus, $textColor="black", $lineColor="black")
+  UpdateRelStyle(monetiqueEye, elk, $textColor="black", $lineColor="black")

@@ -1,0 +1,40 @@
+sequenceDiagram
+    participant U as User Browser
+    participant F as React Frontend
+    participant S as Spring Security
+    participant C as Controller
+    participant SVC as Service Layer
+    participant DB as MySQL
+    participant P as Prometheus
+    participant ES as Elasticsearch
+    participant AI as Groq AI
+
+    U->>F: Interact with UI
+    F->>S: API Request + JWT Token
+    S->>S: Validate JWT
+    S->>S: Check RBAC Permission
+    S->>C: Authorized Request
+    C->>SVC: Business Logic
+    
+    alt Metrics Query
+        SVC->>P: PromQL Query
+        P-->>SVC: Metric Data
+    end
+    
+    alt Log Search
+        SVC->>ES: Elasticsearch Query
+        ES-->>SVC: Log Results
+    end
+    
+    alt AI Chat
+        SVC->>P: Gather Context (CPU, RAM)
+        SVC->>ES: Gather Recent Logs
+        SVC->>DB: Gather Tickets/Anomalies
+        SVC->>AI: Prompt with Context
+        AI-->>SVC: AI Response
+    end
+    
+    SVC->>DB: Persist Data
+    SVC-->>C: Response DTO
+    C-->>F: JSON Response
+    F-->>U: Render UI Update

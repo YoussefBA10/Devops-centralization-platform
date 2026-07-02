@@ -1,0 +1,19 @@
+graph TD
+    Enter([User navigates to Route]) --> IsPublic{Public route?}
+    IsPublic -- Yes --> Render[Render Page]
+    IsPublic -- No  --> HasJWT{JWT in Auth Context?}
+
+    HasJWT -- No  --> GoLogin[Redirect to /login]
+    HasJWT -- Yes --> Expired{Token expired?}
+
+    Expired -- Yes --> Clear[Clear AuthContext] --> GoLogin
+    Expired -- No  --> AdminRoute{Requires ADMIN role?}
+
+    AdminRoute -- No  --> HasEnv{Environment scope present?}
+    AdminRoute -- Yes --> IsAdmin{User is ADMIN?}
+
+    IsAdmin -- Yes --> Render
+    IsAdmin -- No  --> Go403[Redirect to /403 Forbidden]
+
+    HasEnv -- Yes --> Render
+    HasEnv -- No  --> Go403

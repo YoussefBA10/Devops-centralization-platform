@@ -165,6 +165,12 @@ public class AdminPermissionController {
         detail.setIncidentsDelete(dto.getIncidents().isDelete());
 
         detail.setChatbotAccess(dto.isChatbotAccess());
+        detail.setNetworkMonitorView(dto.isNetworkMonitorView());
+        detail.setSecurityDashboardView(dto.isSecurityDashboardView());
+        detail.setAnalyseView(dto.isAnalyseView());
+        detail.setAuditLogView(dto.isAuditLogView());
+        detail.setDocumentationView(dto.isDocumentationView());
+        detail.setOperationalIntelligenceView(dto.isOperationalIntelligenceView());
         
         userPermissionDetailRepository.save(detail);
 
@@ -209,6 +215,12 @@ public class AdminPermissionController {
                 .appDeployment(new UserPermissionDto.DeploymentPermissions(true, true, true, true))
                 .incidents(new UserPermissionDto.IncidentPermissions(true, true, true, true))
                 .chatbotAccess(true)
+                .networkMonitorView(true)
+                .securityDashboardView(true)
+                .analyseView(true)
+                .auditLogView(true)
+                .documentationView(true)
+                .operationalIntelligenceView(true)
                 .build();
     }
 
@@ -241,6 +253,12 @@ public class AdminPermissionController {
                         .delete(detail.isIncidentsDelete())
                         .build())
                 .chatbotAccess(detail.isChatbotAccess())
+                .networkMonitorView(detail.isNetworkMonitorView())
+                .securityDashboardView(detail.isSecurityDashboardView())
+                .analyseView(detail.isAnalyseView())
+                .auditLogView(detail.isAuditLogView())
+                .documentationView(detail.isDocumentationView())
+                .operationalIntelligenceView(detail.isOperationalIntelligenceView())
                 .build();
     }
 }

@@ -19,7 +19,12 @@ public class UserPermissionDto {
     private DeploymentPermissions appDeployment;
     private IncidentPermissions incidents;
     private boolean chatbotAccess;
-
+    private boolean networkMonitorView;
+    private boolean securityDashboardView;
+    private boolean analyseView;
+    private boolean auditLogView;
+    private boolean documentationView;
+    private boolean operationalIntelligenceView;
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

@@ -1,0 +1,13 @@
+flowchart LR
+    S1["1. Checkout\nGit clone + SCM checkout"] -->
+    S2["2. Build and Test\nMaven package + JUnit 5"] -->
+    S3["3. SonarQube Scan\nQuality gate check"] -->
+    S4["4. OWASP Dep-Check\nBlock on High or Critical CVE"] -->
+    S5["5. Kaniko Build and Push\nBuild image and push to Harbor"] -->
+    S6["6. Security Scan Upload\nTrivy results to Security Dashboard"]
+
+    S2 -- "Tests fail" --> Fail([Pipeline aborted])
+    S3 -- "Quality gate fails" --> Fail
+    S4 -- "CVE detected" --> Fail
+    S5 -- "Harbor blocks image" --> Fail
+    S6 --> Done([Deployment event fired to Monetique Eye])

@@ -21,7 +21,12 @@ import {
   Key,
   Terminal,
   Share2,
-  Layers
+  Layers,
+  Settings,
+  Network,
+  BarChart2,
+  FileText,
+  Book
 } from 'lucide-react';
 import api from '../services/api';
 import { Card } from '../components/ui/Card';
@@ -68,6 +73,12 @@ interface PermissionState {
     delete: boolean;
   };
   chatbotAccess: boolean;
+  networkMonitorView: boolean;
+  securityDashboardView: boolean;
+  analyseView: boolean;
+  auditLogView: boolean;
+  documentationView: boolean;
+  operationalIntelligenceView: boolean;
 }
 
 const UserManagementPage: React.FC = () => {
@@ -540,6 +551,40 @@ const UserManagementPage: React.FC = () => {
                       </button>
                     </Card>
                   </div>
+
+                  {/* 5. Additional Features */}
+                  <Card className="p-6 border-white/5 bg-card/30">
+                    <div className="flex items-center gap-3 mb-6">
+                      <Settings className="w-5 h-5 text-indigo-500" />
+                      <div>
+                        <h3 className="font-bold">Additional Features</h3>
+                        <p className="text-xs text-muted-foreground">Access to supplementary platform tools</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      {[
+                        { key: 'networkMonitorView', label: 'Network Monitor', icon: Network },
+                        { key: 'securityDashboardView', label: 'Security Dashboard', icon: Shield },
+                        { key: 'analyseView', label: 'Analyse', icon: BarChart2 },
+                        { key: 'operationalIntelligenceView', label: 'Operational Intelligence', icon: Activity },
+                        { key: 'auditLogView', label: 'Audit Log', icon: FileText },
+                        { key: 'documentationView', label: 'Documentation', icon: Book }
+                      ].map(item => (
+                        <button
+                          key={item.key}
+                          onClick={() => togglePermission(item.key)}
+                          className={`flex flex-col gap-3 p-4 rounded-2xl border transition-all text-left ${
+                            (permissions as any)[item.key]
+                              ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-500'
+                              : 'bg-secondary/30 border-white/5 text-muted-foreground hover:border-white/10'
+                          }`}
+                        >
+                          <item.icon className="w-5 h-5" />
+                          <span className="font-bold text-sm">{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
                 </div>
               )}
             </div>

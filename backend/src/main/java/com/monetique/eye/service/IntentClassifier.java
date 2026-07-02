@@ -105,6 +105,20 @@ public class IntentClassifier {
         return Intent.GENERAL_QUERY;
     }
 
+    public boolean requiresAiSummary(String query) {
+        if (query == null) return false;
+        String lowerQuery = query.toLowerCase();
+        
+        // Keywords that explicitly ask for AI processing or summarization
+        if (lowerQuery.contains("summarize") || lowerQuery.contains("summary") ||
+            lowerQuery.contains("explain") || lowerQuery.contains("analyze") ||
+            lowerQuery.contains("analysis") || lowerQuery.contains("compare") ||
+            lowerQuery.contains("trend") || lowerQuery.matches(".*\\b(why|how)\\b.*")) {
+            return true;
+        }
+        return false;
+    }
+
     public String extractEnvironment(String query) {
         if (query == null) return null;
         String lowerQuery = query.toLowerCase();

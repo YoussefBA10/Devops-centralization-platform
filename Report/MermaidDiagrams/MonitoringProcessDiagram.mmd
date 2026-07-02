@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Unmonitored
+    Unmonitored --> Deploying : Trigger Deployment
+    Deploying --> Configuring : Ansible runs
+    Configuring --> Running : Agents started
+    Running --> SendingMetrics : Node Exporter/cAdvisor
+    Running --> SendingLogs : Filebeat
+    SendingMetrics --> Alerting : Threshold exceeded
+    Alerting --> IncidentCreated : Auto-incident
+    IncidentCreated --> Resolved : Operator fixes
+    Resolved --> Running

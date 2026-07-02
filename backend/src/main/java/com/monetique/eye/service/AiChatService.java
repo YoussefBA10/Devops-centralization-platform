@@ -199,6 +199,15 @@ public class AiChatService {
         // 3. Gather Targeted Context based on Intent
         String context = gatherTargetedContext(intent, query);
 
+        // Check if the user specifically requested an AI summary/analysis
+        boolean requiresAi = intentClassifier.requiresAiSummary(query) || intent == Intent.ANALYTICAL || intent == Intent.GENERAL_QUERY;
+
+        if (!requiresAi) {
+            // Direct data response without AI overhead
+            updateHistory(conversation, history, query, context);
+            return context;
+        }
+
         // 4. Build History String for Prompt
         StringBuilder historySb = new StringBuilder();
         if (!history.isEmpty()) {

@@ -132,11 +132,11 @@ Specifically, we aimed to build a system that:
 The \textbf{Monetique Eye} project was structured to deliver an enterprise-grade observability platform through multiple sequential phases, each building upon the previous:
 
 \begin{description}
-  \item[Phase 1: Backend Foundation \& Security] Establish a secure, scalable data layer with JWT authentication, RBAC, and a minimal 10-entity data model.
+  \item[Phase 1: Backend Foundation \& Security] Establish a secure, scalable data layer with JWT authentication, RBAC, and a comprehensive 28-entity data model.
   \item[Phase 2: Core UI \& Dashboarding] Build a React-based frontend with environment management, real-time monitoring dashboards, and an interactive topology visualization.
   \item[Phase 3: Advanced Observability Features] Implement log aggregation, real-time log search, and the AI-powered « Root Cause Intelligence » engine.
   \item[Phase 4: Operational Intelligence] Create executive dashboards with AI-generated summaries, stability scoring, and operational signal detection.
-  \item[Phase 5: CI/CD Integration \& Hardening] Integrate Jenkins pipelines, implement automated deployment tracking, and harden security.
+  \item[Phase 5: DevSecOps \& CI/CD Integration] Integrate Jenkins, Falco, Vault, Harbor, OWASP, SonarQube, and automated deployment tracking.
 \end{description}
 
 \section*{Chapter Overview}
@@ -304,7 +304,7 @@ To deliver a robust, production-grade platform within the six-month internship, 
 
 \textbf{Objectives:}
 \begin{itemize}
-  \item Design and implement a minimal, clean data model (10 core entities)
+  \item Design and implement a clean, robust data model (28 core entities)
   \item Establish stateless JWT-based authentication
   \item Implement role-based access control (RBAC) at the entity level
   \item Create the foundational APIs for environment and application management
@@ -409,7 +409,7 @@ All data—applications, nodes, metrics, logs, alerts, incidents—are scoped to
 \section{Key Design Principles}
 
 \begin{description}
-  \item[Minimal Data Model] Only 10 core entities to reduce cognitive load and maintenance burden
+  \item[Comprehensive Data Model] 28 core entities covering monitoring, AI digests, security events, and configuration
   \item[No Vendor Lock-in] Reuses existing GitOps, Ansible, Prometheus, and ELK tooling
   \item[Zero-Config Discovery] Monitoring agents auto-register; operators see live data within seconds
   \item[Stateless APIs] No session state; all requests are validated via JWT
@@ -479,7 +479,7 @@ Phase 1 established the platform's data and security layer. The goal was to crea
 
 \subsection{Data Model Design}
 
-We designed exactly 10 core entities, organized by functional domain:
+We designed 28 core entities, organized by functional domain:
 
 \begin{center}
 \begin{tabular}{|l|l|p{4cm}|}
@@ -828,11 +828,11 @@ The platform detects « drift »—deviations from historical log patterns:
 
 This proactive detection catches emerging issues before they cascade into full incidents.
 
-\section{Phase 5: CI/CD Integration \& Hardening}
+\section{Phase 5: DevSecOps, CI/CD Integration \& Hardening}
 
 \subsection{Overview}
 
-Phase 5 focused on integrating with existing CI/CD pipelines and hardening the platform for production deployment.
+Phase 5 focused on integrating with existing CI/CD pipelines, advancing the GitOps workflow, and hardening the platform into a full DevSecOps solution for production deployment.
 
 \subsection{Jenkins Integration}
 
@@ -863,15 +863,15 @@ A « Deployment History » page shows:
 
 This transparency helps operators quickly roll back deployments if needed.
 
-\subsection{Security Hardening}
+\subsection{DevSecOps \& Security Hardening}
 
-Phase 5 additions included:
+Phase 5 additions transformed the platform into a comprehensive DevSecOps solution:
 \begin{itemize}
-  \item \textbf{Audit Logging:} All user actions (create, delete, deploy) are logged to a dedicated audit table
-  \item \textbf{Rate Limiting:} API endpoints are rate-limited to prevent abuse
-  \item \textbf{Input Validation:} All user inputs are validated and sanitized
-  \item \textbf{SQL Injection Prevention:} Parameterized queries used throughout
-  \item \textbf{CORS Configuration:} Cross-origin requests restricted to whitelisted domains
+  \item \textbf{Secrets Management:} Integrated HashiCorp Vault for dynamic secrets, secure key storage, and automated credential rotation via Spring Cloud Vault.
+  \item \textbf{Container Registry:} Deployed Harbor for secure, private image hosting equipped with automated CVE scanning and role-based access.
+  \item \textbf{Runtime Security:} Implemented Falco for deep container threat detection at the kernel/eBPF level, surfacing real-time alerts to the backend.
+  \item \textbf{SCA \& SAST Integration:} Linked OWASP Dependency-Check and SonarQube findings directly into the platform's Security Dashboard for vulnerability intelligence.
+  \item \textbf{Audit Logging:} All user actions (create, delete, deploy) are logged to a dedicated audit table for compliance.
 \end{itemize}
 
 \section{Key Diagrams \& Architecture Visualizations}
@@ -885,7 +885,7 @@ The backend entities and their relationships:
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{documentation/diagram/FULL_BACKEND_CLASS_DIAGRAM.png}
-  \caption{Full Backend Class Diagram: 10 Core Entities and Relationships}
+  \caption{Full Backend Class Diagram: 28 Core Entities and Relationships}
   \label{fig:class_diagram}
 \end{figure}
 
