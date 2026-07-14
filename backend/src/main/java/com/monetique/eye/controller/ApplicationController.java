@@ -202,7 +202,7 @@ public class ApplicationController {
             }
         }
 
-        applicationRepository.save(app);
+        app = applicationRepository.save(app);
 
         // Async deployment
         deploymentService.deployApplicationFull(env.getId(), request, app.getId(), previousName,

@@ -519,6 +519,12 @@ public class DeploymentService {
     public void deployApplicationFull(Long environmentId, com.monetique.eye.dto.DeployRequestDTO request,
             Long applicationId, String previousName, String userId, boolean isNew) {
 
+        if (applicationId == null) {
+            log.error("deployApplicationFull called with null applicationId for environment: {}, app name: {}",
+                    environmentId, request != null ? request.getName() : "unknown");
+            throw new IllegalArgumentException("applicationId must not be null");
+        }
+
         Environment environment = environmentRepository.findById(environmentId)
                 .orElseThrow(() -> new RuntimeException("Environment not found: " + environmentId));
         Application app = applicationRepository.findById(applicationId)
