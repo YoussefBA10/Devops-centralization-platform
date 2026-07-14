@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import jakarta.annotation.PostConstruct;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +39,19 @@ public class ScrapeConfigGeneratorService {
 
     @Value("${monitoring.blackbox-exporter.url:blackbox-exporter:9115}")
     private String blackboxExporterUrl;
+
+    @PostConstruct
+    public void init() {
+        log.info("Initializing ScrapeConfigGeneratorService...");
+        try {
+            String yamlContent = generateYaml();
+            validateYaml(yamlContent);
+            writeAtomically(yamlContent);
+            log.info("Initial scrape config generated.");
+        } catch (Exception e) {
+            log.error("Failed to generate initial Prometheus config: {}", e.getMessage(), e);
+        }
+    }
 
     public void generateAndReload() {
         log.info("Generating Prometheus scrape configuration for network monitor...");
