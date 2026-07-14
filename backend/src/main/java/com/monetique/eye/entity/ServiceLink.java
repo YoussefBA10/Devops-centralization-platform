@@ -3,8 +3,8 @@ package com.monetique.eye.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.GenericGenerator;
-
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @Entity
 @Table(name = "service_link")
@@ -25,10 +25,12 @@ public class ServiceLink {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "source_node_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private ManagedNode sourceNode;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "target_node_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private ManagedNode targetNode;
 
     @Column(name = "target_port", nullable = false)
