@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/prometheus")
+@RequestMapping("/api/v1/prometheus")
 public class PrometheusProxyController {
 
     @Autowired
