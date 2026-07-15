@@ -224,8 +224,9 @@ public class AiChatService {
             }
             
             Long appId = null;
+            final String finalTargetApp = targetApp;
             Application app = applicationRepository.findAll().stream()
-                    .filter(a -> a.getName().equalsIgnoreCase(targetApp))
+                    .filter(a -> a.getName().equalsIgnoreCase(finalTargetApp))
                     .findFirst().orElse(null);
             if (app != null) {
                 appId = app.getId();
