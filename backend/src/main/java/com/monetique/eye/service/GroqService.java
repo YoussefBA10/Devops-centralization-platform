@@ -3,9 +3,11 @@ package com.monetique.eye.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.netty.http.client.HttpClient;
 import java.util.Map;
 import java.util.List;
 
@@ -22,7 +24,9 @@ public class GroqService {
     public GroqService(@Value("${groq.api-key}") String apiKey, 
                        @Value("${groq.model}") String model,
                        WebClient.Builder webClientBuilder) {
+        HttpClient httpClient = HttpClient.newConnection();
         this.webClient = webClientBuilder
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl("https://api.groq.com/openai/v1")
                 .defaultHeader("Authorization", "Bearer " + apiKey)
                 .build();
