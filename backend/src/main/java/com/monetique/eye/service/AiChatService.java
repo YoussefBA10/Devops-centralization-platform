@@ -336,7 +336,7 @@ public class AiChatService {
                     sb.append("The following active alerts/tickets require attention:\n\n");
                     String[] lines = context.split("\n");
                     for (String line : lines) {
-                        if (line.trim().startsWith("- ")) {
+                        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                             sb.append(line.trim()).append("\n");
                         }
                     }
@@ -351,7 +351,7 @@ public class AiChatService {
                     sb.append("Recent matching log entries:\n\n");
                     String[] lines = context.split("\n");
                     for (String line : lines) {
-                        if (line.trim().startsWith("- ")) {
+                        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                             sb.append(line.trim()).append("\n");
                         }
                     }
@@ -362,7 +362,7 @@ public class AiChatService {
                 sb.append("## 🚀 Deployment Status\n\n");
                 String[] depLines = context.split("\n");
                 for (String line : depLines) {
-                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("  - ")) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                         sb.append(line.trim()).append("\n");
                     }
                 }
@@ -372,7 +372,7 @@ public class AiChatService {
                 sb.append("## 🛡️ Security Audit & Posture\n\n");
                 String[] secLines = context.split("\n");
                 for (String line : secLines) {
-                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("  - ") || line.trim().startsWith("    * ")) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                         sb.append(line.trim()).append("\n");
                     }
                 }
@@ -382,7 +382,7 @@ public class AiChatService {
                 sb.append("## 👥 User Access & RBAC Audit\n\n");
                 String[] auditLines = context.split("\n");
                 for (String line : auditLines) {
-                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("  - ")) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                         sb.append(line.trim()).append("\n");
                     }
                 }
@@ -396,7 +396,7 @@ public class AiChatService {
                     sb.append("The following anomalous signals were detected in the system:\n\n");
                     String[] lines = context.split("\n");
                     for (String line : lines) {
-                        if (line.trim().startsWith("- ")) {
+                        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                             sb.append(line.trim()).append("\n");
                         }
                     }
@@ -411,7 +411,7 @@ public class AiChatService {
                     sb.append("Here are the top ranked root cause hypotheses based on active signals:\n\n");
                     String[] lines = context.split("\n");
                     for (String line : lines) {
-                        if (line.trim().startsWith("- ") || line.trim().startsWith("  *") || line.trim().startsWith("    -")) {
+                        if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
                             sb.append(line.trim()).append("\n");
                         }
                     }
@@ -422,7 +422,7 @@ public class AiChatService {
                 sb.append("## 📊 Observability Analytical Report\n\n");
                 String[] analLines = context.split("\n");
                 for (String line : analLines) {
-                    if (line.trim().startsWith("- ") || line.trim().startsWith("  *") || line.trim().startsWith("####")) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("####")) {
                         sb.append(line.trim()).append("\n");
                     }
                 }
@@ -608,7 +608,7 @@ public class AiChatService {
                         if (checkExternalCallsLimit(externalCallsCount, sb)) {
                             ram = prometheusClient.getMemoryUsagePercent(envLabel);
                         }
-                        sb.append(String.format("- Env %s CPU: %.1f%%, RAM: %.1f%%\n", env.getName(), cpu, ram));
+                        sb.append(String.format("- Env %s CPU Usage: %.1f%%, RAM Usage: %.1f%%\n", env.getName(), cpu, ram));
                     }
                 } else {
                     sb.append("Please specify an environment to get accurate metrics.\n");

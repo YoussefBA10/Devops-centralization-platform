@@ -114,12 +114,12 @@ public class IntentClassifier {
             return Intent.DEPLOYMENT_STATUS;
         }
 
-        if (TOPOLOGY_PATTERN.matcher(query).find()) {
-            return Intent.INFRA_TOPOLOGY;
-        }
-
         if (AUDIT_PATTERN.matcher(query).find()) {
             return Intent.USER_AUDIT;
+        }
+
+        if (TOPOLOGY_PATTERN.matcher(query).find()) {
+            return Intent.INFRA_TOPOLOGY;
         }
 
         // Check for ambiguous query based on common short patterns missing context
@@ -178,18 +178,29 @@ public class IntentClassifier {
 
     public List<String> extractEnvironments(String query) {
         if (query == null) return List.of();
-        String[] parts = query.split("(?i)\\b(vs|versus|and|&)\\b");
+        String lowerQuery = query.toLowerCase().replaceAll("[^a-z0-9-_ ]", "");
         List<String> results = new ArrayList<>();
-        for (String part : parts) {
-            String matched = extractSingleEnvironment(part);
-            if (matched != null && !results.contains(matched)) {
-                results.add(matched);
+        try {
+            List<Environment> envs = new ArrayList<>(environmentRepository.findAll());
+            envs.sort((e1, e2) -> Integer.compare(e2.getName().length(), e1.getName().length()));
+            for (Environment env : envs) {
+                String envName = env.getName().toLowerCase();
+                if (lowerQuery.contains(envName) && !results.contains(env.getName())) {
+                    results.add(env.getName());
+                }
             }
+        } catch (Exception e) {
+            // fallback
         }
         if (results.isEmpty()) {
-            String matched = extractSingleEnvironment(query);
-            if (matched != null) {
-                results.add(matched);
+            if (lowerQuery.contains("production") || lowerQuery.contains("prod")) {
+                results.add("production");
+            }
+            if (lowerQuery.contains("staging") || lowerQuery.contains("stage")) {
+                results.add("staging");
+            }
+            if (lowerQuery.contains("dev")) {
+                results.add("development");
             }
         }
         return results;
@@ -256,19 +267,25 @@ public class IntentClassifier {
 
     public List<String> extractApplications(String query) {
         if (query == null) return List.of();
-        String[] parts = query.split("(?i)\\b(vs|versus|and|&)\\b");
+        String lowerQuery = query.toLowerCase().replaceAll("[^a-z0-9-_ ]", "");
         List<String> results = new ArrayList<>();
-        for (String part : parts) {
-            String matched = extractSingleApplication(part);
-            if (matched != null && !results.contains(matched)) {
-                results.add(matched);
+        try {
+            List<Application> apps = new ArrayList<>(applicationRepository.findAll());
+            apps.sort((a1, a2) -> Integer.compare(a2.getName().length(), a1.getName().length()));
+            for (Application app : apps) {
+                String appName = app.getName().toLowerCase();
+                if (lowerQuery.contains(appName) && !results.contains(app.getName())) {
+                    results.add(app.getName());
+                }
             }
+        } catch (Exception e) {
+            // fallback
         }
         if (results.isEmpty()) {
-            String matched = extractSingleApplication(query);
-            if (matched != null) {
-                results.add(matched);
-            }
+            if (lowerQuery.contains("backend")) results.add("backend");
+            if (lowerQuery.contains("frontend")) results.add("frontend");
+            if (lowerQuery.contains("payment")) results.add("payment-service");
+            if (lowerQuery.contains("checkout")) results.add("checkout-service");
         }
         return results;
     }
