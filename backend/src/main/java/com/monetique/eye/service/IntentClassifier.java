@@ -7,10 +7,16 @@ import com.monetique.eye.entity.Application;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.Collections;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 @Component
 public class IntentClassifier {
+
+    public record ResolvedContext(String environment, String application) {}
 
     private static final Pattern ACTION_PATTERN = Pattern.compile("(?i)\\b(restart|deploy|silence|acknowledge|resolve|create ticket|add node)\\b");
     private static final Pattern SECURITY_PATTERN = Pattern.compile("(?i)\\b(security|cve|vulnerability|falco|dependency-check|scan|suspicious|posture)\\b");
@@ -21,6 +27,8 @@ public class IntentClassifier {
     private static final Pattern TOPOLOGY_PATTERN = Pattern.compile("(?i)\\b(topology|nodes?|online|containerized|standalone|running on|unreachable|environment|infra|infrastructure|cluster|health|healthy|status)\\b");
     private static final Pattern AUDIT_PATTERN = Pattern.compile("(?i)\\b(access|permissions?|audit|rbac|who|users?|roles?)\\b");
     private static final Pattern ANALYTICAL_PATTERN = Pattern.compile("(?i)\\b(compare|trend|least stable|most resources|improving)\\b");
+    private static final Pattern ANOMALY_PATTERN = Pattern.compile("(?i)\\b(anomal|unusual|abnormal|spike|outlier|deviation|strange behavior)\\b");
+    private static final Pattern ROOT_CAUSE_PATTERN = Pattern.compile("(?i)\\b(why|root cause|caused|what caused|reason for|because of)\\b");
     
     private static final Pattern OUT_OF_SCOPE_PATTERN = Pattern.compile("(?i)\\b(weather|joke|fix my code|python script|write code)\\b");
     private static final Pattern CONVERSATIONAL_PATTERN = Pattern.compile("(?i)\\b(hello|hi|hey|greetings|good morning|good afternoon|good evening|who are you|what is your name|help|commands|features|how to use|what can you do)\\b");
@@ -34,6 +42,10 @@ public class IntentClassifier {
     }
 
     public Intent classifyIntent(String query) {
+        return classifyIntent(query, null);
+    }
+
+    public Intent classifyIntent(String query, List<Map<String, String>> history) {
         if (query == null || query.isBlank()) {
             return Intent.AMBIGUOUS_CLARIFY;
         }
@@ -48,10 +60,15 @@ public class IntentClassifier {
 
         Intent baseIntent = determineBaseIntent(query);
 
-        // If it requires environment/app but both are missing, clarify
+        // If it requires environment/app but both are missing, clarify (attempt to resolve from history first)
         if (baseIntent == Intent.METRIC_QUERY || baseIntent == Intent.LOG_SEARCH || baseIntent == Intent.ACTION_REQUEST) {
             String env = extractEnvironment(query);
             String app = extractApplication(query);
+            if (env == null && app == null && history != null) {
+                ResolvedContext resolved = resolveFromHistory(query, history);
+                env = resolved.environment();
+                app = resolved.application();
+            }
             if (env == null && app == null) {
                 return Intent.AMBIGUOUS_CLARIFY;
             }
@@ -65,8 +82,24 @@ public class IntentClassifier {
             return Intent.ACTION_REQUEST;
         }
 
+        if (ROOT_CAUSE_PATTERN.matcher(query).find()) {
+            return Intent.ROOT_CAUSE_QUERY;
+        }
+
+        if (ANOMALY_PATTERN.matcher(query).find()) {
+            return Intent.ANOMALY_QUERY;
+        }
+
+        if (ANALYTICAL_PATTERN.matcher(query).find()) {
+            return Intent.ANALYTICAL;
+        }
+
         if (SECURITY_PATTERN.matcher(query).find()) {
             return Intent.SECURITY_QUERY;
+        }
+
+        if (INCIDENT_PATTERN.matcher(query).find()) {
+            return Intent.INCIDENT_SUMMARY;
         }
 
         if (METRIC_PATTERN.matcher(query).find()) {
@@ -75,10 +108,6 @@ public class IntentClassifier {
 
         if (LOG_PATTERN.matcher(query).find()) {
             return Intent.LOG_SEARCH;
-        }
-
-        if (INCIDENT_PATTERN.matcher(query).find()) {
-            return Intent.INCIDENT_SUMMARY;
         }
 
         if (DEPLOYMENT_PATTERN.matcher(query).find()) {
@@ -93,16 +122,39 @@ public class IntentClassifier {
             return Intent.USER_AUDIT;
         }
 
-        if (ANALYTICAL_PATTERN.matcher(query).find()) {
-            return Intent.ANALYTICAL;
-        }
-
         // Check for ambiguous query based on common short patterns missing context
         if (query.matches("(?i)^(what's the cpu usage\\??|show me the errors\\??|restart the app\\??|is everything okay\\??)$")) {
             return Intent.AMBIGUOUS_CLARIFY;
         }
 
         return Intent.GENERAL_QUERY;
+    }
+
+    public ResolvedContext resolveFromHistory(String query, List<Map<String, String>> history) {
+        String env = extractEnvironment(query);
+        String app = extractApplication(query);
+
+        if (history != null && (env == null || app == null)) {
+            // Scan last 6 messages (3 turns of conversation)
+            int limit = 6;
+            int start = Math.max(0, history.size() - limit);
+            for (int i = history.size() - 1; i >= start; i--) {
+                Map<String, String> msg = history.get(i);
+                String content = msg.get("content");
+                if (content != null && !content.isBlank()) {
+                    if (env == null) {
+                        env = extractEnvironment(content);
+                    }
+                    if (app == null) {
+                        app = extractApplication(content);
+                    }
+                }
+                if (env != null && app != null) {
+                    break;
+                }
+            }
+        }
+        return new ResolvedContext(env, app);
     }
 
     public boolean requiresAiSummary(String query) {
@@ -120,6 +172,30 @@ public class IntentClassifier {
     }
 
     public String extractEnvironment(String query) {
+        List<String> envs = extractEnvironments(query);
+        return envs.isEmpty() ? null : envs.get(0);
+    }
+
+    public List<String> extractEnvironments(String query) {
+        if (query == null) return List.of();
+        String[] parts = query.split("(?i)\\b(vs|versus|and|&)\\b");
+        List<String> results = new ArrayList<>();
+        for (String part : parts) {
+            String matched = extractSingleEnvironment(part);
+            if (matched != null && !results.contains(matched)) {
+                results.add(matched);
+            }
+        }
+        if (results.isEmpty()) {
+            String matched = extractSingleEnvironment(query);
+            if (matched != null) {
+                results.add(matched);
+            }
+        }
+        return results;
+    }
+
+    private String extractSingleEnvironment(String query) {
         if (query == null) return null;
         String lowerQuery = query.toLowerCase().replaceAll("[^a-z0-9-_ ]", "");
         
@@ -174,6 +250,30 @@ public class IntentClassifier {
     }
 
     public String extractApplication(String query) {
+        List<String> apps = extractApplications(query);
+        return apps.isEmpty() ? null : apps.get(0);
+    }
+
+    public List<String> extractApplications(String query) {
+        if (query == null) return List.of();
+        String[] parts = query.split("(?i)\\b(vs|versus|and|&)\\b");
+        List<String> results = new ArrayList<>();
+        for (String part : parts) {
+            String matched = extractSingleApplication(part);
+            if (matched != null && !results.contains(matched)) {
+                results.add(matched);
+            }
+        }
+        if (results.isEmpty()) {
+            String matched = extractSingleApplication(query);
+            if (matched != null) {
+                results.add(matched);
+            }
+        }
+        return results;
+    }
+
+    private String extractSingleApplication(String query) {
         if (query == null) return null;
         String lowerQuery = query.toLowerCase().replaceAll("[^a-z0-9-_ ]", "");
         

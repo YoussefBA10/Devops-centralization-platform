@@ -21,6 +21,7 @@ import com.monetique.eye.security.service.SecurityReportService;
 import com.monetique.eye.security.entity.enums.VulnerabilityStatus;
 import com.monetique.eye.entity.ManagedNode;
 import com.monetique.eye.entity.ActivityLog;
+import com.monetique.eye.repository.IncidentRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,6 +51,9 @@ public class AiChatService {
     private final PrometheusClient prometheusClient;
     private final ElasticsearchLogService esLogService;
     private final ConversationRepository conversationRepository;
+    private final DeploymentService deploymentService;
+    private final IncidentRepository incidentRepository;
+    private final RootCauseIntelligenceService rootCauseIntelligenceService;
     private final ObjectMapper objectMapper;
     
     // In-memory state management for action confirmations
@@ -69,6 +74,9 @@ public class AiChatService {
                         PrometheusClient prometheusClient,
                         ElasticsearchLogService esLogService,
                         ConversationRepository conversationRepository,
+                        DeploymentService deploymentService,
+                        IncidentRepository incidentRepository,
+                        RootCauseIntelligenceService rootCauseIntelligenceService,
                         ObjectMapper objectMapper) {
         this.groqService = groqService;
         this.intentClassifier = intentClassifier;
@@ -85,6 +93,9 @@ public class AiChatService {
         this.prometheusClient = prometheusClient;
         this.esLogService = esLogService;
         this.conversationRepository = conversationRepository;
+        this.deploymentService = deploymentService;
+        this.incidentRepository = incidentRepository;
+        this.rootCauseIntelligenceService = rootCauseIntelligenceService;
         this.objectMapper = objectMapper;
     }
 
@@ -124,9 +135,24 @@ public class AiChatService {
         if (pendingAction != null && !pendingAction.isExpired()) {
             if (query.trim().equalsIgnoreCase("yes") || query.toLowerCase().contains("confirm")) {
                 pendingActions.remove(activeConversationId);
-                // Execute actual action (mocked for now, needs actual service call)
-                String result = "Action " + pendingAction.getActionType() + " executed successfully for " + 
-                                pendingAction.getTargetApp() + " on " + pendingAction.getTargetEnv() + ".";
+                String result;
+                Application app = null;
+                if (pendingAction.getApplicationId() != null) {
+                    app = applicationRepository.findById(pendingAction.getApplicationId()).orElse(null);
+                }
+                if (app == null && pendingAction.getTargetApp() != null) {
+                    app = applicationRepository.findAll().stream()
+                            .filter(a -> a.getName().equalsIgnoreCase(pendingAction.getTargetApp()))
+                            .findFirst().orElse(null);
+                }
+                
+                if (app != null) {
+                    deploymentService.restartApplicationFull(app.getId());
+                    result = "✅ Restart action initiated successfully for application **" + app.getName() + 
+                             "** in the **" + pendingAction.getTargetEnv() + "** environment. Check deployment logs for progress.";
+                } else {
+                    result = "⚠️ Could not execute action: Application '" + pendingAction.getTargetApp() + "' not found.";
+                }
                 updateHistory(conversation, history, query, result);
                 return result;
             } else if (query.trim().equalsIgnoreCase("no") || query.toLowerCase().contains("cancel")) {
@@ -140,7 +166,7 @@ public class AiChatService {
         }
 
         // 2. Classify Intent
-        Intent intent = intentClassifier.classifyIntent(query);
+        Intent intent = intentClassifier.classifyIntent(query, history);
         
         // Handle explicit fallbacks
         if (intent == Intent.OUT_OF_SCOPE) {
@@ -179,25 +205,41 @@ public class AiChatService {
             return responseText;
         }
         
+        // Extract targets with contextual resolution
+        String targetEnv = intentClassifier.extractEnvironment(query);
+        String targetApp = intentClassifier.extractApplication(query);
+        
+        if (targetEnv == null || targetApp == null) {
+            IntentClassifier.ResolvedContext resolved = intentClassifier.resolveFromHistory(query, history);
+            if (targetEnv == null) targetEnv = resolved.environment();
+            if (targetApp == null) targetApp = resolved.application();
+        }
+        
         // Handle Actions
         if (intent == Intent.ACTION_REQUEST) {
-            String targetApp = intentClassifier.extractApplication(query);
-            String targetEnv = intentClassifier.extractEnvironment(query);
-            
             if (targetApp == null || targetEnv == null) {
                 String fallback = "To perform an action, I need both the target Application and Environment. Could you clarify?";
                 updateHistory(conversation, history, query, fallback);
                 return fallback;
             }
             
-            pendingActions.put(activeConversationId, new PendingAction("RESTART", targetApp, targetEnv));
+            Long appId = null;
+            Application app = applicationRepository.findAll().stream()
+                    .filter(a -> a.getName().equalsIgnoreCase(targetApp))
+                    .findFirst().orElse(null);
+            if (app != null) {
+                appId = app.getId();
+            }
+            
+            pendingActions.put(activeConversationId, new PendingAction("RESTART", targetApp, targetEnv, appId));
             String response = "You have requested to perform an action on the **" + targetApp + "** application in the **" + targetEnv + "** environment. Please reply with 'Yes' to confirm execution.";
             updateHistory(conversation, history, query, response);
             return response;
         }
 
-        // 3. Gather Targeted Context based on Intent
-        String context = gatherTargetedContext(intent, query);
+        // 3. Gather Targeted Context based on Intent with Call Guardrail
+        AtomicInteger externalCallsCount = new AtomicInteger(0);
+        String context = gatherTargetedContext(intent, query, targetEnv, targetApp, externalCallsCount);
 
         // Always use the AI to generate a presentable summary and response from the gathered context
 
@@ -207,6 +249,16 @@ public class AiChatService {
             historySb.append("\nPREVIOUS CONVERSATION HISTORY:\n");
             for (Map<String, String> msg : history.stream().skip(Math.max(0, history.size() - 6)).collect(Collectors.toList())) {
                 historySb.append(String.format("%s: %s\n", msg.get("role").toUpperCase(), msg.get("content")));
+            }
+        }
+
+        // Build Role Instruction
+        String roleInstruction = "";
+        if (user != null && user.getRole() != null) {
+            if (user.getRole() == com.monetique.eye.entity.enums.Role.ADMIN) {
+                roleInstruction = "- The operator is an Administrator/SRE. Include technical details, diagnostic instructions, and potential terminal commands or actions where useful.\n";
+            } else {
+                roleInstruction = "- The operator is a standard User/Manager. Translate technical jargon into clear, plain business language.\n";
             }
         }
 
@@ -225,7 +277,7 @@ public class AiChatService {
                 
                 INSTRUCTIONS:
                 - Provide a professional executive-level summary answering the user's question.
-                - Start with a brief 1-2 sentence status overview (e.g., "Your Demo-cluster environment is healthy with no critical issues detected.").
+                %s- Start with a brief 1-2 sentence status overview (e.g., "Your Demo-cluster environment is healthy with no critical issues detected.").
                 - Then present the key findings using **bold** labels and bullet points.
                 - Highlight any warnings, errors, or risks with ⚠️ markers and explain what they mean.
                 - If everything is healthy, explicitly confirm that with ✅.
@@ -233,7 +285,9 @@ public class AiChatService {
                 - Use markdown formatting: **bold** for labels, bullet points for lists, `code` for technical values.
                 - Keep the response concise but informative (3-8 sentences max).
                 - Do NOT just repeat the raw data — interpret it and provide actionable insights.
-                """, intent.name(), context, historySb.toString(), query);
+                - If data for part of the question is missing, say so explicitly rather than omitting it silently.
+                - Never fabricate metrics or statistics. If no data is available, say 'No data available'.
+                """, intent.name(), context, historySb.toString(), query, roleInstruction);
 
         // 6. Call Groq
         String response = groqService.generateSummary(prompt);
@@ -267,107 +321,219 @@ public class AiChatService {
     private String generateLocalSummary(Intent intent, String query, String context) {
         StringBuilder sb = new StringBuilder();
         
-        // Extract key data points from context for summary generation
+        sb.append("*Note: The AI summarization service is currently busy. Below is the structured local status retrieved for your request:* \n\n");
+        
         boolean hasErrors = context.contains("[ERROR]");
-        boolean hasWarnings = context.contains("[WARN]") || context.contains("warnings detected");
-        boolean hasNoIssues = context.contains("No significant errors") || context.contains("No recent logs found");
-        
-        // Extract CPU/RAM if present
-        String cpuValue = extractMetricValue(context, "CPU Usage");
-        String ramValue = extractMetricValue(context, "RAM Usage");
-        
-        // Extract environment name
-        String envName = extractFieldValue(context, "Env:");
-        
-        // Count errors and warnings
-        String errorCountStr = extractBetween(context, "errors and", "warnings detected");
-        String warningCountStr = extractBetween(context, "and", "warnings detected");
         int errorCount = 0;
-        int warningCount = 0;
-        try {
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+) errors? and (\\d+) warnings?").matcher(context);
-            if (m.find()) {
-                errorCount = Integer.parseInt(m.group(1));
-                warningCount = Integer.parseInt(m.group(2));
-            }
-        } catch (Exception ignored) {}
         
-        // Build status overview
-        sb.append("*Note: The AI summarization service is currently busy. Below is a structured local summary of your infrastructure:* \n\n");
-        sb.append("## 📋 Status Summary");
-        if (envName != null) {
-            sb.append(" — ").append(envName);
-        }
-        sb.append("\n\n");
-        
-        // Health assessment
-        if (hasErrors || errorCount > 0) {
-            sb.append("⚠️ **Warning**: Issues detected in your environment that require attention.\n\n");
-        } else if (hasNoIssues) {
-            sb.append("✅ **All Clear**: Your environment appears healthy with no critical issues detected.\n\n");
-        } else {
-            sb.append("ℹ️ **Status**: Environment is operational.\n\n");
-        }
-        
-        // Metrics summary
-        if (cpuValue != null || ramValue != null) {
-            sb.append("### 📊 Resource Utilization\n");
-            if (cpuValue != null) {
-                double cpu = 0;
-                try { cpu = Double.parseDouble(cpuValue.replace("%", "")); } catch (Exception e) {}
-                String cpuStatus = cpu > 80 ? "🔴 Critical" : cpu > 60 ? "🟡 Elevated" : "🟢 Normal";
-                sb.append(String.format("- **CPU**: `%s` — %s\n", cpuValue, cpuStatus));
-            }
-            if (ramValue != null) {
-                double ram = 0;
-                try { ram = Double.parseDouble(ramValue.replace("%", "")); } catch (Exception e) {}
-                String ramStatus = ram > 85 ? "🔴 Critical" : ram > 70 ? "🟡 Elevated" : "🟢 Normal";
-                sb.append(String.format("- **RAM**: `%s` — %s\n", ramValue, ramStatus));
-            }
-            sb.append("\n");
-        }
-        
-        // Error/Warning summary
-        if (errorCount > 0 || warningCount > 0) {
-            sb.append("### ⚠️ Issues Detected\n");
-            sb.append(String.format("- **%d error(s)** and **%d warning(s)** found in recent logs.\n", errorCount, warningCount));
-            
-            // Extract specific error summaries from context
-            String[] lines = context.split("\n");
-            int issueCount = 0;
-            for (String line : lines) {
-                if ((line.contains("[ERROR]") || line.contains("[WARN]")) && issueCount < 3) {
-                    String cleaned = line.replaceAll("^[-*\\s]+", "").trim();
-                    if (cleaned.length() > 150) cleaned = cleaned.substring(0, 147) + "...";
-                    sb.append(String.format("  - %s\n", cleaned));
-                    issueCount++;
+        switch (intent) {
+            case INCIDENT_SUMMARY:
+                sb.append("## 🚨 Active Incidents & Alerts\n\n");
+                if (context.contains("No active firing alerts")) {
+                    sb.append("✅ **All Clear**: No active firing alerts or incidents are currently reported on the system.\n");
+                } else {
+                    sb.append("The following active alerts/tickets require attention:\n\n");
+                    String[] lines = context.split("\n");
+                    for (String line : lines) {
+                        if (line.trim().startsWith("- ")) {
+                            sb.append(line.trim()).append("\n");
+                        }
+                    }
                 }
-            }
-            sb.append("\n");
-        } else if (hasNoIssues) {
-            sb.append("### ✅ Logs & Alerts\n");
-            sb.append("- No errors or warnings detected in recent logs.\n\n");
-        }
-        
-        // Topology info
-        if (context.contains("Managed Nodes:") || context.contains("Deployed Applications:")) {
-            sb.append("### 🏗️ Infrastructure\n");
-            String[] lines = context.split("\n");
-            for (String line : lines) {
-                if (line.contains("Managed Nodes:") || line.contains("Deployed Applications:")) {
-                    sb.append("- ").append(line.replaceAll("^[-*\\s]+", "").trim()).append("\n");
+                break;
+                
+            case LOG_SEARCH:
+                sb.append("## 📝 Log Search Results\n\n");
+                if (context.contains("No recent logs found")) {
+                    sb.append("ℹ️ No matching log entries were found for your search query.\n");
+                } else {
+                    sb.append("Recent matching log entries:\n\n");
+                    String[] lines = context.split("\n");
+                    for (String line : lines) {
+                        if (line.trim().startsWith("- ")) {
+                            sb.append(line.trim()).append("\n");
+                        }
+                    }
                 }
-                if (line.trim().startsWith("* ") || (line.contains("Role:") || line.contains("Status:"))) {
-                    String cleaned = line.replaceAll("^[\\s*]+", "").trim();
-                    sb.append("  - ").append(cleaned).append("\n");
+                break;
+                
+            case DEPLOYMENT_STATUS:
+                sb.append("## 🚀 Deployment Status\n\n");
+                String[] depLines = context.split("\n");
+                for (String line : depLines) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("  - ")) {
+                        sb.append(line.trim()).append("\n");
+                    }
                 }
-            }
-            sb.append("\n");
+                break;
+                
+            case SECURITY_QUERY:
+                sb.append("## 🛡️ Security Audit & Posture\n\n");
+                String[] secLines = context.split("\n");
+                for (String line : secLines) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("  - ") || line.trim().startsWith("    * ")) {
+                        sb.append(line.trim()).append("\n");
+                    }
+                }
+                break;
+                
+            case USER_AUDIT:
+                sb.append("## 👥 User Access & RBAC Audit\n\n");
+                String[] auditLines = context.split("\n");
+                for (String line : auditLines) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("* ") || line.trim().startsWith("  - ")) {
+                        sb.append(line.trim()).append("\n");
+                    }
+                }
+                break;
+
+            case ANOMALY_QUERY:
+                sb.append("## 🔍 Statistical Anomalies & Unusual Behavior\n\n");
+                if (context.contains("No system anomalies")) {
+                    sb.append("✅ **All Clear**: No significant resource or log-volume anomalies detected.\n");
+                } else {
+                    sb.append("The following anomalous signals were detected in the system:\n\n");
+                    String[] lines = context.split("\n");
+                    for (String line : lines) {
+                        if (line.trim().startsWith("- ")) {
+                            sb.append(line.trim()).append("\n");
+                        }
+                    }
+                }
+                break;
+                
+            case ROOT_CAUSE_QUERY:
+                sb.append("## 🕵️ Root Cause Intelligence Analysis\n\n");
+                if (context.contains("No clear root causes")) {
+                    sb.append("ℹ️ Rule correlation was unable to isolate a specific single root cause category. Check active alerts.\n");
+                } else {
+                    sb.append("Here are the top ranked root cause hypotheses based on active signals:\n\n");
+                    String[] lines = context.split("\n");
+                    for (String line : lines) {
+                        if (line.trim().startsWith("- ") || line.trim().startsWith("  *") || line.trim().startsWith("    -")) {
+                            sb.append(line.trim()).append("\n");
+                        }
+                    }
+                }
+                break;
+                
+            case ANALYTICAL:
+                sb.append("## 📊 Observability Analytical Report\n\n");
+                String[] analLines = context.split("\n");
+                for (String line : analLines) {
+                    if (line.trim().startsWith("- ") || line.trim().startsWith("  *") || line.trim().startsWith("####")) {
+                        sb.append(line.trim()).append("\n");
+                    }
+                }
+                break;
+
+            case METRIC_QUERY:
+            case INFRA_TOPOLOGY:
+            case GENERAL_QUERY:
+            default:
+                boolean hasWarnings = context.contains("[WARN]") || context.contains("warnings detected");
+                boolean hasNoIssues = context.contains("No significant errors") || context.contains("No recent logs found") || context.contains("No active firing alerts");
+                
+                // Extract CPU/RAM if present
+                String cpuValue = extractMetricValue(context, "CPU Usage");
+                String ramValue = extractMetricValue(context, "RAM Usage");
+                
+                // Extract environment name
+                String envName = extractFieldValue(context, "Env:");
+                
+                // Count errors and warnings
+                int warningCount = 0;
+                try {
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+) errors? and (\\d+) warnings?").matcher(context);
+                    if (m.find()) {
+                        errorCount = Integer.parseInt(m.group(1));
+                        warningCount = Integer.parseInt(m.group(2));
+                    }
+                } catch (Exception ignored) {}
+                
+                // Build status overview
+                sb.append("## 📋 Status Summary");
+                if (envName != null) {
+                    sb.append(" — ").append(envName);
+                }
+                sb.append("\n\n");
+                
+                // Health assessment
+                if (hasErrors || errorCount > 0) {
+                    sb.append("⚠️ **Warning**: Issues detected in your environment that require attention.\n\n");
+                } else if (hasNoIssues || (!hasErrors && errorCount == 0)) {
+                    sb.append("✅ **All Clear**: Your environment appears healthy with no critical issues detected.\n\n");
+                } else {
+                    sb.append("ℹ️ **Status**: Environment is operational.\n\n");
+                }
+                
+                // Metrics summary
+                if (cpuValue != null || ramValue != null) {
+                    sb.append("### 📊 Resource Utilization\n");
+                    if (cpuValue != null) {
+                        double cpu = 0;
+                        try { cpu = Double.parseDouble(cpuValue.replace("%", "")); } catch (Exception e) {}
+                        String cpuStatus = cpu > 80 ? "🔴 Critical" : cpu > 60 ? "🟡 Elevated" : "🟢 Normal";
+                        sb.append(String.format("- **CPU**: `%s` — %s\n", cpuValue, cpuStatus));
+                    }
+                    if (ramValue != null) {
+                        double ram = 0;
+                        try { ram = Double.parseDouble(ramValue.replace("%", "")); } catch (Exception e) {}
+                        String ramStatus = ram > 85 ? "🔴 Critical" : ram > 70 ? "🟡 Elevated" : "🟢 Normal";
+                        sb.append(String.format("- **RAM**: `%s` — %s\n", ramValue, ramStatus));
+                    }
+                    sb.append("\n");
+                }
+                
+                // Error/Warning summary
+                if (errorCount > 0 || warningCount > 0) {
+                    sb.append("### ⚠️ Issues Detected\n");
+                    sb.append(String.format("- **%d error(s)** and **%d warning(s)** found in recent logs.\n", errorCount, warningCount));
+                    
+                    // Extract specific error summaries from context
+                    String[] lines = context.split("\n");
+                    int issueCount = 0;
+                    for (String line : lines) {
+                        if ((line.contains("[ERROR]") || line.contains("[WARN]")) && issueCount < 3) {
+                            String cleaned = line.replaceAll("^[-*\\s]+", "").trim();
+                            if (cleaned.length() > 150) cleaned = cleaned.substring(0, 147) + "...";
+                            sb.append(String.format("  - %s\n", cleaned));
+                            issueCount++;
+                        }
+                    }
+                    sb.append("\n");
+                } else {
+                    sb.append("### ✅ Logs & Alerts\n");
+                    sb.append("- No errors or warnings detected in recent logs.\n\n");
+                }
+                
+                // Topology info
+                if (context.contains("Managed Nodes:") || context.contains("Deployed Applications:") || context.contains("active environments:")) {
+                    sb.append("### 🏗️ Infrastructure\n");
+                    String[] lines = context.split("\n");
+                    for (String line : lines) {
+                        if (line.contains("Managed Nodes:") || line.contains("Deployed Applications:") || line.contains("active environments:")) {
+                            sb.append("- ").append(line.replaceAll("^[-*\\s]+", "").trim()).append("\n");
+                        }
+                        if (line.trim().startsWith("* ") || (line.contains("Role:") || line.contains("Status:"))) {
+                            String cleaned = line.replaceAll("^[\\s*]+", "").trim();
+                            sb.append("  - ").append(cleaned).append("\n");
+                        }
+                    }
+                    sb.append("\n");
+                }
+                break;
         }
         
         // Recommendation
         sb.append("---\n");
-        if (hasErrors || errorCount > 0) {
+        if (intent == Intent.INCIDENT_SUMMARY) {
+            if (context.contains("No active firing alerts")) {
+                sb.append("💡 **Recommendation**: No immediate action required. System is stable.");
+            } else {
+                sb.append("💡 **Recommendation**: Acknowledge the active alerts in Alertmanager and check the service health status.");
+            }
+        } else if (hasErrors || errorCount > 0) {
             sb.append("💡 **Recommendation**: Review the error logs above. Consider checking the affected services for connectivity or configuration issues.");
         } else {
             sb.append("💡 **Recommendation**: No immediate action required. Continue monitoring for any changes.");
@@ -412,10 +578,18 @@ public class AiChatService {
         return null;
     }
 
-    private String gatherTargetedContext(Intent intent, String query) {
+    private boolean checkExternalCallsLimit(AtomicInteger externalCalls, StringBuilder sb) {
+        if (externalCalls.incrementAndGet() > 6) {
+            if (sb.indexOf("⚠️ Query complexity limit reached") == -1) {
+                sb.append("\n⚠️ Query complexity limit reached. Some data sources were skipped.\n");
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private String gatherTargetedContext(Intent intent, String query, String targetEnv, String targetApp, AtomicInteger externalCallsCount) {
         StringBuilder sb = new StringBuilder();
-        String targetEnv = intentClassifier.extractEnvironment(query);
-        String targetApp = intentClassifier.extractApplication(query);
 
         // Only fetch what is needed based on Intent
         switch (intent) {
@@ -425,8 +599,14 @@ public class AiChatService {
                     Environment env = environmentRepository.findAll().stream().filter(e -> e.getName().equalsIgnoreCase(targetEnv)).findFirst().orElse(null);
                     if (env != null) {
                         String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
-                        Double cpu = prometheusClient.getCpuUsage(envLabel);
-                        Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                        Double cpu = 0.0;
+                        Double ram = 0.0;
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            cpu = prometheusClient.getCpuUsage(envLabel);
+                        }
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                        }
                         sb.append(String.format("- Env %s CPU: %.1f%%, RAM: %.1f%%\n", env.getName(), cpu, ram));
                     }
                 } else {
@@ -437,33 +617,201 @@ public class AiChatService {
             case LOG_SEARCH:
                 sb.append("### 📝 Recent Logs\n");
                 if (targetEnv != null) {
-                    List<Map<String, Object>> logs = esLogService.getRecentLogs(targetEnv.toLowerCase(), 10);
-                    if (!logs.isEmpty()) {
-                        for (Map<String, Object> log : logs) {
-                            Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
-                            sb.append(String.format("- **[%s] %s**: %s\n", log.get("severity"), log.get("service_name"), msg));
+                    if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                        List<Map<String, Object>> logs = esLogService.getRecentLogs(targetEnv.toLowerCase(), 10);
+                        if (!logs.isEmpty()) {
+                            for (Map<String, Object> log : logs) {
+                                Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
+                                sb.append(String.format("- **[%s] %s**: %s\n", log.get("severity"), log.get("service_name"), msg));
+                            }
+                        } else {
+                            sb.append("- No recent logs found for environment: " + targetEnv + "\n");
                         }
-                    } else {
-                        sb.append("- No recent logs found for environment: " + targetEnv + "\n");
                     }
                 }
                 break;
                 
             case INCIDENT_SUMMARY:
-                sb.append("### ⚠️ Active Alerts & Incidents\n");
+                sb.append("### ⚠️ Active Incident History & Alerts\n");
+                List<com.monetique.eye.entity.Incident> activeIncidents = incidentRepository.findWithFilters(
+                        com.monetique.eye.entity.enums.IncidentStatus.OPEN, null, null, PageRequest.of(0, 5));
+                if (activeIncidents != null && !activeIncidents.isEmpty()) {
+                    for (com.monetique.eye.entity.Incident inc : activeIncidents) {
+                        sb.append(String.format("- **[Incident #%d] %s** (%s, %s, Created: %s):\n", 
+                                inc.getId(), inc.getTitle(), inc.getSeverity(), inc.getStatus(), inc.getCreatedAt()));
+                        if (inc.getAiSummary() != null && !inc.getAiSummary().isBlank()) {
+                            sb.append("  * AI Summary: ").append(inc.getAiSummary()).append("\n");
+                        }
+                    }
+                } else {
+                    sb.append("- No active incidents found in database.\n");
+                }
+
                 List<Ticket> openTickets = ticketRepository.findAll().stream()
                         .filter(t -> t.getStatus() == TicketStatus.OPEN)
                         .limit(5)
                         .collect(Collectors.toList());
                 if (!openTickets.isEmpty()) {
+                    sb.append("  - Active Alerts:\n");
                     for (Ticket t : openTickets) {
-                        sb.append(String.format("- **[%s] %s**: %s\n", t.getPriority(), t.getTitle(), t.getDescription()));
+                        sb.append(String.format("    * [%s] %s: %s\n", t.getPriority(), t.getTitle(), t.getDescription()));
                     }
-                } else {
+                } else if (activeIncidents == null || activeIncidents.isEmpty()) {
                     sb.append("- ✅ No active firing alerts or incidents.\n");
                 }
                 break;
                 
+            case ANOMALY_QUERY:
+                sb.append("### 🔍 System Anomalies & Unusual Behavior\n");
+                if (targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream()
+                            .filter(e -> e.getName().equalsIgnoreCase(targetEnv))
+                            .findFirst().orElse(null);
+                    if (env != null) {
+                        List<com.monetique.eye.dto.AnomalyResponse> anomalies = anomalyService.getRecentAnomalies(env.getId());
+                        if (anomalies != null && !anomalies.isEmpty()) {
+                            for (var anomaly : anomalies) {
+                                sb.append(String.format("- **[%s] %s** (Node: %s, Type: %s, at %s)\n",
+                                        anomaly.getSeverity(), anomaly.getDescription(), 
+                                        anomaly.getNode() != null ? anomaly.getNode() : "unknown",
+                                        anomaly.getType(), anomaly.getTimestamp()));
+                            }
+                        } else {
+                            sb.append("- ✅ No system anomalies or unusual behaviors detected in the last window.\n");
+                        }
+                    } else {
+                        sb.append("- Environment '").append(targetEnv).append("' not found.\n");
+                    }
+                } else {
+                    sb.append("Please specify an environment to scan for anomalies.\n");
+                }
+                break;
+
+            case ROOT_CAUSE_QUERY:
+                sb.append("### 🕵️ Root Cause Intelligence Analysis\n");
+                if (targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream()
+                            .filter(e -> e.getName().equalsIgnoreCase(targetEnv))
+                            .findFirst().orElse(null);
+                    if (env != null) {
+                        String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            var rules = rootCauseIntelligenceService.analyze(
+                                    envLabel, 
+                                    targetApp, 
+                                    null, 
+                                    java.time.Instant.now().minus(2, java.time.temporal.ChronoUnit.HOURS), 
+                                    java.time.Instant.now());
+                            if (rules != null && !rules.isEmpty()) {
+                                for (var rule : rules) {
+                                    sb.append(String.format("- **%s** (Confidence: %s, Probability: %.1f%%)\n",
+                                            rule.getTitle(), rule.getConfidence(), rule.getProbability()));
+                                    sb.append("  * Description: ").append(rule.getDescription()).append("\n");
+                                    if (rule.getEvidence() != null && !rule.getEvidence().isEmpty()) {
+                                        sb.append("  * Evidence:\n");
+                                        for (String ev : rule.getEvidence()) {
+                                            sb.append("    - ").append(ev).append("\n");
+                                        }
+                                    }
+                                }
+                            } else {
+                                sb.append("- No clear root causes could be classified by rule correlation.\n");
+                            }
+                        }
+                    } else {
+                        sb.append("- Environment '").append(targetEnv).append("' not found.\n");
+                    }
+                } else {
+                    sb.append("Please specify an environment to perform root cause analysis.\n");
+                }
+                break;
+
+            case ANALYTICAL:
+                sb.append("### 📊 Analytical & Comparison Report\n");
+                List<String> envs = intentClassifier.extractEnvironments(query);
+                List<String> apps = intentClassifier.extractApplications(query);
+                
+                boolean isTrendQuery = query.toLowerCase().contains("trend") || query.toLowerCase().contains("over time") || query.toLowerCase().contains("improving") || query.toLowerCase().contains("stable");
+                
+                if (isTrendQuery && targetEnv != null) {
+                    Environment env = environmentRepository.findAll().stream()
+                            .filter(e -> e.getName().equalsIgnoreCase(targetEnv))
+                            .findFirst().orElse(null);
+                    if (env != null) {
+                        String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+                        sb.append(String.format("- **Environment**: %s\n", env.getName()));
+                        
+                        Double cpuNow = 0.0;
+                        Double cpuHourAgo = 0.0;
+                        Double ramNow = 0.0;
+                        Double ramHourAgo = 0.0;
+                        
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            cpuNow = prometheusClient.getCpuUsage(envLabel);
+                        }
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            cpuHourAgo = prometheusClient.getCpuUsage(envLabel, java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS));
+                        }
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            ramNow = prometheusClient.getMemoryUsagePercent(envLabel);
+                        }
+                        if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                            ramHourAgo = prometheusClient.getMemoryUsagePercent(envLabel, java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS));
+                        }
+                        
+                        sb.append(String.format("  * CPU Usage: %.1f%% (Current) vs %.1f%% (1 hour ago)\n", cpuNow, cpuHourAgo));
+                        sb.append(String.format("  * RAM Usage: %.1f%% (Current) vs %.1f%% (1 hour ago)\n", ramNow, ramHourAgo));
+                        
+                        String cpuTrend = cpuNow > cpuHourAgo + 5.0 ? "trending UP (increased load)" : cpuNow < cpuHourAgo - 5.0 ? "trending DOWN (reduced load)" : "STABLE";
+                        String ramTrend = ramNow > ramHourAgo + 5.0 ? "trending UP" : ramNow < ramHourAgo - 5.0 ? "trending DOWN" : "STABLE";
+                        sb.append(String.format("  * Resource Direction: CPU is %s, RAM is %s\n", cpuTrend, ramTrend));
+                    }
+                } else if (envs.size() >= 2) {
+                    sb.append("#### Side-by-Side Environment Comparison\n");
+                    for (String envName : envs) {
+                        Environment env = environmentRepository.findAll().stream()
+                                .filter(e -> e.getName().equalsIgnoreCase(envName))
+                                .findFirst().orElse(null);
+                        if (env != null) {
+                            sb.append(String.format("- **Environment: %s**\n", env.getName()));
+                            Double cpu = 0.0;
+                            Double ram = 0.0;
+                            if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                                String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+                                cpu = prometheusClient.getCpuUsage(envLabel);
+                            }
+                            if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                                String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
+                                ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                            }
+                            sb.append(String.format("  * CPU Usage: %.1f%%\n  * RAM Usage: %.1f%%\n", cpu, ram));
+                            long nodeCount = managedNodeRepository.countByEnvironment(env);
+                            long appCount = applicationRepository.findByEnvironmentId(env.getId()).size();
+                            sb.append(String.format("  * Managed Nodes: %d, Deployed Applications: %d\n", nodeCount, appCount));
+                        }
+                    }
+                } else if (apps.size() >= 2) {
+                    sb.append("#### Side-by-Side Application Comparison\n");
+                    for (String appName : apps) {
+                        Application app = applicationRepository.findAll().stream()
+                                .filter(a -> a.getName().equalsIgnoreCase(appName))
+                                .findFirst().orElse(null);
+                        if (app != null) {
+                            sb.append(String.format("- **Application: %s**\n", app.getName()));
+                            sb.append(String.format("  * Status: %s, Port: %s, Target Node: %s\n", app.getStatus(), app.getPort(), app.getTargetNode()));
+                            try {
+                                var summary = securityReportService.getSummaryForApplication(app.getId());
+                                sb.append(String.format("  * Vulnerabilities: %d critical, %d high\n", summary.getCriticalCount(), summary.getHighCount()));
+                            } catch (Exception e) {
+                                // ignore
+                            }
+                        }
+                    }
+                } else {
+                    sb.append("To run analytical comparison, please specify 'compare <env1> vs <env2>' or 'compare <app1> vs <app2>'.\n");
+                }
+                break;
+
             case SECURITY_QUERY:
                 sb.append("### 🛡️ Security Posture\n");
                 if (targetApp != null) {
@@ -508,9 +856,9 @@ public class AiChatService {
                             sb.append(String.format("  - Total Falco Runtime Alerts (24h): %d\n", totalFalco));
                             
                             var atRiskNodes = attackSurface.getNodes().stream()
-                                    .filter(n -> !"HEALTHY".equals(n.getStatus()))
-                                    .limit(5)
-                                    .toList();
+                                     .filter(n -> !"HEALTHY".equals(n.getStatus()))
+                                     .limit(5)
+                                     .toList();
                             if (!atRiskNodes.isEmpty()) {
                                 sb.append("  - At-Risk Components:\n");
                                 for (var n : atRiskNodes) {
@@ -630,8 +978,14 @@ public class AiChatService {
                         sb.append("\n### 📊 Metrics\n");
                         try {
                             String envLabel = env.getPrometheusLabel() != null ? env.getPrometheusLabel() : env.getName().toLowerCase();
-                            Double cpu = prometheusClient.getCpuUsage(envLabel);
-                            Double ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                            Double cpu = 0.0;
+                            Double ram = 0.0;
+                            if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                                cpu = prometheusClient.getCpuUsage(envLabel);
+                            }
+                            if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                                ram = prometheusClient.getMemoryUsagePercent(envLabel);
+                            }
                             sb.append(String.format("- **CPU Usage**: %.1f%%\n- **RAM Usage**: %.1f%%\n", cpu, ram));
                         } catch (Exception e) {
                             sb.append("- Metrics currently unavailable.\n");
@@ -639,52 +993,68 @@ public class AiChatService {
 
                         sb.append("\n### ⚠️ Log Issues & Warnings\n");
                         try {
-                            java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 20);
-                            if (envLogs != null && !envLogs.isEmpty()) {
-                                long errorCount = 0;
-                                long warnCount = 0;
-                                java.util.List<String> problemSummaries = new java.util.ArrayList<>();
+                            if (checkExternalCallsLimit(externalCallsCount, sb)) {
+                                java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 20);
+                                if (envLogs != null && !envLogs.isEmpty()) {
+                                    long errorCount = 0;
+                                    long warnCount = 0;
+                                    java.util.List<String> problemSummaries = new java.util.ArrayList<>();
 
-                                for (java.util.Map<String, Object> log : envLogs) {
-                                    String severity = log.get("severity") != null ? log.get("severity").toString().toUpperCase() : "INFO";
-                                    Object msgObj = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
-                                    String message = msgObj != null ? msgObj.toString() : "";
-                                    
-                                    boolean isError = severity.contains("ERROR") || severity.contains("ERR") || message.toLowerCase().contains("error") || message.toLowerCase().contains("exception") || message.toLowerCase().contains("fail");
-                                    boolean isWarn = severity.contains("WARN") || message.toLowerCase().contains("warn") || message.toLowerCase().contains("warning");
+                                    for (java.util.Map<String, Object> log : envLogs) {
+                                        String severity = log.get("severity") != null ? log.get("severity").toString().toUpperCase() : "INFO";
+                                        Object msgObj = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
+                                        String message = msgObj != null ? msgObj.toString() : "";
+                                        
+                                        boolean isError = severity.contains("ERROR") || severity.contains("ERR") || message.toLowerCase().contains("error") || message.toLowerCase().contains("exception") || message.toLowerCase().contains("fail");
+                                        boolean isWarn = severity.contains("WARN") || message.toLowerCase().contains("warn") || message.toLowerCase().contains("warning");
 
-                                    if (isError) {
-                                        errorCount++;
-                                        String service = log.get("service_name") != null ? log.get("service_name").toString() : "unknown";
-                                        String brief = cleanLogMessage(message);
-                                        String problem = String.format("- **[ERROR] %s**: %s", service, brief);
-                                        if (!problemSummaries.contains(problem) && problemSummaries.size() < 3) {
-                                            problemSummaries.add(problem);
-                                        }
-                                    } else if (isWarn) {
-                                        warnCount++;
-                                        String service = log.get("service_name") != null ? log.get("service_name").toString() : "unknown";
-                                        String brief = cleanLogMessage(message);
-                                        String problem = String.format("- **[WARN] %s**: %s", service, brief);
-                                        if (!problemSummaries.contains(problem) && problemSummaries.size() < 3) {
-                                            problemSummaries.add(problem);
+                                        if (isError) {
+                                            errorCount++;
+                                            String service = log.get("service_name") != null ? log.get("service_name").toString() : "unknown";
+                                            String brief = cleanLogMessage(message);
+                                            String problem = String.format("- **[ERROR] %s**: %s", service, brief);
+                                            if (!problemSummaries.contains(problem) && problemSummaries.size() < 3) {
+                                                problemSummaries.add(problem);
+                                            }
+                                        } else if (isWarn) {
+                                            warnCount++;
+                                            String service = log.get("service_name") != null ? log.get("service_name").toString() : "unknown";
+                                            String brief = cleanLogMessage(message);
+                                            String problem = String.format("- **[WARN] %s**: %s", service, brief);
+                                            if (!problemSummaries.contains(problem) && problemSummaries.size() < 3) {
+                                                problemSummaries.add(problem);
+                                            }
                                         }
                                     }
-                                }
 
-                                if (errorCount > 0 || warnCount > 0) {
-                                    for (String problem : problemSummaries) {
-                                        sb.append(problem).append("\n");
+                                    if (errorCount > 0 || warnCount > 0) {
+                                        for (String problem : problemSummaries) {
+                                            sb.append(problem).append("\n");
+                                        }
+                                        sb.append(String.format("*(Recent logs analyzed: %d errors and %d warnings detected)*\n", errorCount, warnCount));
+                                    } else {
+                                        sb.append("- ✅ No significant errors or warnings detected in recent logs.\n");
                                     }
-                                    sb.append(String.format("*(Recent logs analyzed: %d errors and %d warnings detected)*\n", errorCount, warnCount));
                                 } else {
-                                    sb.append("- ✅ No significant errors or warnings detected in recent logs.\n");
+                                    sb.append("- No recent logs found to analyze.\n");
                                 }
-                            } else {
-                                sb.append("- No recent logs found to analyze.\n");
                             }
                         } catch (Exception e) {
                             sb.append("- Log search currently unavailable.\n");
+                        }
+
+                        // Merge anomalies into INFRA_TOPOLOGY if they exist
+                        try {
+                            List<com.monetique.eye.dto.AnomalyResponse> anomalies = anomalyService.getRecentAnomalies(env.getId());
+                            if (anomalies != null && !anomalies.isEmpty()) {
+                                sb.append("\n### 🔍 Recent Anomalies in this Environment\n");
+                                for (var anomaly : anomalies) {
+                                    sb.append(String.format("- **[%s] %s** (Type: %s, at %s)\n",
+                                            anomaly.getSeverity(), anomaly.getDescription(), anomaly.getType(), anomaly.getTimestamp()));
+                                }
+                            }
+                        } catch (Exception e) {
+                            // ignore
                         }
                     } else {
                         sb.append(String.format("- Environment '%s' not found.\n", targetEnv));
@@ -732,13 +1102,13 @@ public class AiChatService {
                     }
                 }
                 break;
-
+ 
             default:
                 if (targetEnv != null) {
-                    return gatherTargetedContext(Intent.INFRA_TOPOLOGY, query);
+                    return gatherTargetedContext(Intent.INFRA_TOPOLOGY, query, targetEnv, targetApp, externalCallsCount);
                 }
                 if (targetApp != null) {
-                    return gatherTargetedContext(Intent.SECURITY_QUERY, query);
+                    return gatherTargetedContext(Intent.SECURITY_QUERY, query, targetEnv, targetApp, externalCallsCount);
                 }
                 // Fallback to basic cluster health for general queries
                 sb.append("### 🏥 Cluster Health\n");
