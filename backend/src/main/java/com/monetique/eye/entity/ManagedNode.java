@@ -57,4 +57,25 @@ public class ManagedNode {
     @EqualsAndHashCode.Exclude
     @JsonIgnore
     private Environment environment;
+
+    @OneToMany(mappedBy = "sourceNode", cascade = CascadeType.REMOVE)
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    private java.util.Set<ServiceLink> sourceLinks = new java.util.HashSet<>();
+
+    @OneToMany(mappedBy = "targetNode", cascade = CascadeType.REMOVE)
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    private java.util.Set<ServiceLink> targetLinks = new java.util.HashSet<>();
+
+    @OneToMany(mappedBy = "node", cascade = CascadeType.REMOVE)
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Builder.Default
+    private java.util.Set<NetworkAlertRule> networkAlertRules = new java.util.HashSet<>();
 }
