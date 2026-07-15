@@ -6,7 +6,6 @@ import {
   Send, 
   Bot, 
   User, 
-  Loader2, 
   Maximize2, 
   Minimize2,
   Brain,
