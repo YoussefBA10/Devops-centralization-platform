@@ -1,14 +1,20 @@
 package com.monetique.eye.controller;
 
 import com.monetique.eye.entity.Cluster;
+import com.monetique.eye.entity.User;
+import com.monetique.eye.entity.enums.Role;
 import com.monetique.eye.repository.ClusterRepository;
 import com.monetique.eye.repository.EnvironmentRepository;
 import com.monetique.eye.security.RequiresPermission;
+import com.monetique.eye.service.PermissionService;
+import com.monetique.eye.service.SecurityService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/clusters")
@@ -16,16 +22,40 @@ public class ClusterController {
 
     private final ClusterRepository clusterRepository;
     private final EnvironmentRepository environmentRepository;
+    private final SecurityService securityService;
+    private final PermissionService permissionService;
 
-    public ClusterController(ClusterRepository clusterRepository, EnvironmentRepository environmentRepository) {
+    public ClusterController(ClusterRepository clusterRepository, 
+                             EnvironmentRepository environmentRepository,
+                             SecurityService securityService,
+                             PermissionService permissionService) {
         this.clusterRepository = clusterRepository;
         this.environmentRepository = environmentRepository;
+        this.securityService = securityService;
+        this.permissionService = permissionService;
     }
 
     @GetMapping
     @RequiresPermission("ENV_DEPLOYMENT_VIEW")
     public List<Cluster> getAll() {
-        return clusterRepository.findAll();
+        User currentUser = securityService.getCurrentUser();
+        List<Cluster> allClusters = clusterRepository.findAll();
+        
+        // Admins see all clusters
+        if (currentUser != null && currentUser.getRole() == Role.ADMIN) {
+            return allClusters;
+        }
+        
+        // Regular users see only clusters they have access to
+        if (currentUser != null) {
+            Set<String> allowedIds = permissionService.getAllowedClusterIds(currentUser.getUsername())
+                    .stream().collect(Collectors.toSet());
+            return allClusters.stream()
+                    .filter(c -> allowedIds.contains(String.valueOf(c.getId())))
+                    .collect(Collectors.toList());
+        }
+        
+        return List.of();
     }
 
     @PostMapping
@@ -61,3 +91,4 @@ public class ClusterController {
         return ResponseEntity.ok().build();
     }
 }
+
