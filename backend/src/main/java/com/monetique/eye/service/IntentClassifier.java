@@ -121,14 +121,41 @@ public class IntentClassifier {
 
     public String extractEnvironment(String query) {
         if (query == null) return null;
-        String lowerQuery = query.toLowerCase();
+        String lowerQuery = query.toLowerCase().replaceAll("[^a-z0-9-_ ]", "");
         
         try {
             List<Environment> envs = environmentRepository.findAll();
+            // 1. Exact/Full match check
             for (Environment env : envs) {
-                if (lowerQuery.contains(env.getName().toLowerCase())) {
+                String envName = env.getName().toLowerCase();
+                if (lowerQuery.contains(envName)) {
                     return env.getName();
                 }
+            }
+            
+            // 2. Partial/Word match check (e.g. "demo-cluster" matches "demo-cluster-pre-prod")
+            String[] queryWords = lowerQuery.split("[\\s-_]+");
+            Environment bestMatch = null;
+            int bestScore = 0;
+            for (Environment env : envs) {
+                String envName = env.getName().toLowerCase();
+                int score = 0;
+                for (String word : queryWords) {
+                    if (word.length() >= 4 && envName.contains(word)) {
+                        // Skip matching generic keywords if they aren't the exact env name
+                        if ((word.equals("prod") || word.equals("stage") || word.equals("node") || word.equals("cluster")) && !envName.equals(word)) {
+                            continue;
+                        }
+                        score++;
+                    }
+                }
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = env;
+                }
+            }
+            if (bestMatch != null) {
+                return bestMatch.getName();
             }
         } catch (Exception e) {
             // fallback
@@ -148,14 +175,37 @@ public class IntentClassifier {
 
     public String extractApplication(String query) {
         if (query == null) return null;
-        String lowerQuery = query.toLowerCase();
+        String lowerQuery = query.toLowerCase().replaceAll("[^a-z0-9-_ ]", "");
         
         try {
             List<Application> apps = applicationRepository.findAll();
+            // 1. Exact/Full match check
             for (Application app : apps) {
-                if (lowerQuery.contains(app.getName().toLowerCase())) {
+                String appName = app.getName().toLowerCase();
+                if (lowerQuery.contains(appName)) {
                     return app.getName();
                 }
+            }
+            
+            // 2. Partial match check
+            String[] queryWords = lowerQuery.split("[\\s-_]+");
+            Application bestMatch = null;
+            int bestScore = 0;
+            for (Application app : apps) {
+                String appName = app.getName().toLowerCase();
+                int score = 0;
+                for (String word : queryWords) {
+                    if (word.length() >= 4 && appName.contains(word)) {
+                        score++;
+                    }
+                }
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = app;
+                }
+            }
+            if (bestMatch != null) {
+                return bestMatch.getName();
             }
         } catch (Exception e) {
             // fallback
