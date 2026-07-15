@@ -3,13 +3,13 @@ import {
   Send, 
   Bot, 
   User as UserIcon, 
-  Sparkles, 
   Loader2, 
   MessageSquare,
   Plus,
   History,
   Trash2,
-  Brain
+  Brain,
+  AlertTriangle
 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,7 @@ import ReactMarkdown from 'react-markdown';
 interface Message {
   role: 'assistant' | 'user';
   content: string;
+  timestamp?: string;
 }
 
 interface Conversation {
@@ -37,6 +38,20 @@ const ChatPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isSendingRef = useRef(false);
+
+  const getFormattedTime = () => {
+    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const cleanFallbackMessage = (content: string) => {
+    let cleaned = content;
+    // Remove the top warning note case insensitively
+    cleaned = cleaned.replace(/\*?Note: The AI summarization service is currently busy or rate-limited\..*?retrieved for your request:\*?/is, '');
+    // Remove the bottom retry note case insensitively
+    cleaned = cleaned.replace(/\*?Please try again in a few seconds for an AI-generated summary\.\*?/is, '');
+    return cleaned.trim();
+  };
 
   useEffect(() => {
     fetchHistory();
@@ -58,7 +73,12 @@ const ChatPage: React.FC = () => {
       const res = await api.get(`/chat/${id}`);
       const conv = res.data;
       setCurrentConvId(conv.id);
-      setMessages(JSON.parse(conv.messagesJson));
+      const history: Message[] = JSON.parse(conv.messagesJson);
+      const mappedHistory = history.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp || getFormattedTime()
+      }));
+      setMessages(mappedHistory);
     } catch (err) {
       console.error('Failed to load conversation', err);
     }
@@ -89,11 +109,13 @@ const ChatPage: React.FC = () => {
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || isSendingRef.current) return;
 
+    isSendingRef.current = true;
     const userMessage: Message = {
       role: 'user',
       content: input,
+      timestamp: getFormattedTime()
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -102,13 +124,14 @@ const ChatPage: React.FC = () => {
 
     try {
       const res = await api.post('/chat', { 
-        query: input,
+        query: userMessage.content,
         conversationId: currentConvId 
       });
       
       const assistantMessage: Message = {
         role: 'assistant',
         content: res.data.response,
+        timestamp: getFormattedTime()
       };
       
       setMessages(prev => [...prev, assistantMessage]);
@@ -121,9 +144,11 @@ const ChatPage: React.FC = () => {
        setMessages(prev => [...prev, {
          role: 'assistant',
          content: "I'm sorry, I'm having trouble connecting to the AI brain right now.",
+         timestamp: getFormattedTime()
        }]);
     } finally {
       setLoading(false);
+      isSendingRef.current = false;
     }
   };
 
@@ -197,49 +222,92 @@ const ChatPage: React.FC = () => {
 
         <Card className="flex-1 overflow-hidden flex flex-col mb-6 bg-card/30 backdrop-blur-xl border-white/5">
           <div className="flex-1 overflow-y-auto p-6 space-y-6" ref={scrollRef}>
-            {messages.length === 0 && !loading && (
-              <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-                <Sparkles className="w-12 h-12 text-primary mb-4" />
-                <h3 className="text-xl font-bold">How can I help you today?</h3>
-                <p className="text-sm max-w-sm mt-2">
-                  Ask about deployments, environment health, logs, or metrics.
-                </p>
+            {messages.length === 0 && !loading ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 select-none my-auto">
+                <div className="p-4 bg-[#1a1a1a] rounded-2xl border border-white/5 mb-3 text-slate-400">
+                  <Bot className="w-8 h-8" />
+                </div>
+                <p className="text-sm text-muted-foreground font-medium">Ask me about your infrastructure</p>
               </div>
+            ) : (
+              messages.map((msg, i) => {
+                const isUser = msg.role === 'user';
+                const isFallback = msg.role === 'assistant' && (
+                  msg.content.includes("busy or rate-limited") || 
+                  msg.content.includes("summarization service is currently busy")
+                );
+
+                return (
+                  <div key={i} className={`flex gap-3 items-start ${isUser ? 'flex-row-reverse' : ''}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+                      isUser 
+                        ? 'bg-blue-600/20 border-blue-500/10 text-blue-400' 
+                        : 'bg-[#1a1a1a] border-white/5 text-slate-400'
+                    }`}>
+                      {isUser ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    </div>
+                    
+                    <div className={`p-4 pb-2 rounded-[12px] flex flex-col text-sm leading-relaxed ${
+                      isUser 
+                        ? 'bg-blue-600 text-white max-w-[70%]' 
+                        : `bg-[#1a1a1a] text-white max-w-[70%] border border-white/5 ${isFallback ? 'border-l-4 border-l-amber-500' : ''}`
+                    }`}>
+                      {isFallback && (
+                        <div className="flex items-center gap-1.5 text-xs text-amber-500 font-semibold mb-2 select-none">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Limited response</span>
+                        </div>
+                      )}
+                      
+                      <div className={`mb-1 pr-6 ${isUser ? '' : 'text-slate-100'}`}>
+                        {isUser ? (
+                          msg.content
+                        ) : (
+                          <ReactMarkdown
+                            components={{
+                              strong: (props) => <strong className="font-bold text-white" {...props} />,
+                              em: (props) => <em className="italic text-slate-200" {...props} />,
+                              p: (props) => <p className="mb-2 last:mb-0" {...props} />,
+                              ul: (props) => <ul className="list-disc pl-5 mb-2 space-y-1 text-slate-200" {...props} />,
+                              ol: (props) => <ol className="list-decimal pl-5 mb-2 space-y-1 text-slate-200" {...props} />,
+                              li: (props) => <li className="text-sm" {...props} />,
+                              code: ({ className, children, ...props }) => {
+                                const match = /language-(\w+)/.exec(className || '');
+                                return match ? (
+                                  <pre className="bg-[#0f0f10] p-3 rounded-lg overflow-x-auto text-xs my-2 border border-white/5 font-mono">
+                                    <code className="text-slate-200" {...props}>{children}</code>
+                                  </pre>
+                                ) : (
+                                  <code className="bg-[#0f0f10] px-1.5 py-0.5 rounded text-xs font-mono text-amber-400" {...props}>{children}</code>
+                                );
+                              }
+                            }}
+                          >
+                            {isFallback ? cleanFallbackMessage(msg.content) : msg.content}
+                          </ReactMarkdown>
+                        )}
+                      </div>
+                      
+                      <span className={`text-[10px] self-end mt-1 ${isUser ? 'text-blue-200/70' : 'text-muted-foreground'}`}>
+                        {msg.timestamp || getFormattedTime()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
             )}
             
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`flex gap-4 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-border ${
-                    msg.role === 'user' ? 'bg-secondary' : 'bg-primary/10'
-                  }`}>
-                    {msg.role === 'user' ? <UserIcon className="w-4 h-4" /> : <Bot className="w-4 h-4 text-primary" />}
-                  </div>
-                  <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
-                    msg.role === 'user' 
-                      ? 'bg-primary text-primary-foreground rounded-tr-none' 
-                      : 'bg-secondary/80 border border-border rounded-tl-none prose prose-invert prose-p:leading-relaxed max-w-none'
-                  }`}>
-                    {msg.role === 'assistant' ? (
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    ) : msg.content}
-                  </div>
-                </div>
-              </div>
-            ))}
-            
             {loading && (
-              <div className="flex justify-start">
-                <div className="flex gap-4">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                     <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                  </div>
-                  <div className="p-4 bg-secondary/80 border border-border rounded-2xl rounded-tl-none">
-                     <div className="flex gap-1">
-                       <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce"></span>
-                       <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce delay-75"></span>
-                       <span className="w-1.5 h-1.5 bg-primary/50 rounded-full animate-bounce delay-150"></span>
-                     </div>
+              <div className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-full bg-[#1a1a1a] flex items-center justify-center shrink-0 border border-white/5 text-slate-400">
+                  <Bot className="w-4 h-4" />
+                </div>
+                
+                <div className="p-4 rounded-[12px] bg-[#1a1a1a] text-white max-w-[70%] border border-white/5 flex items-center justify-center min-h-[44px]">
+                  <div className="flex gap-1.5 items-center">
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                   </div>
                 </div>
               </div>
@@ -253,11 +321,11 @@ const ChatPage: React.FC = () => {
                type="text"
                value={input}
                onChange={(e) => setInput(e.target.value)}
-               placeholder="Ask about your infrastructure..."
-               className="flex-1 bg-transparent border-none focus:outline-none text-base placeholder:text-muted-foreground"
+               placeholder={loading ? "Waiting for response..." : "Ask about your infrastructure..."}
+               className="flex-1 bg-transparent border-none focus:outline-none text-base placeholder:text-muted-foreground disabled:opacity-50"
                disabled={loading}
              />
-             <Button type="submit" size="lg" className="h-full rounded-xl px-6" loading={loading} disabled={!input.trim()}>
+             <Button type="submit" size="lg" className="h-full rounded-xl px-6" loading={loading} disabled={!input.trim() || loading}>
                <Send className="w-4 h-4" />
              </Button>
           </div>
