@@ -212,11 +212,11 @@ public class AiChatService {
 
         // 5. Build Prompt
         String prompt = String.format("""
-                You are 'Monetique Eye AI', an advanced infrastructure assistant.
+                You are 'Monetique Eye AI', an advanced enterprise infrastructure and observability assistant.
                 
                 USER INTENT: %s
                 
-                RELEVANT CONTEXT:
+                RELEVANT INFRASTRUCTURE DATA:
                 %s
                 %s
                 
@@ -224,25 +224,24 @@ public class AiChatService {
                 %s
                 
                 INSTRUCTIONS:
-                - Use the provided RELEVANT CONTEXT to answer the query specifically.
-                - Keep responses professional, concise, and enterprise-level.
-                - Use markdown for lists or emphasizing key metrics.
-                - If data is missing from the context, explicitly state that you don't have enough data rather than hallucinating.
+                - Provide a professional executive-level summary answering the user's question.
+                - Start with a brief 1-2 sentence status overview (e.g., "Your Demo-cluster environment is healthy with no critical issues detected.").
+                - Then present the key findings using **bold** labels and bullet points.
+                - Highlight any warnings, errors, or risks with ⚠️ markers and explain what they mean.
+                - If everything is healthy, explicitly confirm that with ✅.
+                - End with a brief recommendation if applicable.
+                - Use markdown formatting: **bold** for labels, bullet points for lists, `code` for technical values.
+                - Keep the response concise but informative (3-8 sentences max).
+                - Do NOT just repeat the raw data — interpret it and provide actionable insights.
                 """, intent.name(), context, historySb.toString(), query);
 
         // 6. Call Groq
         String response = groqService.generateSummary(prompt);
 
-        // Fallback: If Groq failed or was rate limited, we can still present the gathered context
+        // Fallback: If Groq failed or was rate limited, generate a smart local summary
         if (response != null && (response.contains("rate limit reached") || response.contains("unavailable") || response.contains("Error:"))) {
             if (context != null && !context.isBlank()) {
-                response = String.format("""
-                        *Note: The AI summarization service is currently busy or rate-limited. To ensure you aren't blocked, here is the raw infrastructure data retrieved for your request:*
-                        
-                        %s
-                        
-                        *Please try again in a few seconds for an AI-generated summary.*
-                        """, context);
+                response = generateLocalSummary(intent, query, context);
             }
         }
 
@@ -263,6 +262,154 @@ public class AiChatService {
                 // Log error
             }
         }
+    }
+
+    private String generateLocalSummary(Intent intent, String query, String context) {
+        StringBuilder sb = new StringBuilder();
+        
+        // Extract key data points from context for summary generation
+        boolean hasErrors = context.contains("[ERROR]");
+        boolean hasWarnings = context.contains("[WARN]") || context.contains("warnings detected");
+        boolean hasNoIssues = context.contains("No significant errors") || context.contains("No recent logs found");
+        
+        // Extract CPU/RAM if present
+        String cpuValue = extractMetricValue(context, "CPU Usage");
+        String ramValue = extractMetricValue(context, "RAM Usage");
+        
+        // Extract environment name
+        String envName = extractFieldValue(context, "Env:");
+        
+        // Count errors and warnings
+        String errorCountStr = extractBetween(context, "errors and", "warnings detected");
+        String warningCountStr = extractBetween(context, "and", "warnings detected");
+        int errorCount = 0;
+        int warningCount = 0;
+        try {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+) errors? and (\\d+) warnings?").matcher(context);
+            if (m.find()) {
+                errorCount = Integer.parseInt(m.group(1));
+                warningCount = Integer.parseInt(m.group(2));
+            }
+        } catch (Exception ignored) {}
+        
+        // Build status overview
+        sb.append("*Note: The AI summarization service is currently busy. Below is a structured local summary of your infrastructure:* \n\n");
+        sb.append("## 📋 Status Summary");
+        if (envName != null) {
+            sb.append(" — ").append(envName);
+        }
+        sb.append("\n\n");
+        
+        // Health assessment
+        if (hasErrors || errorCount > 0) {
+            sb.append("⚠️ **Warning**: Issues detected in your environment that require attention.\n\n");
+        } else if (hasNoIssues) {
+            sb.append("✅ **All Clear**: Your environment appears healthy with no critical issues detected.\n\n");
+        } else {
+            sb.append("ℹ️ **Status**: Environment is operational.\n\n");
+        }
+        
+        // Metrics summary
+        if (cpuValue != null || ramValue != null) {
+            sb.append("### 📊 Resource Utilization\n");
+            if (cpuValue != null) {
+                double cpu = 0;
+                try { cpu = Double.parseDouble(cpuValue.replace("%", "")); } catch (Exception e) {}
+                String cpuStatus = cpu > 80 ? "🔴 Critical" : cpu > 60 ? "🟡 Elevated" : "🟢 Normal";
+                sb.append(String.format("- **CPU**: `%s` — %s\n", cpuValue, cpuStatus));
+            }
+            if (ramValue != null) {
+                double ram = 0;
+                try { ram = Double.parseDouble(ramValue.replace("%", "")); } catch (Exception e) {}
+                String ramStatus = ram > 85 ? "🔴 Critical" : ram > 70 ? "🟡 Elevated" : "🟢 Normal";
+                sb.append(String.format("- **RAM**: `%s` — %s\n", ramValue, ramStatus));
+            }
+            sb.append("\n");
+        }
+        
+        // Error/Warning summary
+        if (errorCount > 0 || warningCount > 0) {
+            sb.append("### ⚠️ Issues Detected\n");
+            sb.append(String.format("- **%d error(s)** and **%d warning(s)** found in recent logs.\n", errorCount, warningCount));
+            
+            // Extract specific error summaries from context
+            String[] lines = context.split("\n");
+            int issueCount = 0;
+            for (String line : lines) {
+                if ((line.contains("[ERROR]") || line.contains("[WARN]")) && issueCount < 3) {
+                    String cleaned = line.replaceAll("^[-*\\s]+", "").trim();
+                    if (cleaned.length() > 150) cleaned = cleaned.substring(0, 147) + "...";
+                    sb.append(String.format("  - %s\n", cleaned));
+                    issueCount++;
+                }
+            }
+            sb.append("\n");
+        } else if (hasNoIssues) {
+            sb.append("### ✅ Logs & Alerts\n");
+            sb.append("- No errors or warnings detected in recent logs.\n\n");
+        }
+        
+        // Topology info
+        if (context.contains("Managed Nodes:") || context.contains("Deployed Applications:")) {
+            sb.append("### 🏗️ Infrastructure\n");
+            String[] lines = context.split("\n");
+            for (String line : lines) {
+                if (line.contains("Managed Nodes:") || line.contains("Deployed Applications:")) {
+                    sb.append("- ").append(line.replaceAll("^[-*\\s]+", "").trim()).append("\n");
+                }
+                if (line.trim().startsWith("* ") || (line.contains("Role:") || line.contains("Status:"))) {
+                    String cleaned = line.replaceAll("^[\\s*]+", "").trim();
+                    sb.append("  - ").append(cleaned).append("\n");
+                }
+            }
+            sb.append("\n");
+        }
+        
+        // Recommendation
+        sb.append("---\n");
+        if (hasErrors || errorCount > 0) {
+            sb.append("💡 **Recommendation**: Review the error logs above. Consider checking the affected services for connectivity or configuration issues.");
+        } else {
+            sb.append("💡 **Recommendation**: No immediate action required. Continue monitoring for any changes.");
+        }
+        
+        return sb.toString();
+    }
+    
+    private String extractMetricValue(String context, String metricName) {
+        try {
+            int idx = context.indexOf(metricName);
+            if (idx == -1) return null;
+            String after = context.substring(idx + metricName.length());
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("[:\\s]*([\\d.]+%)").matcher(after);
+            if (m.find()) return m.group(1);
+        } catch (Exception e) {}
+        return null;
+    }
+    
+    private String extractFieldValue(String context, String fieldName) {
+        try {
+            int idx = context.indexOf(fieldName);
+            if (idx == -1) return null;
+            String after = context.substring(idx + fieldName.length());
+            int lineEnd = after.indexOf("\n");
+            if (lineEnd == -1) lineEnd = after.length();
+            String value = after.substring(0, lineEnd).trim();
+            // Remove parenthetical cluster info
+            int parenIdx = value.indexOf("(");
+            if (parenIdx > 0) value = value.substring(0, parenIdx).trim();
+            return value;
+        } catch (Exception e) {}
+        return null;
+    }
+    
+    private String extractBetween(String text, String start, String end) {
+        try {
+            int s = text.indexOf(start);
+            int e = text.indexOf(end);
+            if (s >= 0 && e > s) return text.substring(s + start.length(), e).trim();
+        } catch (Exception ex) {}
+        return null;
     }
 
     private String gatherTargetedContext(Intent intent, String query) {
