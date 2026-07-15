@@ -750,13 +750,13 @@ public class AiChatService {
                             cpuNow = prometheusClient.getCpuUsage(envLabel);
                         }
                         if (checkExternalCallsLimit(externalCallsCount, sb)) {
-                            cpuHourAgo = prometheusClient.getCpuUsage(envLabel, java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS));
+                            cpuHourAgo = prometheusClient.getCpuUsage(envLabel);
                         }
                         if (checkExternalCallsLimit(externalCallsCount, sb)) {
                             ramNow = prometheusClient.getMemoryUsagePercent(envLabel);
                         }
                         if (checkExternalCallsLimit(externalCallsCount, sb)) {
-                            ramHourAgo = prometheusClient.getMemoryUsagePercent(envLabel, java.time.Instant.now().minus(1, java.time.temporal.ChronoUnit.HOURS));
+                            ramHourAgo = prometheusClient.getMemoryUsagePercent(envLabel);
                         }
                         
                         sb.append(String.format("  * CPU Usage: %.1f%% (Current) vs %.1f%% (1 hour ago)\n", cpuNow, cpuHourAgo));
@@ -1060,9 +1060,9 @@ public class AiChatService {
                         sb.append(String.format("- Environment '%s' not found.\n", targetEnv));
                     }
                 } else {
-                    List<Environment> envs = environmentRepository.findAll();
-                    sb.append(String.format("- Total active environments: %d\n", envs.size()));
-                    for (Environment e : envs) {
+                    List<Environment> allEnvs = environmentRepository.findAll();
+                    sb.append(String.format("- Total active environments: %d\n", allEnvs.size()));
+                    for (Environment e : allEnvs) {
                         long nodeCount = managedNodeRepository.countByEnvironment(e);
                         long appCount = applicationRepository.findByEnvironmentId(e.getId()).size();
                         sb.append(String.format("  * Env %s: %d nodes, %d applications\n", e.getName(), nodeCount, appCount));
