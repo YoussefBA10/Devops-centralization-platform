@@ -18,7 +18,7 @@ public class IntentClassifier {
     private static final Pattern LOG_PATTERN = Pattern.compile("(?i)\\b(logs?|errors?|warn|search|exception|trace|spike in logs)\\b");
     private static final Pattern INCIDENT_PATTERN = Pattern.compile("(?i)\\b(alerts?|incidents?|root cause|mttr|firing|resolved)\\b");
     private static final Pattern DEPLOYMENT_PATTERN = Pattern.compile("(?i)\\b(deployment|rollback|version|ci/cd|release)\\b");
-    private static final Pattern TOPOLOGY_PATTERN = Pattern.compile("(?i)\\b(topology|nodes?|online|containerized|standalone|running on|unreachable|environment|infra|infrastructure)\\b");
+    private static final Pattern TOPOLOGY_PATTERN = Pattern.compile("(?i)\\b(topology|nodes?|online|containerized|standalone|running on|unreachable|environment|infra|infrastructure|cluster|health|healthy|status)\\b");
     private static final Pattern AUDIT_PATTERN = Pattern.compile("(?i)\\b(access|permissions?|audit|rbac|who|users?|roles?)\\b");
     private static final Pattern ANALYTICAL_PATTERN = Pattern.compile("(?i)\\b(compare|trend|least stable|most resources|improving)\\b");
     

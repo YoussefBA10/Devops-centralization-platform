@@ -199,14 +199,7 @@ public class AiChatService {
         // 3. Gather Targeted Context based on Intent
         String context = gatherTargetedContext(intent, query);
 
-        // Check if the user specifically requested an AI summary/analysis
-        boolean requiresAi = intentClassifier.requiresAiSummary(query) || intent == Intent.ANALYTICAL || intent == Intent.GENERAL_QUERY;
-
-        if (!requiresAi) {
-            // Direct data response without AI overhead
-            updateHistory(conversation, history, query, context);
-            return context;
-        }
+        // Always use the AI to generate a presentable summary and response from the gathered context
 
         // 4. Build History String for Prompt
         StringBuilder historySb = new StringBuilder();
@@ -594,6 +587,12 @@ public class AiChatService {
                 break;
 
             default:
+                if (targetEnv != null) {
+                    return gatherTargetedContext(Intent.INFRA_TOPOLOGY, query);
+                }
+                if (targetApp != null) {
+                    return gatherTargetedContext(Intent.SECURITY_QUERY, query);
+                }
                 // Fallback to basic cluster health for general queries
                 sb.append("### 🏥 Cluster Health\n");
                 sb.append(environmentRepository.count() + " environments active.\n");
