@@ -138,6 +138,7 @@ public class DeploymentService {
                     playbookPath,
                     "--limit", targetIp,
                     "-e", "ansible_ssh_pass=" + sshPassword,
+                    "-e", "ansible_become_password=" + sshPassword,
                     "-e", "env_label=" + envLabel,
                     "-e", "ansible_user=" + sshUser,
                     "-e", "ssh_user=" + sshUser,
@@ -246,6 +247,8 @@ public class DeploymentService {
                 if (sshPassword != null && !sshPassword.isEmpty()) {
                     commandList.add("-e");
                     commandList.add("ansible_ssh_pass=" + sshPassword);
+                    commandList.add("-e");
+                    commandList.add("ansible_become_password=" + sshPassword);
                     executeProcessSecure(commandList.toArray(new String[0]), new DeploymentLog(), 300);
                 } else {
                     executeProcess(commandList.toArray(new String[0]), new DeploymentLog(), 300);
@@ -323,6 +326,8 @@ public class DeploymentService {
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
+                commandList.add("-e");
+                commandList.add("ansible_become_password=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
@@ -409,6 +414,8 @@ public class DeploymentService {
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
+                commandList.add("-e");
+                commandList.add("ansible_become_password=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 300);
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 300);
@@ -489,6 +496,8 @@ public class DeploymentService {
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
+                commandList.add("-e");
+                commandList.add("ansible_become_password=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 120);
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 120);
@@ -655,6 +664,8 @@ public class DeploymentService {
             if (sshPass != null && !sshPass.isEmpty()) {
                 commandList.add("-e");
                 commandList.add("ansible_ssh_pass=" + sshPass);
+                commandList.add("-e");
+                commandList.add("ansible_become_password=" + sshPass);
                 executeProcessSecure(commandList.toArray(new String[0]), deploymentLog, 600);
             } else {
                 executeProcess(commandList.toArray(new String[0]), deploymentLog, 600);
@@ -1276,6 +1287,7 @@ public class DeploymentService {
                 "ansible", "all", "-i", inventoryPath, "--limit", targetIp,
                 "-m", "shell", "-a", checkCommand,
                 "-e", "ansible_ssh_pass=" + sshPass,
+                "-e", "ansible_become_password=" + sshPass,
                 "-e", "ansible_become_pass=" + sshPass,
                 "-e", "ansible_user=" + sshUser
             );
@@ -1325,6 +1337,7 @@ public class DeploymentService {
                     "-b",
                     "-e", "ansible_become_pass=" + sshPass,
                     "-e", "ansible_ssh_pass=" + sshPass,
+                "-e", "ansible_become_password=" + sshPass,
                     "-e", "ansible_user=" + sshUser
             }, null, 60); 
             log.info("Container {} restarted successfully on {}", containerName, targetNodeIp);
