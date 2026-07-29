@@ -29,10 +29,8 @@ public class LogsController {
         Environment env = environmentRepository.findById(environmentId).orElse(null);
         if (env == null) return List.of();
         
-        // In reality, 'query' parameter would be passed to ElasticsearchLogService.
-        // For the sake of matching the test plan precisely, we just map environmentId to environment name.
-        String searchLabel = (env.getPrometheusLabel() != null && !env.getPrometheusLabel().isBlank()) 
-                             ? env.getPrometheusLabel() : env.getSafeName();
+        // Use getSafeName() to match the Logstash/Filebeat index naming convention (e.g. "demo-pre-prod-env")
+        String searchLabel = env.getSafeName();
         return esLogService.getRecentLogs(searchLabel, limit);
     }
 }

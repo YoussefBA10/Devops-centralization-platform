@@ -27,7 +27,7 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getPrometheusLabel() : ".*";
+        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getSafeName() : ".*";
         String serviceKeyword = app.getServiceNameKeyword();
 
         Page<LogEventDTO> page = elasticsearchLogClient.searchLogs(envLabel, serviceKeyword, null, query, severity, from, to, pageable);
@@ -52,7 +52,7 @@ public class LogService {
         Application app = applicationRepository.findById(appId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getPrometheusLabel() : ".*";
+        String envLabel = (app.getEnvironment() != null) ? app.getEnvironment().getSafeName() : ".*";
         String serviceKeyword = app.getServiceNameKeyword();
 
         // Fetch top 1000 logs for export

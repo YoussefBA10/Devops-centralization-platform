@@ -67,13 +67,13 @@ public class OperationalScheduler {
             List<Application> apps = applicationRepository.findByEnvironmentId(env.getId());
             for (Application app : apps) {
                 // 1. Fetch Logs
-                List<Map<String, Object>> recentLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 100);
+                List<Map<String, Object>> recentLogs = esLogService.getRecentLogs(env.getSafeName(), 100);
                 
                 // 2. Fingerprint recurring patterns
                 patternService.processLogs(app, recentLogs);
 
                 // 3. Aggregate 1-minute errors and calculate stability
-                long errorCount = esLogService.getErrorCount(env.getName().toLowerCase(), 1);
+                long errorCount = esLogService.getErrorCount(env.getSafeName(), 1);
                 double stabilityIndex = aggregationService.calculateStabilityIndex(app, errorCount);
                 
                 // 4. Save window

@@ -619,7 +619,13 @@ public class AiChatService {
                 sb.append("### 📝 Recent Logs\n");
                 if (targetEnv != null) {
                     if (checkExternalCallsLimit(externalCallsCount, sb)) {
-                        List<Map<String, Object>> logs = esLogService.getRecentLogs(targetEnv.toLowerCase(), 10);
+                        // Resolve targetEnv name to safe name for Elasticsearch index matching
+                        String esEnvLabel = environmentRepository.findAll().stream()
+                                .filter(e -> e.getName().equalsIgnoreCase(targetEnv))
+                                .findFirst()
+                                .map(Environment::getSafeName)
+                                .orElse(targetEnv.toLowerCase().replaceAll("[^a-z0-9]+", "-"));
+                        List<Map<String, Object>> logs = esLogService.getRecentLogs(esEnvLabel, 10);
                         if (!logs.isEmpty()) {
                             for (Map<String, Object> log : logs) {
                                 Object msg = log.get("raw_message") != null ? log.get("raw_message") : log.get("message");
@@ -995,7 +1001,7 @@ public class AiChatService {
                         sb.append("\n### ⚠️ Log Issues & Warnings\n");
                         try {
                             if (checkExternalCallsLimit(externalCallsCount, sb)) {
-                                java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getName().toLowerCase(), 20);
+                                java.util.List<java.util.Map<String, Object>> envLogs = esLogService.getRecentLogs(env.getSafeName(), 20);
                                 if (envLogs != null && !envLogs.isEmpty()) {
                                     long errorCount = 0;
                                     long warnCount = 0;

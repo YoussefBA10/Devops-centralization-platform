@@ -75,7 +75,7 @@ public class LogAnalyticsService {
         Instant start = end.minus(hours, ChronoUnit.HOURS);
 
         Environment env = environmentRepository.findById(environmentId).orElse(null);
-        String envLabel = env != null ? env.getPrometheusLabel() : ".*";
+        String envLabel = env != null ? env.getSafeName() : ".*";
 
         // When a specific service is requested (from a ticket), we need two filter sets:
         // 1. Container-level filters: use broad env/node (".*"/null) to find the container wherever it runs
